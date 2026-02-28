@@ -45,6 +45,7 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - Avoid magic values; use constants or configuration when appropriate.
 - Maintain idempotency where the workflow requires it.
 - Always use .env files instead of including secrets in code.
+- Coding should be done using teams.
 
 ## Documentation expectations
 - Add or update docstrings, README, or inline comments when behavior is not obvious.
