@@ -17,8 +17,9 @@ web:
 	cd web && npm ci && npm run build
 
 proto:
-	protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	protoc \
+		--go_out=. --go_opt=module=github.com/badskater/distributed-encoder \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/badskater/distributed-encoder \
 		proto/encoder/v1/agent.proto
 
 test:
