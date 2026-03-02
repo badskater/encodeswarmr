@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 
@@ -43,8 +42,7 @@ func (s *Server) SyncOfflineResults(stream grpc.ClientStreamingServer[pb.TaskRes
 				slog.String("task_id", result.GetTaskId()),
 				slog.String("error", err.Error()),
 			)
-			return status.Errorf(codes.Internal,
-				fmt.Sprintf("grpc syncoffline: get task: %v", err))
+			return status.Errorf(codes.Internal, "grpc syncoffline: get task: %v", err)
 		}
 
 		if (task.Status == "completed" || task.Status == "failed") && !result.GetOfflineResult() {
@@ -57,8 +55,7 @@ func (s *Server) SyncOfflineResults(stream grpc.ClientStreamingServer[pb.TaskRes
 			return err
 		}
 		if err := s.store.UpdateJobTaskCounts(ctx, result.GetJobId()); err != nil {
-			return status.Errorf(codes.Internal,
-				fmt.Sprintf("grpc syncoffline: update job counts: %v", err))
+			return status.Errorf(codes.Internal, "grpc syncoffline: update job counts: %v", err)
 		}
 		if err := s.checkJobCompletion(ctx, result.GetJobId()); err != nil {
 			return err

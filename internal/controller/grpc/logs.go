@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"time"
@@ -48,8 +47,7 @@ func (s *Server) StreamLogs(stream grpc.ClientStreamingServer[pb.LogEntry, pb.Ac
 				slog.String("task_id", entry.GetTaskId()),
 				slog.String("error", err.Error()),
 			)
-			return status.Errorf(codes.Internal,
-				fmt.Sprintf("grpc streamlogs: insert log: %v", err))
+			return status.Errorf(codes.Internal, "grpc streamlogs: insert log: %v", err)
 		}
 	}
 }

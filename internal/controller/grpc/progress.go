@@ -1,7 +1,6 @@
 package grpc
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 
@@ -44,8 +43,7 @@ func (s *Server) ReportProgress(stream grpc.ClientStreamingServer[pb.ProgressUpd
 					slog.String("task_id", update.GetTaskId()),
 					slog.String("error", err.Error()),
 				)
-				return status.Errorf(codes.Internal,
-					fmt.Sprintf("grpc reportprogress: update task status: %v", err))
+				return status.Errorf(codes.Internal, "grpc reportprogress: update task status: %v", err)
 			}
 		}
 	}
