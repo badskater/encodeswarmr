@@ -1,0 +1,231 @@
+syntax = "proto3";
+
+package encoder.v1;
+
+option go_package = "github.com/badskater/distributed-encoder/internal/proto/encoderv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// ---------------------------------------------------------------------------
+// AgentService — all RPC calls are initiated by the Windows Agent.
+// ---------------------------------------------------------------------------
+service AgentService {
+  // Called on agent startup to register or re-register with the controller.
+  rpc Register(AgentInfo) returns (RegisterResponse);
+
+  // Periodic liveness signal (~30 s). Controller replies with any config
+  // updates the agent should apply (e.g. drain flag, new allowed_shares).
+  rpc Heartbeat(HeartbeatReq) returns (HeartbeatResp);
+
+  // Agent polls for its next task assignment. Returns an empty assignment
+  // (has_task = false) when there is nothing to do.
+  rpc PollTask(PollTaskReq) returns (TaskAssignment);
+
+  // Agent streams frame-level progress while a task is running.
+  rpc ReportProgress(stream ProgressUpdate) returns (Ack);
+
+  // Agent reports final result after a task completes or fails.
+  rpc ReportResult(TaskResult) returns (Ack);
+
+  // Agent streams stdout/stderr/executor log lines to the controller in
+  // real-time. The controller stores them in task_logs and forwards to
+  // any active SSE subscribers.
+  rpc StreamLogs(stream LogEntry) returns (Ack);
+
+  // After a network outage the agent replays buffered results.
+  rpc SyncOfflineResults(stream TaskResult) returns (SyncResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Register
+// ---------------------------------------------------------------------------
+
+message AgentInfo {
+  string hostname       = 1;
+  string ip_address     = 2;
+  string agent_version  = 3;
+  repeated string tags  = 4;
+  GPUCapabilities gpu   = 5;
+  // OS info (e.g. "Windows Server 2022 Build 20348")
+  string os_version     = 6;
+  // Logical CPU count
+  int32 cpu_count       = 7;
+  // Total physical RAM in MiB
+  int64 ram_mib         = 8;
+}
+
+message GPUCapabilities {
+  string vendor  = 1;  // "nvidia", "intel", "amd"
+  string model   = 2;  // e.g. "RTX 4090"
+  bool   nvenc   = 3;
+  bool   qsv     = 4;
+  bool   amf     = 5;
+  int32  vram_mb = 6;
+}
+
+message RegisterResponse {
+  bool   ok          = 1;
+  string agent_id    = 2;  // UUID assigned / confirmed by controller
+  string message     = 3;  // Human-readable, e.g. "pending approval"
+  bool   approved    = 4;  // false → agent should wait and re-register
+}
+
+// ---------------------------------------------------------------------------
+// Heartbeat
+// ---------------------------------------------------------------------------
+
+message HeartbeatReq {
+  string agent_id = 1;
+  // Current agent state as reported by the agent itself.
+  AgentState state = 2;
+  // Optional metrics snapshot.
+  AgentMetrics metrics = 3;
+  // ID of the task the agent is currently executing (empty if idle).
+  string current_task_id = 4;
+}
+
+enum AgentState {
+  AGENT_STATE_UNSPECIFIED = 0;
+  AGENT_STATE_IDLE        = 1;
+  AGENT_STATE_BUSY        = 2;
+  AGENT_STATE_DRAINING    = 3;
+  AGENT_STATE_OFFLINE     = 4;
+}
+
+message AgentMetrics {
+  float  cpu_percent  = 1;
+  float  ram_percent  = 2;
+  float  gpu_percent  = 3;
+  float  gpu_vram_pct = 4;
+  // Disk free on the work/temp directory (MiB).
+  int64  disk_free_mib = 5;
+}
+
+message HeartbeatResp {
+  // When true the agent should complete the current task then stop polling.
+  bool drain    = 1;
+  // When true the agent should immediately abort and not pick up new work.
+  bool disabled = 2;
+  // Controller time — agents use this for log timestamp alignment only.
+  google.protobuf.Timestamp server_time = 3;
+}
+
+// ---------------------------------------------------------------------------
+// PollTask
+// ---------------------------------------------------------------------------
+
+message PollTaskReq {
+  string agent_id           = 1;
+  GPUCapabilities gpu       = 2;
+  repeated string tags      = 3;
+}
+
+message TaskAssignment {
+  bool   has_task     = 1;
+  string task_id      = 2;
+  string job_id       = 3;
+  int32  chunk_index  = 4;
+
+  // Script files to write to disk (filename → content).
+  // Keys are relative paths, e.g. "encode.bat", "source.avs".
+  map<string, string> scripts = 5;
+
+  // Key-value variables to substitute — supplemental to those embedded in
+  // the script content by the template engine.
+  map<string, string> variables = 6;
+
+  // UNC path to the source file.
+  string source_path  = 7;
+  // UNC path the agent should write the output to.
+  string output_path  = 8;
+  // Hard timeout in seconds.  Agent must abort and report failure if exceeded.
+  int32  timeout_sec  = 9;
+  // Job priority (informational).
+  int32  priority     = 10;
+}
+
+// ---------------------------------------------------------------------------
+// ReportProgress
+// ---------------------------------------------------------------------------
+
+message ProgressUpdate {
+  string task_id     = 1;
+  string job_id      = 2;
+  int64  frame       = 3;
+  int64  total_frames = 4;
+  float  fps         = 5;
+  // Estimated seconds remaining.
+  int32  eta_sec     = 6;
+  // Encoding quality metric (e.g. current CRF-adjusted PSNR) — optional.
+  float  quality     = 7;
+  google.protobuf.Timestamp timestamp = 8;
+}
+
+// ---------------------------------------------------------------------------
+// ReportResult
+// ---------------------------------------------------------------------------
+
+message TaskResult {
+  string task_id    = 1;
+  string job_id     = 2;
+  bool   success    = 3;
+  int32  exit_code  = 4;
+  string error_msg  = 5;
+
+  // Final encoding metrics.
+  EncodeMetrics metrics = 6;
+
+  google.protobuf.Timestamp started_at   = 7;
+  google.protobuf.Timestamp completed_at = 8;
+
+  // Set to true when this result was buffered offline and is being replayed.
+  bool offline_result = 9;
+}
+
+message EncodeMetrics {
+  int64  frames_encoded  = 1;
+  float  avg_fps         = 2;
+  int64  output_size     = 3;  // bytes
+  float  vmaf_score      = 4;
+  float  psnr            = 5;
+  float  ssim            = 6;
+  // Wall-clock encoding duration in seconds.
+  int64  duration_sec    = 7;
+}
+
+// ---------------------------------------------------------------------------
+// StreamLogs
+// ---------------------------------------------------------------------------
+
+message LogEntry {
+  string task_id = 1;
+  string job_id  = 2;
+  // "stdout", "stderr", or "agent"
+  string stream  = 3;
+  // "debug", "info", "warn", "error"
+  string level   = 4;
+  string message = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  // Optional structured metadata, e.g. {"frame":2400,"fps":24.5}
+  google.protobuf.Struct metadata = 7;
+}
+
+// ---------------------------------------------------------------------------
+// SyncOfflineResults
+// ---------------------------------------------------------------------------
+
+message SyncResponse {
+  // Number of results accepted.
+  int32 accepted = 1;
+  // IDs of results that were rejected (e.g. already processed).
+  repeated string rejected_task_ids = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Shared
+// ---------------------------------------------------------------------------
+
+message Ack {
+  bool ok = 1;
+}

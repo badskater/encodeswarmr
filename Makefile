@@ -1,4 +1,4 @@
-.PHONY: all controller agent web proto test lint migrate-up migrate-down bin
+.PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin
 
 CONTROLLER_BIN := bin/controller
 AGENT_BIN      := bin/agent.exe
@@ -19,7 +19,7 @@ web:
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/distencoder.proto
+		proto/encoder/v1/agent.proto
 
 test:
 	go test ./... -race -cover -timeout 120s
@@ -32,6 +32,9 @@ migrate-up:
 
 migrate-down:
 	migrate -path internal/db/migrations -database "$(DATABASE_URL)" down 1
+
+migrate-status:
+	migrate -path internal/db/migrations -database "$(DATABASE_URL)" version
 
 bin:
 	mkdir -p bin
