@@ -139,6 +139,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/users", admin(s.handleCreateUser))
 	mux.Handle("DELETE /api/v1/users/{id}", admin(s.handleDeleteUser))
 	mux.Handle("PUT /api/v1/users/{id}/role", admin(s.handleUpdateUserRole))
+	mux.Handle("GET /api/v1/users/me", viewer(s.handleGetMe))
+
+	// Static UI — must be last so API routes take precedence.
+	mux.Handle("/", s.staticHandler())
 }
 
 // requestIDMiddleware injects a correlation ID into each request and response.

@@ -24,8 +24,9 @@ certs/
 *.db-shm
 *.db-wal
 
-# Frontend build output
-web/dist/
+# Frontend build output (exclude all except the placeholder needed for go:embed)
+web/dist/*
+!web/dist/index.html
 web/node_modules/
 web/.svelte-kit/
 web/.vite/
