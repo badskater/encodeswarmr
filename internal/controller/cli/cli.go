@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/badskater/distributed-encoder/internal/controller/api"
+	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
 	controllergrpc "github.com/badskater/distributed-encoder/internal/controller/grpc"
 	"github.com/badskater/distributed-encoder/internal/db"
@@ -72,6 +74,20 @@ func runServer(ctx context.Context, cfgPath string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// Initialise auth service.
+	authSvc, err := auth.NewService(ctx, store, &cfg.Auth, logger)
+	if err != nil {
+		return fmt.Errorf("cli: init auth: %w", err)
+	}
+
+	// Start HTTP API server.
+	httpSrv := api.New(store, authSvc, cfg, logger)
+	httpErrCh := make(chan error, 1)
+	go func() {
+		logger.Info("starting HTTP server", "addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))
+		httpErrCh <- httpSrv.Serve(ctx)
+	}()
+
 	// Start gRPC server.
 	grpcSrv := controllergrpc.New(store, &cfg.GRPC, &cfg.Agent, logger)
 	grpcErrCh := make(chan error, 1)
@@ -80,10 +96,15 @@ func runServer(ctx context.Context, cfgPath string) error {
 		grpcErrCh <- grpcSrv.Serve(ctx)
 	}()
 
-	// Block until a signal or gRPC server error.
+	// Block until a signal or any server error.
 	select {
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
+		return nil
+	case err := <-httpErrCh:
+		if err != nil {
+			return fmt.Errorf("cli: http server: %w", err)
+		}
 		return nil
 	case err := <-grpcErrCh:
 		if err != nil {
