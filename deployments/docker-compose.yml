@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  controller:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.controller
+    ports:
+      - "8080:8080"
+      - "9443:9443"
+    env_file:
+      - ../.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: distencoder
+      POSTGRES_USER: distencoder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U distencoder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASE_URL: "postgres://distencoder:${POSTGRES_PASSWORD}@postgres:5432/distencoder"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+    depends_on:
+      - postgres
+    ports:
+      - "6432:5432"
+
+volumes:
+  postgres_data:

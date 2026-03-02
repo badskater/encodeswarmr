@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      - run: go mod tidy
+      - name: Build controller (linux/amd64)
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w" -o dist/controller ./cmd/controller
+      - name: Build agent (windows/amd64)
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="-s -w" -o dist/distencoder-agent.exe ./cmd/agent
+      - name: Create release archives
+        run: |
+          cd dist
+          tar czf controller-linux-amd64.tar.gz controller
+          zip agent-windows-amd64.zip distencoder-agent.exe
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/controller-linux-amd64.tar.gz
+            dist/agent-windows-amd64.zip

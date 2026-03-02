@@ -1,0 +1,48 @@
+controller:
+  address: "controller.example.com:9443"
+  tls:
+    cert: "C:\\DistEncoder\\certs\\agent.crt"
+    key: "C:\\DistEncoder\\certs\\agent.key"
+    ca: "C:\\DistEncoder\\certs\\ca.crt"
+  reconnect:
+    initial_delay: 5s
+    max_delay: 5m
+    multiplier: 2.0
+
+agent:
+  hostname: "ENCODE-01"
+  work_dir: "C:\\DistEncoder\\work"
+  log_dir: "C:\\DistEncoder\\logs"
+  offline_db: "C:\\DistEncoder\\offline.db"
+  heartbeat_interval: 30s
+  poll_interval: 10s
+  cleanup_on_success: true
+  keep_failed_jobs: 10
+
+tools:
+  ffmpeg: "C:\\Tools\\ffmpeg\\ffmpeg.exe"
+  ffprobe: "C:\\Tools\\ffmpeg\\ffprobe.exe"
+  x265: "C:\\Tools\\x265\\x265.exe"
+  x264: "C:\\Tools\\x264\\x264.exe"
+  svt_av1: ""
+  avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"
+  vspipe: "C:\\Program Files\\VapourSynth\\vspipe.exe"
+
+gpu:
+  enabled: true
+  vendor: ""        # auto-detect; override: nvidia | intel | amd
+  max_vram_mb: 0    # 0 = no limit
+  monitor_interval: 5s
+
+allowed_shares:
+  - "\\\\NAS01\\media"
+  - "\\\\NAS01\\encodes"
+
+logging:
+  level: info
+  format: json
+  max_size_mb: 100
+  max_backups: 5
+  compress: true
+  stream_buffer_size: 1000
+  stream_flush_interval: 1s

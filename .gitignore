@@ -1,0 +1,45 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+
+# Environment
+.env
+*.env.local
+
+# TLS certificates and keys
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend build output
+web/dist/
+web/node_modules/
+web/.svelte-kit/
+web/.vite/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
