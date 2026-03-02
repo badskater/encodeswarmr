@@ -1071,3 +1071,110 @@ func scanAnalysisResult(row pgx.Row) (*AnalysisResult, error) {
 	}
 	return &r, nil
 }
+
+// ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateSession(ctx context.Context, p CreateSessionParams) (*Session, error) {
+	const q = `INSERT INTO sessions (token, user_id, expires_at)
+	           VALUES ($1, $2, $3)
+	           RETURNING token, user_id, created_at, expires_at`
+	row := s.pool.QueryRow(ctx, q, p.Token, p.UserID, p.ExpiresAt)
+	return scanSession(row)
+}
+
+func (s *pgStore) GetSessionByToken(ctx context.Context, token string) (*Session, error) {
+	const q = `SELECT token, user_id, created_at, expires_at
+	           FROM sessions WHERE token = $1 AND expires_at > now()`
+	return scanSession(s.pool.QueryRow(ctx, q, token))
+}
+
+func (s *pgStore) DeleteSession(ctx context.Context, token string) error {
+	const q = `DELETE FROM sessions WHERE token = $1`
+	_, err := s.pool.Exec(ctx, q, token)
+	return err
+}
+
+func (s *pgStore) PruneExpiredSessions(ctx context.Context) error {
+	const q = `DELETE FROM sessions WHERE expires_at <= now()`
+	_, err := s.pool.Exec(ctx, q)
+	return err
+}
+
+func scanSession(row pgx.Row) (*Session, error) {
+	var sess Session
+	err := row.Scan(&sess.Token, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan session: %w", err)
+	}
+	return &sess, nil
+}
+
+// ---------------------------------------------------------------------------
+// Extended queries
+// ---------------------------------------------------------------------------
+
+// RetryFailedTasksForJob re-queues all failed tasks in a job as pending,
+// clearing their result fields. Only failed tasks are affected.
+func (s *pgStore) RetryFailedTasksForJob(ctx context.Context, jobID string) error {
+	const q = `UPDATE tasks SET
+	    status         = 'pending',
+	    agent_id       = NULL,
+	    exit_code      = NULL,
+	    frames_encoded = NULL,
+	    avg_fps        = NULL,
+	    output_size    = NULL,
+	    duration_sec   = NULL,
+	    vmaf_score     = NULL,
+	    psnr           = NULL,
+	    ssim           = NULL,
+	    error_msg      = NULL,
+	    started_at     = NULL,
+	    completed_at   = NULL,
+	    updated_at     = now()
+	WHERE job_id = $1 AND status = 'failed'`
+	_, err := s.pool.Exec(ctx, q, jobID)
+	return err
+}
+
+// ListJobLogs returns task logs for all tasks in a job, ordered by timestamp.
+func (s *pgStore) ListJobLogs(ctx context.Context, p ListJobLogsParams) ([]*TaskLog, error) {
+	pageSize := p.PageSize
+	if pageSize <= 0 || pageSize > 1000 {
+		pageSize = 200
+	}
+	q := `SELECT id, task_id, job_id, stream, level, message, metadata, logged_at
+	      FROM task_logs WHERE job_id = $1`
+	args := []any{p.JobID}
+	argN := 2
+	if p.Stream != "" {
+		q += fmt.Sprintf(` AND stream = $%d`, argN)
+		args = append(args, p.Stream)
+		argN++
+	}
+	if p.Cursor > 0 {
+		q += fmt.Sprintf(` AND id > $%d`, argN)
+		args = append(args, p.Cursor)
+		argN++
+	}
+	q += fmt.Sprintf(` ORDER BY logged_at ASC, id ASC LIMIT $%d`, argN)
+	args = append(args, pageSize)
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: list job logs: %w", err)
+	}
+	defer rows.Close()
+	return scanTaskLogs(rows)
+}
+
+// PruneOldTaskLogs deletes task log rows older than the given time.
+func (s *pgStore) PruneOldTaskLogs(ctx context.Context, olderThan time.Time) error {
+	const q = `DELETE FROM task_logs WHERE logged_at < $1`
+	_, err := s.pool.Exec(ctx, q, olderThan)
+	return err
+}

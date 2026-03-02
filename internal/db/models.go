@@ -158,6 +158,14 @@ type AnalysisResult struct {
 	CreatedAt time.Time
 }
 
+// Session is a row from the sessions table.
+type Session struct {
+	Token     string
+	UserID    string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 // ---------------------------------------------------------------------------
 // Parameter structs — one per write operation
 // ---------------------------------------------------------------------------
@@ -309,4 +317,17 @@ type UpsertAnalysisResultParams struct {
 	Type      string
 	FrameData []byte
 	Summary   []byte
+}
+
+type CreateSessionParams struct {
+	Token     string
+	UserID    string
+	ExpiresAt time.Time
+}
+
+type ListJobLogsParams struct {
+	JobID    string
+	Stream   string
+	Cursor   int64
+	PageSize int
 }

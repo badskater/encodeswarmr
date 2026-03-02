@@ -10,6 +10,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -95,6 +96,17 @@ type Store interface {
 	UpsertAnalysisResult(ctx context.Context, p UpsertAnalysisResultParams) (*AnalysisResult, error)
 	GetAnalysisResult(ctx context.Context, sourceID, analysisType string) (*AnalysisResult, error)
 	ListAnalysisResults(ctx context.Context, sourceID string) ([]*AnalysisResult, error)
+
+	// --- Sessions ---
+	CreateSession(ctx context.Context, p CreateSessionParams) (*Session, error)
+	GetSessionByToken(ctx context.Context, token string) (*Session, error)
+	DeleteSession(ctx context.Context, token string) error
+	PruneExpiredSessions(ctx context.Context) error
+
+	// --- Extended queries ---
+	RetryFailedTasksForJob(ctx context.Context, jobID string) error
+	ListJobLogs(ctx context.Context, p ListJobLogsParams) ([]*TaskLog, error)
+	PruneOldTaskLogs(ctx context.Context, olderThan time.Time) error
 }
 
 // pgStore implements Store using a pgx connection pool.
