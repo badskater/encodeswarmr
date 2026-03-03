@@ -1,0 +1,22 @@
+# Build artefacts — never send pre-built binaries into the Docker build context
+bin/
+web/dist/
+web/node_modules/
+
+# Local dev and editor files
+.claude/
+.env
+*.env
+.vscode/
+.idea/
+
+# Git history (not needed in image)
+.git/
+
+# Test and lint output
+coverage.out
+*.test
+
+# OS
+.DS_Store
+Thumbs.db

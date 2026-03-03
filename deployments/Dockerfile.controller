@@ -1,14 +1,29 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
-RUN apk add --no-cache git make nodejs npm
+# ── Stage 1: Web UI ───────────────────────────────────────────────────────────
+FROM node:22-alpine AS web-builder
+WORKDIR /web
+# Copy lockfile and manifest first for better layer caching
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ .
+RUN npm run build
+
+# ── Stage 2: Go binary ────────────────────────────────────────────────────────
+FROM golang:1.24-alpine AS builder
+ARG VERSION=dev
+RUN apk add --no-cache git
 WORKDIR /src
+# Download deps before copying source for better layer caching
 COPY go.mod go.sum ./
 RUN go mod download
+# Copy source (web/dist is excluded by .dockerignore)
 COPY . .
+# Overwrite with the freshly built web UI
+COPY --from=web-builder /web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w" -o /controller ./cmd/controller
+    go build -ldflags="-s -w -X main.Version=${VERSION}" \
+    -o /controller ./cmd/controller
 
-# Runtime stage
+# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
