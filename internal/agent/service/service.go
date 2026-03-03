@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
@@ -17,21 +18,118 @@ const (
 	serviceName       = "distributed-encoder-agent"
 )
 
-// Run is the agent service entrypoint. It loads configuration, then either
-// runs as a Windows Service or in the foreground depending on the execution
-// context.
+const usage = `Usage:
+  distencoder-agent <subcommand> [flags]
+
+Subcommands:
+  install    Install as Windows Service
+  uninstall  Remove the Windows Service
+  start      Start the Windows Service
+  stop       Stop the Windows Service
+  run        Run in foreground (default if no subcommand or when started by SCM)
+
+Flags (all subcommands):
+  --config <path>    Config file path (default: C:\ProgramData\distributed-encoder\agent.yaml)
+  --debug            Enable debug logging
+  --http-debug       Start local debug HTTP server on :9080 (run subcommand only)
+`
+
+// parsedArgs holds the result of parsing CLI arguments.
+type parsedArgs struct {
+	subcommand string
+	configPath string
+	debug      bool
+	httpDebug  bool
+}
+
+// parseArgs walks the argument list extracting flags and the subcommand.
+func parseArgs(args []string) parsedArgs {
+	p := parsedArgs{
+		configPath: defaultConfigPath,
+	}
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+
+		// --config=<path>
+		if strings.HasPrefix(arg, "--config=") {
+			p.configPath = strings.TrimPrefix(arg, "--config=")
+			i++
+			continue
+		}
+		// --config <path>
+		if arg == "--config" {
+			if i+1 < len(args) {
+				i++
+				p.configPath = args[i]
+			}
+			i++
+			continue
+		}
+		if arg == "--debug" {
+			p.debug = true
+			i++
+			continue
+		}
+		if arg == "--http-debug" {
+			p.httpDebug = true
+			i++
+			continue
+		}
+
+		// First non-flag argument is the subcommand.
+		if p.subcommand == "" && !strings.HasPrefix(arg, "--") {
+			p.subcommand = arg
+		}
+		i++
+	}
+	return p
+}
+
+// Run is the agent service entrypoint. It parses CLI subcommands and flags,
+// then dispatches to the appropriate handler.
 func Run(args []string) error {
-	configPath := defaultConfigPath
-	if len(args) > 0 && args[0] != "" {
-		configPath = args[0]
-	}
+	parsed := parseArgs(args)
 
-	cfg, err := agentcfg.Load(configPath)
+	// Configure logging level.
+	logLevel := slog.LevelInfo
+	if parsed.debug {
+		logLevel = slog.LevelDebug
+	}
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
+	slog.SetDefault(log)
+
+	switch parsed.subcommand {
+	case "install":
+		return installService(serviceName, parsed.configPath)
+	case "uninstall":
+		return uninstallService(serviceName)
+	case "start":
+		return startService(serviceName)
+	case "stop":
+		return stopService(serviceName)
+	case "run", "":
+		return runAgent(parsed, log)
+	case "help", "--help", "-h":
+		fmt.Print(usage)
+		return nil
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n", parsed.subcommand)
+		fmt.Print(usage)
+		return fmt.Errorf("unknown subcommand: %s", parsed.subcommand)
+	}
+}
+
+// runAgent loads config and starts the agent either as a Windows Service or
+// in the foreground.
+func runAgent(parsed parsedArgs, log *slog.Logger) error {
+	cfg, err := agentcfg.Load(parsed.configPath)
 	if err != nil {
-		return fmt.Errorf("loading config from %s: %w", configPath, err)
+		return fmt.Errorf("loading config from %s: %w", parsed.configPath, err)
 	}
-
-	log := slog.Default()
 
 	runFn := func(ctx context.Context) error {
 		r := &runner{
@@ -39,6 +137,11 @@ func Run(args []string) error {
 			log:   log,
 			state: pb.AgentState_AGENT_STATE_IDLE,
 		}
+
+		if parsed.httpDebug {
+			go startDebugServer(ctx, r, log)
+		}
+
 		return r.run(ctx)
 	}
 

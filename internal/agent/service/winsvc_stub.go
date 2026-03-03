@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -15,4 +16,24 @@ func runAsWindowsService(_ string, _ func(ctx context.Context) error) error {
 // isWindowsService always returns false on non-Windows platforms.
 func isWindowsService() bool {
 	return false
+}
+
+// installService is a stub for non-Windows platforms.
+func installService(_, _ string) error {
+	return errors.New("only supported on Windows")
+}
+
+// uninstallService is a stub for non-Windows platforms.
+func uninstallService(_ string) error {
+	return errors.New("only supported on Windows")
+}
+
+// startService is a stub for non-Windows platforms.
+func startService(_ string) error {
+	return errors.New("only supported on Windows")
+}
+
+// stopService is a stub for non-Windows platforms.
+func stopService(_ string) error {
+	return errors.New("only supported on Windows")
 }

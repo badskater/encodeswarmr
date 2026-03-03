@@ -35,6 +35,9 @@ type runner struct {
 	log     *slog.Logger
 	offline *offlineStore
 
+	// primaryGPUVendor is set after detectGPUs() at startup (empty if none found).
+	primaryGPUVendor string
+
 	mu            sync.Mutex
 	state         pb.AgentState
 	currentTaskID string
@@ -42,7 +45,16 @@ type runner struct {
 
 // run is the main lifecycle of the agent. It blocks until ctx is cancelled.
 func (r *runner) run(ctx context.Context) error {
-	r.log.Info("agent starting")
+	r.log.Info("agent starting", "version", agentVersion)
+
+	// Detect GPUs at startup (best-effort).
+	if r.cfg.GPU.Enabled {
+		gpus := detectGPUs()
+		if len(gpus) > 0 {
+			r.primaryGPUVendor = gpus[0].Vendor
+			r.log.Info("GPU detected", "vendor", gpus[0].Vendor, "model", gpus[0].Model)
+		}
+	}
 
 	// Open offline journal.
 	offDB, err := newOfflineStore(r.cfg.Agent.OfflineDB)
@@ -58,18 +70,31 @@ func (r *runner) run(ctx context.Context) error {
 	}
 	defer r.conn.Close()
 
-	// Register with controller.
+	// Register with controller (blocks until approved).
 	if err := r.register(ctx); err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
 
-	// Sync any offline results from previous runs.
+	// Sync any offline results and logs from previous runs.
 	r.syncOfflineResults(ctx)
 
 	r.setState(pb.AgentState_AGENT_STATE_IDLE, "")
 
-	// Start heartbeat goroutine.
+	// Start upgrade checker goroutine.
+	upgrader := newUpgradeChecker(r.cfg, r.log)
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		upgrader.checkLoop(ctx, func() bool {
+			r.mu.Lock()
+			busy := r.state == pb.AgentState_AGENT_STATE_BUSY
+			r.mu.Unlock()
+			return busy
+		})
+	}()
+
+	// Start heartbeat goroutine.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -160,7 +185,8 @@ func buildTLSConfig(cfg agentcfg.TLSConfig) (*tls.Config, error) {
 }
 
 // register calls the controller Register RPC with exponential backoff until
-// it succeeds or the context is cancelled.
+// the agent is registered AND approved. Implements the PENDING_APPROVAL state
+// from the agent state machine (AGENTS.md §3).
 func (r *runner) register(ctx context.Context) error {
 	hostname := r.cfg.Agent.Hostname
 	if hostname == "" {
@@ -175,10 +201,9 @@ func (r *runner) register(ctx context.Context) error {
 		OsVersion:    runtime.GOOS + "/" + runtime.GOARCH,
 		CpuCount:     int32(runtime.NumCPU()),
 	}
-	if r.cfg.GPU.Enabled {
+	if r.cfg.GPU.Enabled && r.primaryGPUVendor != "" {
 		info.Gpu = &pb.GPUCapabilities{
-			Vendor: r.cfg.GPU.Vendor,
-			VramMb: int32(r.cfg.GPU.MaxVRAMMB),
+			Vendor: r.primaryGPUVendor,
 		}
 	}
 
@@ -196,6 +221,8 @@ func (r *runner) register(ctx context.Context) error {
 	}
 
 	currentDelay := delay
+	pendingLogged := false
+
 	for {
 		resp, err := r.client.Register(ctx, info)
 		if err != nil {
@@ -212,7 +239,7 @@ func (r *runner) register(ctx context.Context) error {
 			continue
 		}
 		if !resp.GetOk() {
-			r.log.Warn("registration rejected", "message", resp.GetMessage())
+			r.log.Warn("registration rejected by controller", "message", resp.GetMessage())
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -220,8 +247,25 @@ func (r *runner) register(ctx context.Context) error {
 			}
 			continue
 		}
+
 		r.agentID = resp.GetAgentId()
-		r.log.Info("registered with controller", "agent_id", r.agentID, "approved", resp.GetApproved())
+
+		// If not yet approved, enter PENDING_APPROVAL state and poll until approved.
+		if !resp.GetApproved() {
+			if !pendingLogged {
+				r.log.Info("agent pending admin approval", "agent_id", r.agentID)
+				pendingLogged = true
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(30 * time.Second):
+			}
+			// Re-register to check approval status.
+			continue
+		}
+
+		r.log.Info("registered with controller", "agent_id", r.agentID)
 		return nil
 	}
 }
@@ -339,12 +383,90 @@ func (r *runner) pollAndExecute(ctx context.Context) {
 		r.log.Info("task result reported", "task_id", resp.GetTaskId(), "success", success)
 	}
 
+	// Clean up work directory on success if configured.
+	if success && r.cfg.Agent.CleanupOnSuccess {
+		workDir := filepath.Join(r.cfg.Agent.WorkDir, resp.GetTaskId())
+		if err := os.RemoveAll(workDir); err != nil {
+			r.log.Warn("cleanup work dir failed", "path", workDir, "error", err)
+		}
+	}
+
 	r.setState(pb.AgentState_AGENT_STATE_IDLE, "")
 }
 
-// executeTask writes script files to disk and runs the .bat entrypoint,
-// streaming stdout/stderr to the controller.
+// validateTask performs pre-execution checks per AGENTS.md §5.1.
+// Returns a descriptive error if any check fails.
+func (r *runner) validateTask(task *pb.TaskAssignment) error {
+	// Timeout sanity.
+	if task.GetTimeoutSec() < 0 {
+		return fmt.Errorf("validation: invalid timeout %d", task.GetTimeoutSec())
+	}
+
+	// DE_PARAM_* variable completeness — all variables must be non-empty.
+	for k, v := range task.GetVariables() {
+		if strings.HasPrefix(k, "DE_PARAM_") && v == "" {
+			return fmt.Errorf("validation: required param %s is empty", k)
+		}
+	}
+
+	// UNC path validation.
+	if path := task.GetSourcePath(); path != "" {
+		if err := r.validateUNCPath(path); err != nil {
+			return fmt.Errorf("validation: source_path: %w", err)
+		}
+	}
+	if path := task.GetOutputPath(); path != "" {
+		if err := r.validateUNCPath(path); err != nil {
+			return fmt.Errorf("validation: output_path: %w", err)
+		}
+	}
+
+	// Script content must be present.
+	if len(task.GetScripts()) == 0 {
+		return fmt.Errorf("validation: task contains no scripts")
+	}
+	hasBat := false
+	for name, content := range task.GetScripts() {
+		if strings.HasSuffix(strings.ToLower(name), ".bat") {
+			hasBat = true
+			if strings.TrimSpace(content) == "" {
+				return fmt.Errorf("validation: bat script %q is empty", name)
+			}
+		}
+	}
+	if !hasBat {
+		return fmt.Errorf("validation: no .bat script found in task")
+	}
+
+	return nil
+}
+
+// validateUNCPath checks that path is within one of the configured allowed
+// shares per AGENTS.md §7.2. If allowed_shares is empty, all paths pass.
+func (r *runner) validateUNCPath(path string) error {
+	if len(r.cfg.AllowedShares) == 0 {
+		return nil
+	}
+	pathLower := strings.ToLower(path)
+	for _, prefix := range r.cfg.AllowedShares {
+		if strings.HasPrefix(pathLower, strings.ToLower(prefix)) {
+			return nil
+		}
+	}
+	return fmt.Errorf("path %q not in allowed shares", path)
+}
+
+// executeTask validates, writes script files to disk, and runs the .bat
+// entrypoint, streaming stdout/stderr to the controller with offline fallback.
 func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int, error) {
+	// §5.1 Pre-execution validation.
+	if err := r.validateTask(task); err != nil {
+		r.log.Error("task validation failed", "task_id", task.GetTaskId(), "error", err)
+		// Stream validation failure as an agent-level log entry.
+		r.streamAgentLog(ctx, task, "error", err.Error())
+		return -1, err
+	}
+
 	workDir := filepath.Join(r.cfg.Agent.WorkDir, task.GetTaskId())
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return -1, fmt.Errorf("creating work dir: %w", err)
@@ -376,9 +498,17 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		defer cancel()
 	}
 
-	r.log.Info("executing task", "bat", batPath)
+	r.log.Info("executing task", "bat", batPath, "task_id", task.GetTaskId())
+
+	// §5.3 Build cmd.exe with DE_PARAM_* environment variables.
 	cmd := exec.CommandContext(execCtx, "cmd.exe", "/c", batPath)
 	cmd.Dir = workDir
+
+	env := os.Environ()
+	for k, v := range task.GetVariables() {
+		env = append(env, k+"="+v)
+	}
+	cmd.Env = env
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -393,24 +523,84 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		return -1, fmt.Errorf("starting command: %w", err)
 	}
 
-	// Open a log stream to the controller.
+	// Open a log stream to the controller (may be nil if unavailable).
 	logStream, streamErr := r.client.StreamLogs(ctx)
+	if streamErr != nil {
+		r.log.Warn("could not open log stream, falling back to offline journal", "error", streamErr)
+	}
 
-	// Stream stdout and stderr in goroutines.
+	// §5.4 Start progress streamer.
+	var gpuFn func() *gpuSample
+	var gpuCh <-chan gpuSample
+	if r.cfg.GPU.Enabled && r.primaryGPUVendor != "" {
+		monitorInterval := r.cfg.GPU.MonitorInterval
+		if monitorInterval == 0 {
+			monitorInterval = 5 * time.Second
+		}
+		gpuCh = monitorGPU(execCtx, r.primaryGPUVendor, monitorInterval)
+		var lastSample gpuSample
+		var sampleMu sync.Mutex
+		// Forward GPU samples to a local variable for the progress streamer.
+		go func() {
+			for s := range gpuCh {
+				sampleMu.Lock()
+				lastSample = s
+				sampleMu.Unlock()
+			}
+		}()
+		gpuFn = func() *gpuSample {
+			sampleMu.Lock()
+			s := lastSample
+			sampleMu.Unlock()
+			return &s
+		}
+	}
+
+	ps := newProgressStreamer(r.client, task.GetTaskId(), task.GetJobId(), r.log, gpuFn)
+	cancelProgress := ps.start(execCtx)
+	defer cancelProgress()
+
+	// Stream stdout and stderr in goroutines with offline fallback.
 	var streamWg sync.WaitGroup
+
 	streamLine := func(stream string, scanner *bufio.Scanner) {
 		defer streamWg.Done()
 		for scanner.Scan() {
 			line := scanner.Text()
+
+			// §5.4 Parse progress from stdout.
+			if stream == "stdout" {
+				if pm := parseProgress(line); pm != nil {
+					select {
+					case ps.ch <- pm:
+					default:
+					}
+				}
+			}
+
+			level := "info"
+			if stream == "stderr" {
+				level = "warn"
+			}
+
+			entry := &pb.LogEntry{
+				TaskId:    task.GetTaskId(),
+				JobId:     task.GetJobId(),
+				Stream:    stream,
+				Level:     level,
+				Message:   line,
+				Timestamp: timestamppb.Now(),
+			}
+
 			if logStream != nil && streamErr == nil {
-				_ = logStream.Send(&pb.LogEntry{
-					TaskId:    task.GetTaskId(),
-					JobId:     task.GetJobId(),
-					Stream:    stream,
-					Level:     "info",
-					Message:   line,
-					Timestamp: timestamppb.Now(),
-				})
+				if sendErr := logStream.Send(entry); sendErr != nil {
+					// §8.1 Fall back to offline journal on send error.
+					r.log.Warn("log stream send failed, buffering offline", "error", sendErr)
+					_ = r.offline.saveLog(task.GetTaskId(), task.GetJobId(), stream, level, line)
+				}
+			} else {
+				// §8.1 No stream available — journal directly.
+				_ = r.offline.saveLog(task.GetTaskId(), task.GetJobId(), stream, level, line)
 			}
 		}
 	}
@@ -418,12 +608,13 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 	streamWg.Add(2)
 	go streamLine("stdout", bufio.NewScanner(stdout))
 	go streamLine("stderr", bufio.NewScanner(stderr))
-
 	streamWg.Wait()
 
 	// Close the log stream.
 	if logStream != nil && streamErr == nil {
-		_, _ = logStream.CloseAndRecv()
+		if _, err := logStream.CloseAndRecv(); err != nil {
+			r.log.Warn("closing log stream", "error", err)
+		}
 	}
 
 	waitErr := cmd.Wait()
@@ -436,8 +627,34 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 	return 0, nil
 }
 
-// syncOfflineResults replays any buffered results to the controller.
+// streamAgentLog sends a single agent-level log entry to the controller,
+// falling back to the offline journal if the stream is unavailable.
+func (r *runner) streamAgentLog(ctx context.Context, task *pb.TaskAssignment, level, message string) {
+	logStream, err := r.client.StreamLogs(ctx)
+	if err != nil {
+		_ = r.offline.saveLog(task.GetTaskId(), task.GetJobId(), "agent", level, message)
+		return
+	}
+	_ = logStream.Send(&pb.LogEntry{
+		TaskId:    task.GetTaskId(),
+		JobId:     task.GetJobId(),
+		Stream:    "agent",
+		Level:     level,
+		Message:   message,
+		Timestamp: timestamppb.Now(),
+	})
+	_, _ = logStream.CloseAndRecv()
+}
+
+// syncOfflineResults replays buffered results and logs to the controller
+// per AGENTS.md §4.3.
 func (r *runner) syncOfflineResults(ctx context.Context) {
+	r.syncResults(ctx)
+	r.syncLogs(ctx)
+}
+
+// syncResults syncs buffered task results via the SyncOfflineResults RPC.
+func (r *runner) syncResults(ctx context.Context) {
 	results, err := r.offline.pendingResults()
 	if err != nil {
 		r.log.Error("reading offline results", "error", err)
@@ -475,19 +692,63 @@ func (r *runner) syncOfflineResults(ctx context.Context) {
 		return
 	}
 
-	// Mark synced results. Build a set of rejected IDs for quick lookup.
 	rejected := make(map[string]bool, len(resp.GetRejectedTaskIds()))
 	for _, tid := range resp.GetRejectedTaskIds() {
 		rejected[tid] = true
 	}
 	for _, res := range results {
-		// Mark both accepted and rejected as synced so we don't re-send.
 		if err := r.offline.markSynced(res.ID); err != nil {
 			r.log.Error("marking result synced", "error", err, "id", res.ID)
 		}
 	}
 
-	r.log.Info("offline sync complete", "accepted", resp.GetAccepted(), "rejected", len(rejected))
+	r.log.Info("offline results sync complete", "accepted", resp.GetAccepted(), "rejected", len(rejected))
+}
+
+// syncLogs syncs buffered log lines via the StreamLogs RPC.
+func (r *runner) syncLogs(ctx context.Context) {
+	logs, err := r.offline.pendingLogs()
+	if err != nil {
+		r.log.Error("reading offline logs", "error", err)
+		return
+	}
+	if len(logs) == 0 {
+		return
+	}
+
+	r.log.Info("syncing offline logs", "count", len(logs))
+
+	stream, err := r.client.StreamLogs(ctx)
+	if err != nil {
+		r.log.Error("opening log sync stream", "error", err)
+		return
+	}
+
+	var synced []int64
+	for _, l := range logs {
+		if err := stream.Send(&pb.LogEntry{
+			TaskId:    l.TaskID,
+			JobId:     l.JobID,
+			Stream:    l.Stream,
+			Level:     l.Level,
+			Message:   l.Message,
+			Timestamp: timestamppb.New(l.CreatedAt),
+		}); err != nil {
+			r.log.Error("sending offline log", "error", err)
+			break
+		}
+		synced = append(synced, l.ID)
+	}
+
+	if _, err := stream.CloseAndRecv(); err != nil {
+		r.log.Warn("closing log sync stream", "error", err)
+	}
+
+	if err := r.offline.markLogsSynced(synced); err != nil {
+		r.log.Error("marking logs synced", "error", err)
+	}
+
+	r.log.Info("offline logs sync complete", "synced", len(synced))
 }
 
 // setState updates the agent's current state atomically.
