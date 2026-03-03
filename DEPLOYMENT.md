@@ -34,7 +34,54 @@ Operational guide for deploying and running the Distributed Video Encoder system
 - Agents need read access to source files and write access to output directories.
 - Recommended: SMB3 with encryption enabled for data in transit.
 
-### 1.4 PostgreSQL
+### 1.4 Agent Tool Requirements
+
+Each Windows Server agent requires the following tools installed and their paths configured in `agent.yaml`:
+
+| Tool | Minimum Version | Download |
+|---|---|---|
+| **FFmpeg** | 6.1+ (static build) | https://www.gyan.dev/ffmpeg/builds/ — use `ffmpeg-release-full-shared.7z` |
+| **x265** | 3.5+ | https://github.com/x265/x265 — pre-built Windows binaries in release assets |
+| **x264** | r3100+ | https://artifacts.videolan.org/x264/release-win64/ |
+| **SVT-AV1** | 1.8+ (optional) | https://gitlab.com/AOMediaCodec/SVT-AV1/-/releases |
+| **AviSynth+** | 3.7.3+ | https://github.com/AviSynth/AviSynth/releases (includes `avs2pipemod.exe`) |
+| **VapourSynth** | R65+ | https://github.com/vapoursynth/vapoursynth/releases |
+
+**Recommended layout on each agent host:**
+
+```
+C:\Tools\
+  ffmpeg\
+    ffmpeg.exe
+    ffprobe.exe
+  x265\
+    x265.exe
+  x264\
+    x264.exe
+  svt-av1\
+    SvtAv1EncApp.exe        # optional
+C:\Program Files\
+  AviSynth+\
+    avs2pipemod.exe
+  VapourSynth\
+    vspipe.exe
+```
+
+**Verification — run in an elevated PowerShell prompt before starting the agent service:**
+
+```powershell
+& "C:\Tools\ffmpeg\ffmpeg.exe"  -version | Select-Object -First 1
+& "C:\Tools\x265\x265.exe"      --version 2>&1 | Select-Object -First 1
+& "C:\Tools\x264\x264.exe"      --version 2>&1 | Select-Object -First 1
+& avs2pipemod                   --version
+& vspipe                        --version
+```
+
+Each command should print a version string without error. If a tool is missing or has the wrong path, the agent logs `tool not found` and rejects tasks requiring that tool.
+
+> **PATH note:** AviSynth+ and VapourSynth installers add themselves to the system PATH automatically. FFmpeg, x265, x264, and SVT-AV1 do not — configure the full path in `agent.yaml` under the `tools:` section, or add them to the system PATH manually.
+
+### 1.5 PostgreSQL
 
 - Version 16+ required.
 - Can run as a container alongside the Controller (default) or as an external managed instance.
@@ -806,3 +853,170 @@ Note: Agent system-level logs (`log/slog` output) are still written locally to `
 - **Share permissions**: After Windows updates or domain changes, verify that the agent service account still has access to UNC shares.
 - **API versioning**: The REST API is versioned at `/api/v1`. When upgrading the controller, check the changelog for breaking API changes. The OpenAPI spec at `/api/v1/openapi.json` is the source of truth for the current API surface.
 - **Session/OIDC expiry**: Session TTL defaults to 24h. OIDC tokens are refreshed automatically. If users report frequent logouts, check `auth.session_ttl` in `config.yaml`.
+
+---
+
+## 12. CLI Command Reference
+
+The controller binary exposes a CLI in addition to the HTTP server. All commands accept `--config <path>` to specify a non-default config file.
+
+```bash
+controller <command> [flags]
+```
+
+| Command | Description |
+|---|---|
+| `controller run` | Start the HTTP + gRPC server (primary production command) |
+| `controller server approve <hostname>` | Approve a pending agent |
+| `controller server revoke <hostname>` | Revoke an approved agent |
+| `controller agent list` | List all registered agents and their state |
+| `controller source list` | List all registered media sources |
+| `controller source scan <id>` | Trigger a rescan of a source directory |
+| `controller job list` | List recent jobs (`--limit`, `--status` flags available) |
+| `controller job cancel <id>` | Cancel a queued or running job |
+| `controller job requeue <id>` | Requeue a failed or cancelled job |
+| `controller template list` | List all encode templates |
+| `controller user list` | List local users |
+| `controller user create` | Create a local user (`--name`, `--password`, `--admin` flags) |
+| `controller user reset-password <username>` | Reset a user's password |
+| `controller webhook list` | List configured webhooks |
+| `controller tls gen-certs` | Generate a self-signed CA + server cert (development only) |
+
+**Examples:**
+
+```bash
+# Approve a newly connected agent
+controller server approve ENCODE-01
+
+# List all jobs in running state
+controller job list --status running
+
+# Requeue a failed job
+controller job requeue abc-123
+
+# Create an admin user (useful for first-run recovery if locked out)
+controller user create --name admin --password "s3cr3t" --admin
+```
+
+---
+
+## 13. Webhook Event Reference
+
+Webhooks fire for the following events. Configure which events a webhook receives in **Settings → Webhooks** or via the API (`POST /api/v1/webhooks`).
+
+| Event | Fired When |
+|---|---|
+| `job.queued` | A new job is submitted and enters the queue |
+| `job.started` | A job's first chunk begins executing on an agent |
+| `job.completed` | All chunks succeed; job reaches `completed` state |
+| `job.failed` | A chunk fails and retries are exhausted; job moves to `failed` |
+| `job.cancelled` | A job is manually cancelled via the UI or API |
+| `agent.connected` | An agent connects or reconnects after being offline |
+| `agent.approved` | An admin approves a `pending_approval` agent |
+| `agent.offline` | An agent misses its heartbeat deadline |
+| `test` | Sent by the **Test Fire** button in the UI |
+
+**Payload envelope** (all events):
+
+```json
+{
+  "event": "job.completed",
+  "timestamp": "2026-03-03T12:00:00Z",
+  "data": {
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "job_name": "Movie.2024.mkv — x265 encode",
+    "status": "completed",
+    "agent": "ENCODE-01",
+    "duration_seconds": 1847
+  }
+}
+```
+
+**Provider format:** The controller wraps the envelope for each provider automatically — Discord uses `{"content":"..."}`, Teams uses Adaptive Cards, Slack uses `{"text":"..."}`. You configure only the webhook URL and event list.
+
+**HMAC signature:** When `DE_WEBHOOK_HMAC_SECRET` is set, each delivery includes `X-Hub-Signature-256: sha256=<hex>` computed over the raw JSON body. Verify in your receiver:
+
+```python
+import hmac, hashlib
+expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+assert hmac.compare_digest(expected, received_sig.removeprefix("sha256="))
+```
+
+---
+
+## 14. Production Readiness Checklist
+
+Run through this before going live with real workloads.
+
+### Security
+- [ ] `DE_SESSION_SECRET` is a random 32+ character string (not the example value)
+- [ ] `.env` file has permissions `600` — `chmod 600 .env`
+- [ ] `.env` is listed in `.gitignore` and has never been committed
+- [ ] mTLS certificates use at least 2048-bit RSA or P-256 EC keys
+- [ ] Calendar reminder set 30 days before TLS certificate expiry
+- [ ] `DE_AGENT_AUTO_APPROVE=false` (default) — agents require manual approval
+- [ ] Port 8080 is behind a reverse proxy with TLS; not exposed directly to the internet
+- [ ] Port 9443 is accessible only from agent subnets
+
+### Database
+- [ ] `POSTGRES_PASSWORD` / `DE_DB_PASS` are strong, random passwords
+- [ ] PostgreSQL data volume is on persistent storage (not ephemeral container storage)
+- [ ] At least one backup taken and a restore test completed
+- [ ] `VACUUM ANALYZE` scheduled (weekly) — cron or `pg_cron`
+- [ ] `DE_TASK_LOG_RETENTION` set to an appropriate value (default `720h` = 30 days)
+
+### Agents
+- [ ] All required tools installed and verified on each agent host (see §1.4)
+- [ ] Agent service account has read access to UNC source shares
+- [ ] Agent service account has write access to UNC output/chunk directories
+- [ ] `allowed_shares` in `agent.yaml` is restricted to minimum required paths
+- [ ] Agent `work_dir` has 100 GB+ free disk space
+
+### Observability
+- [ ] Controller logs forwarded to a log aggregator or persistent file
+- [ ] Agent logs archived (default: `C:\DistEncoder\logs\`)
+- [ ] Alert configured for disk usage > 80% on agent work directories
+- [ ] `job.failed` webhook configured to notify the ops team
+
+### Operations
+- [ ] All agents on the same binary version as the controller
+- [ ] `scripts/gen-certs.sh` output stored securely (private keys are sensitive)
+- [ ] OIDC redirect URL matches identity provider registration (if using SSO)
+
+---
+
+## 15. Web UI Guide
+
+The web UI is served at `http://<controller-host>:8080` after login.
+
+| Page | Purpose |
+|---|---|
+| **Dashboard** | Live overview: active agents, queued/running/failed job counts, recent activity feed |
+| **Jobs** | Submit new jobs, view status, cancel, requeue, access live log stream per job |
+| **Sources** | Register and scan UNC media directories; browse indexed files; trigger encodes |
+| **Templates** | Create and edit Go `text/template` encode scripts; use **Preview** to validate before saving |
+| **Variables** | Define global key-value pairs injected into all templates as `{{.Vars.NAME}}` |
+| **Farm Servers** | View agent status, approve/revoke agents, inspect capabilities and active task |
+| **Webhooks** | Configure Discord/Teams/Slack endpoints; filter by event type; view delivery history |
+| **Users** | Manage local user accounts and admin roles (admin only) |
+| **Logs** | Centralized log viewer across all agents and controller; filterable by job/agent |
+| **API Docs** | Swagger UI at `/api/docs` — interactive REST API reference (admin only) |
+
+**Template context variables:**
+
+| Variable | Type | Description |
+|---|---|---|
+| `{{.SourcePath}}` | string | Full UNC path to the source file |
+| `{{.OutputDir}}` | string | UNC path for output files |
+| `{{.ChunkDir}}` | string | UNC path for this chunk's working directory |
+| `{{.ChunkIndex}}` | int | Zero-based chunk index |
+| `{{.TotalChunks}}` | int | Total number of chunks for this job |
+| `{{.StartFrame}}` | int | First frame of this chunk (for trim operations) |
+| `{{.EndFrame}}` | int | Last frame of this chunk |
+| `{{.Vars.NAME}}` | string | Global variable `NAME` from the Variables page |
+| `{{.Params.NAME}}` | string | Per-job parameter passed at submission time |
+
+**Tips:**
+- Use the **Preview** button in the template editor before saving — it validates Go `text/template` syntax and shows rendered output for a sample payload.
+- A broken template causes all new jobs to fail at the script-generation step. Use the **Preview** feature to catch errors before they reach production.
+- Variables are injected at render time. Changes to a variable value take effect on the next job submission — existing queued jobs use the values that were current at submission time.

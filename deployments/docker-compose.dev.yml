@@ -1,0 +1,51 @@
+# docker-compose.dev.yml — local development stack
+# Usage: docker compose -f deployments/docker-compose.dev.yml up -d
+#
+# This is NOT for production. It starts:
+#   - PostgreSQL (port 5432)
+#   - pgAdmin 4  (port 5050, admin@local.dev / admin)
+#
+# Run the controller locally (no container needed):
+#   cp .env.example .env && $EDITOR .env
+#   DATABASE_URL="postgres://distencoder:<pass>@localhost:5432/distencoder?sslmode=disable" make migrate-up
+#   go run ./cmd/controller run --config configs/controller.yaml.example
+#
+# Requires: POSTGRES_PASSWORD set in ../.env (or inline below)
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: distencoder
+      POSTGRES_USER: distencoder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U distencoder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+
+volumes:
+  postgres_dev_data:
+  pgadmin_dev_data:

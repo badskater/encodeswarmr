@@ -61,7 +61,7 @@ internal/
   db/                PostgreSQL migrations and sqlc query layer
   proto/             gRPC service definitions
   shared/            Shared types and utilities
-web/                 SvelteKit static build (embedded in controller binary)
+web/                 React + Vite static build (embedded in controller binary)
 proto/               Protobuf source files
 scripts/
   gen-certs.sh       mTLS certificate generation helper
@@ -156,6 +156,29 @@ controller server approve <agent-hostname>
 
 ---
 
+## First Run
+
+After `docker compose up -d` and `make migrate-up`, open `http://localhost:8080`. You will be prompted to create the first admin account.
+
+**Minimum setup before your first encode job:**
+
+1. **Approve an agent** — Agents start in `PENDING_APPROVAL`. Go to **Farm Servers** and click **Approve**, or run:
+   ```bash
+   controller server approve <agent-hostname>
+   ```
+
+2. **Add a source** — Go to **Sources → Add Source** and enter a UNC path to your media directory (e.g., `\\NAS01\media\movies`). Run a scan to index available files.
+
+3. **Create a template** — Go to **Templates → New Template**. Templates are Go `text/template` scripts that define encode parameters. The editor validates syntax before saving.
+
+4. **Set global variables** — Go to **Variables** to define shared constants injected into all templates (e.g., `OUTPUT_DIR`, `PRESET`).
+
+5. **Submit a job** — Go to **Sources**, select a file, click **Encode**, choose a template, and submit. The job appears on the **Jobs** page.
+
+6. **Monitor progress** — Click a running job to see the live log stream and progress percentage from the agent.
+
+---
+
 ## Configuration
 
 ### Agent (`agent.yaml`)
@@ -227,6 +250,8 @@ All controller settings can be supplied via `controller.yaml` or environment var
 
 See `configs/controller.yaml.example` and [DEPLOYMENT.md](DEPLOYMENT.md) for the full reference.
 
+**Configuration precedence:** Environment variables (`DE_*`) always win over `controller.yaml`. The recommended pattern is to keep secrets exclusively in `.env` (or Docker secrets) and use `controller.yaml` only for non-secret settings like timeouts and pool sizes.
+
 ---
 
 ## API
@@ -255,6 +280,39 @@ Key resource groups:
 
 ---
 
+## Example Workflow
+
+A complete encode from source file to finished output using the REST API:
+
+```bash
+# Authenticate and save session cookie
+curl -s -c cookies.txt -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"yourpassword"}'
+
+# Submit a job
+curl -s -b cookies.txt -X POST http://localhost:8080/api/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"source_id":"<source-uuid>","template_id":"<template-uuid>","priority":50}'
+# Returns: {"data":{"id":"<job-uuid>","status":"queued",...}}
+
+# Poll for status
+curl -s -b cookies.txt http://localhost:8080/api/v1/jobs/<job-uuid>
+
+# Stream live logs (Server-Sent Events — Ctrl+C to stop)
+curl -s -b cookies.txt http://localhost:8080/api/v1/jobs/<job-uuid>/log/stream
+
+# List all agents and their current state
+curl -s -b cookies.txt http://localhost:8080/api/v1/agents
+
+# Approve a pending agent
+curl -s -b cookies.txt -X POST http://localhost:8080/api/v1/agents/<agent-id>/approve
+```
+
+All of the above is also available via the web UI at `http://localhost:8080`.
+
+---
+
 ## Agent State Machine
 
 ```
@@ -277,7 +335,7 @@ INITIALISING -> REGISTERING -> PENDING_APPROVAL -> IDLE -> VALIDATING -> RUNNING
 | Language | Go 1.24+ (CGO-free static binaries) |
 | Agent to Controller | gRPC + mTLS (protobuf) |
 | REST API | stdlib `net/http` |
-| Web UI | SvelteKit (embedded in binary via `embed.FS`) |
+| Web UI | React + Vite (embedded in binary via `embed.FS`) |
 | Database | PostgreSQL 16+ with `pgx` |
 | DB HA | Patroni + pgBouncer (optional) |
 | Migrations | `golang-migrate` (plain SQL, embedded) |
