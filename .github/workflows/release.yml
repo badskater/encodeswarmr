@@ -29,9 +29,18 @@ jobs:
           cd dist
           tar czf controller-linux-amd64.tar.gz controller
           zip agent-windows-amd64.zip distencoder-agent.exe
+      - name: Install nFPM
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Build .deb package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}" nfpm package \
+            --config nfpm.yaml \
+            --packager deb \
+            --target dist/
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/controller-linux-amd64.tar.gz
             dist/agent-windows-amd64.zip
             dist/distencoder-agent.exe
+            dist/distributed-encoder-controller_*.deb

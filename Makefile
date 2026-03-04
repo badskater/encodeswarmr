@@ -1,4 +1,4 @@
-.PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin installer
+.PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin installer deb
 
 VERSION        ?= dev
 LDFLAGS        := -s -w -X main.Version=$(VERSION)
@@ -49,3 +49,7 @@ ISCC ?= C:\Program Files (x86)\Inno Setup 6\ISCC.exe
 
 installer:
 	"$(ISCC)" /DAgentVersion=$(VERSION) /O"dist" installer\agent-setup.iss
+
+# Build .deb package — requires nFPM: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+deb: controller
+	VERSION=$(VERSION) nfpm package --config nfpm.yaml --packager deb --target dist/

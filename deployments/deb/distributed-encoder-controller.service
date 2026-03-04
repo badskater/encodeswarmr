@@ -1,0 +1,32 @@
+[Unit]
+Description=Distributed Encoder Controller
+Documentation=https://github.com/badskater/distributed-encoder
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=distributed-encoder
+Group=distributed-encoder
+
+# Optional: place DE_* environment variables here instead of (or alongside)
+# the YAML config file. The leading '-' makes this file optional.
+EnvironmentFile=-/etc/distributed-encoder/environment
+
+ExecStart=/usr/bin/distributed-encoder-controller run \
+  --config /etc/distributed-encoder/controller.yaml
+
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=distributed-encoder-controller
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/distributed-encoder /var/log/distributed-encoder
+
+[Install]
+WantedBy=multi-user.target

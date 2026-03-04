@@ -9,7 +9,7 @@ database:
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "internal/db/migrations"
+  migrations_path: "/usr/share/distributed-encoder/migrations"
 
 grpc:
   host: "0.0.0.0"

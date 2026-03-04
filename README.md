@@ -126,6 +126,44 @@ DATABASE_URL="postgres://distenc:<pass>@localhost:5432/distencoder?sslmode=disab
 
 The web UI is available at `http://localhost:8080`.
 
+### Controller — Native install (Debian / Ubuntu 22.04 / 24.04)
+
+Download `distributed-encoder-controller_*_linux_amd64.deb` from the [latest GitHub Release](https://github.com/badskater/distributed-encoder/releases/latest):
+
+```bash
+sudo dpkg -i distributed-encoder-controller_*_linux_amd64.deb
+```
+
+Then complete the setup:
+
+1. **Edit the config** — `/etc/distributed-encoder/controller.yaml`
+   - `database.url` — PostgreSQL connection string
+   - `grpc.tls.cert` / `key` / `ca` — mTLS certificate paths (place files in `/etc/distributed-encoder/certs/`)
+   - `auth.session_secret` — at least 32 random characters: `openssl rand -hex 32`
+
+2. **Run database migrations** (requires [`golang-migrate`](https://github.com/golang-migrate/migrate)):
+   ```bash
+   migrate -path /usr/share/distributed-encoder/migrations \
+           -database "postgres://distencoder:<pass>@localhost:5432/distencoder" up
+   ```
+
+3. **Start the service:**
+   ```bash
+   sudo systemctl start distributed-encoder-controller
+   sudo systemctl status distributed-encoder-controller
+   ```
+
+The web UI is available at `http://<host>:8080`.
+Logs: `journalctl -u distributed-encoder-controller -f`
+
+To build the package locally (requires [`nFPM`](https://nfpm.goreleaser.com/)):
+
+```bash
+go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+make deb VERSION=1.2.0
+# Output: dist/distributed-encoder-controller_1.2.0_linux_amd64.deb
+```
+
 ### Agent — Windows Server
 
 #### GUI Installer (recommended)

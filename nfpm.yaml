@@ -1,0 +1,61 @@
+# nFPM package descriptor — Distributed Encoder Controller
+#
+# Build:
+#   VERSION=1.2.0 nfpm package --config nfpm.yaml --packager deb --target dist/
+#
+# Or via Makefile:
+#   make deb VERSION=1.2.0
+#
+# Install nFPM:
+#   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name:        distributed-encoder-controller
+arch:        amd64
+platform:    linux
+version:     ${VERSION}
+maintainer:  "badskater"
+description: |
+  Distributed Encoder Controller.
+  Orchestrates distributed video encoding across Windows Server agents.
+  Includes an embedded React web UI, REST API (port 8080), gRPC endpoint
+  with mTLS (port 9443), PostgreSQL-backed job queue, and webhook delivery.
+homepage:    https://github.com/badskater/distributed-encoder
+license:     MIT
+section:     misc
+priority:    optional
+
+depends:
+  - adduser
+
+contents:
+  # ── Controller binary ───────────────────────────────────────────────────────
+  - src: bin/controller
+    dst: /usr/bin/distributed-encoder-controller
+    file_info:
+      mode: 0755
+
+  # ── Config template (not overwritten on upgrade) ───────────────────────────
+  - src: configs/controller.yaml.example
+    dst: /etc/distributed-encoder/controller.yaml
+    type: config|noreplace
+
+  # ── Database migrations ────────────────────────────────────────────────────
+  - src: internal/db/migrations/
+    dst: /usr/share/distributed-encoder/migrations/
+
+  # ── Certs directory (operator populates with mTLS certs) ──────────────────
+  - dst: /etc/distributed-encoder/certs
+    type: dir
+    file_info:
+      mode: 0750
+      owner: distributed-encoder
+      group: distributed-encoder
+
+  # ── Systemd service unit ────────────────────────────────────────────────────
+  - src: deployments/deb/distributed-encoder-controller.service
+    dst: /lib/systemd/system/distributed-encoder-controller.service
+
+scripts:
+  postinstall: deployments/deb/postinstall.sh
+  preremove:   deployments/deb/preremove.sh
+  postremove:  deployments/deb/postremove.sh
