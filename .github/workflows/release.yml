@@ -34,3 +34,4 @@ jobs:
           files: |
             dist/controller-linux-amd64.tar.gz
             dist/agent-windows-amd64.zip
+            dist/distencoder-agent.exe

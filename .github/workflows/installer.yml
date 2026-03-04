@@ -1,0 +1,67 @@
+name: Build Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version string (without v prefix, e.g. 1.2.0)"
+        required: true
+
+jobs:
+  build-installer:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Derive version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "v=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup --version 6.3.3 --yes --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.ver.outputs.v }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DAgentVersion=$version `
+            /O"dist" `
+            installer\agent-setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify output
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No installer EXE found in dist\"
+            exit 1
+          }
+          $mb = [math]::Round($exe.Length / 1MB, 2)
+          Write-Host "Installer: $($exe.Name)  ($mb MB)"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: distencoder-agent-setup-${{ steps.ver.outputs.v }}
+          path: dist\distencoder-agent-setup.exe
+          if-no-files-found: error
+
+      - name: Attach installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist\distencoder-agent-setup.exe

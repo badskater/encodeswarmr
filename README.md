@@ -128,6 +128,26 @@ The web UI is available at `http://localhost:8080`.
 
 ### Agent — Windows Server
 
+#### GUI Installer (recommended)
+
+Download `distencoder-agent-setup.exe` from the [latest GitHub Release](https://github.com/badskater/distributed-encoder/releases/latest) and run it as Administrator. The wizard collects:
+
+- **Controller address** — host:port of the gRPC endpoint (e.g. `encoder.example.com:9443`)
+- **Agent hostname** — pre-filled with the computer name; used in logs and the web UI
+- **Release version** — downloaded from GitHub Releases during install
+- **Certificate folder** — directory containing `ca.crt`, `<hostname>.crt`, `<hostname>.key`
+
+The installer creates `C:\DistEncoder`, downloads the agent binary, copies certificates, writes `C:\ProgramData\distributed-encoder\agent.yaml`, and registers and starts the `distributed-encoder-agent` Windows Service.
+
+To build the installer locally (requires [Inno Setup 6](https://jrsoftware.org/isdl.php)):
+
+```bash
+make installer VERSION=1.2.0
+# Output: dist\distencoder-agent-setup.exe
+```
+
+#### Manual installation
+
 ```powershell
 # Copy the agent binary and config to the agent host
 # Edit agent.yaml with the correct controller address and cert paths

@@ -1,4 +1,4 @@
-.PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin
+.PHONY: all controller agent web proto test lint migrate-up migrate-down migrate-status bin installer
 
 VERSION        ?= dev
 LDFLAGS        := -s -w -X main.Version=$(VERSION)
@@ -42,3 +42,10 @@ migrate-status:
 
 bin:
 	mkdir -p bin
+
+# Windows only — requires Inno Setup 6: choco install innosetup
+# Override ISCC if installed to a non-default path.
+ISCC ?= C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+
+installer:
+	"$(ISCC)" /DAgentVersion=$(VERSION) /O"dist" installer\agent-setup.iss
