@@ -61,9 +61,10 @@ func (s *stubStore) GetSourceByUNCPath(context.Context, string) (*db.Source, err
 func (s *stubStore) ListSources(context.Context, db.ListSourcesFilter) ([]*db.Source, int64, error) {
 	return nil, 0, nil
 }
-func (s *stubStore) UpdateSourceState(context.Context, string, string) error  { return nil }
-func (s *stubStore) UpdateSourceVMAF(context.Context, string, float64) error  { return nil }
-func (s *stubStore) DeleteSource(context.Context, string) error               { return nil }
+func (s *stubStore) UpdateSourceState(context.Context, string, string) error              { return nil }
+func (s *stubStore) UpdateSourceVMAF(context.Context, string, float64) error              { return nil }
+func (s *stubStore) UpdateSourceHDR(context.Context, db.UpdateSourceHDRParams) error      { return nil }
+func (s *stubStore) DeleteSource(context.Context, string) error                           { return nil }
 
 func (s *stubStore) CreateJob(context.Context, db.CreateJobParams) (*db.Job, error) {
 	return nil, nil

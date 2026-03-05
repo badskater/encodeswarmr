@@ -19,6 +19,8 @@ import (
 //
 // Tool paths are resolved from environment variables injected by the agent
 // (FFPROBE_BIN, DOVI_TOOL_BIN) with PATH fallbacks.
+// hdrDetectScriptBat is split using string concatenation at the two backtick
+// pairs because Go raw string literals cannot contain backtick characters.
 const hdrDetectScriptBat = `@echo off
 setlocal enabledelayedexpansion
 
@@ -35,7 +37,7 @@ set "COLOR_TRANSFER="
 set "CODEC_TAG="
 
 rem Query color metadata and side-data types from the first video stream.
-for /f "usebackq delims=" %%a in (`"%FFPROBE%" -v error -select_streams v:0 -show_entries stream=color_transfer,codec_tag_string -show_entries stream_side_data=type -of flat=s=_ "!SOURCE!" 2^>nul`) do (
+for /f "usebackq delims=" %%a in (` + "`" + `"%FFPROBE%" -v error -select_streams v:0 -show_entries stream=color_transfer,codec_tag_string -show_entries stream_side_data=type -of flat=s=_ "!SOURCE!" 2^>nul` + "`" + `) do (
     echo %%a | findstr /i "color_transfer" >nul 2>&1 && (
         for /f "tokens=2 delims==" %%v in ("%%a") do set "COLOR_TRANSFER=%%~v"
     )
@@ -64,7 +66,7 @@ if defined HAS_DV (
 rem Use dovi_tool for the DV profile number (optional).
 if /i "!HDR_TYPE!"=="dolby_vision" (
     if not "!DOVI_TOOL!"=="" (
-        for /f "usebackq delims=" %%d in (`"!DOVI_TOOL!" info -i "!SOURCE!" 2^>nul`) do (
+        for /f "usebackq delims=" %%d in (` + "`" + `"!DOVI_TOOL!" info -i "!SOURCE!" 2^>nul` + "`" + `) do (
             echo %%d | findstr /ri "\"profile\"" >nul 2>&1 && (
                 for /f "tokens=2 delims=: " %%p in ("%%d") do (
                     set "DV_PROFILE=%%p"
