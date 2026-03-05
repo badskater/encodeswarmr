@@ -30,6 +30,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design and [AGENTS.md
 ## Features
 
 - **Job orchestration** — priority FIFO queue, script generation (AviSynth `.avs`, VapourSynth `.vpy`, `.bat`), PostgreSQL state tracking
+- **Auto-analysis** — registering a source automatically queues `analysis` (VMAF, histogram, scene detection) and `hdr_detect` jobs; no manual operator action required
+- **HDR/DV metadata** — `hdr_detect` jobs detect HDR10, HDR10+, Dolby Vision (with profile), and HLG; results stored on the source record and exposed in the web UI
 - **GPU encoding** — NVIDIA NVENC, Intel QSV, AMD AMF auto-detected and monitored per agent
 - **Offline resilience** — agents buffer task results and log lines to SQLite and replay on reconnect
 - **Live log streaming** — stdout/stderr streamed to the Controller over gRPC; viewable in the web UI in real time
@@ -225,7 +227,7 @@ After `docker compose up -d` and `make migrate-up`, open `http://localhost:8080`
    controller server approve <agent-hostname>
    ```
 
-2. **Add a source** — Go to **Sources → Add Source** and enter a UNC path to your media directory (e.g., `\\NAS01\media\movies`). Run a scan to index available files.
+2. **Add a source** — Go to **Sources → Add Source** and enter the UNC path to a media file (e.g., `\\NAS01\media\movie.m2ts`). Saving it automatically queues an `analysis` job and an `hdr_detect` job — no manual scan step required. These run on the next available idle agent.
 
 3. **Create a template** — Go to **Templates → New Template**. Templates are Go `text/template` scripts that define encode parameters. The editor validates syntax before saving.
 
@@ -329,6 +331,7 @@ Key resource groups:
 | Prefix | Description |
 |---|---|
 | `/auth` | Login, logout, OIDC redirect |
+| `/api/v1/sources` | Register sources (auto-schedules analysis), HDR detect, HDR metadata |
 | `/api/v1/jobs` | Create, list, cancel, requeue encoding jobs |
 | `/api/v1/agents` | List agents, approve, revoke, view capabilities |
 | `/api/v1/analysis` | Histogram, VMAF, scene detection results |

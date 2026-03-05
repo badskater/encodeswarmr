@@ -227,7 +227,7 @@ sudo systemctl enable --now distencoder
    - **Frameserver scripts** (`.avs` / `.vpy`) — define video filtering (deinterlace, denoise, crop, etc.).
    - Use the **Template Editor** (`/admin/templates/{id}`) for syntax-highlighted editing with a variable reference panel and live preview. Templates use Go `text/template` syntax — see ARCHITECTURE.md §3.4 for available variables and custom functions.
    - Click **Preview** to render the template with sample data before saving. A bad template can cause all jobs to fail.
-6. **(Optional) Run a scene detection scan** on a source file before encoding. Scene boundaries enable **scene-based chunking** during encode configuration — each chunk gets its own `.avs`/`.vpy` with correct frame ranges.
+6. **Add sources** — Go to **Sources → Add Source** and enter a UNC path (e.g., `\\NAS01\media\movie.m2ts`). When a new source is saved, `analysis` (VMAF, scene detection, histogram) and `hdr_detect` jobs are **automatically queued**. Agents must be approved and idle for these to run. Scene boundaries from the analysis job unlock **scene-based chunking** in the encode config.
 7. **Review the API docs** (admin only) at `/api/docs` to explore the REST API via the built-in Swagger UI. Disabled in production by default — enable in `config.yaml` with `api.docs_enabled: true`.
 
 ### 2.6 Agent Approval
@@ -350,8 +350,8 @@ nvidia-smi
 
 Once agents are approved and tools verified, the typical encoding workflow is:
 
-1. **Detect source** — agent discovers a `.m2ts` file in a UNC drop-folder, or an operator adds it manually via the web UI.
-2. **Scan (optional)** — run histogram, VMAF, and/or **scene detection** scans on the source via **Sources > Scan**.
+1. **Register source** — an operator adds the source via **Sources → Add Source** (UNC path), or an agent auto-discovers it in a configured drop-folder.
+2. **Analysis auto-scheduled** — when a source is registered, `analysis` (VMAF, histogram, scene detection) and `hdr_detect` jobs are automatically queued. Wait for these to complete before using scene-based chunking. To manually re-trigger analysis, use **Sources → Re-run Analysis** or the API endpoints `POST /api/v1/sources/{id}/analyze` and `POST /api/v1/sources/{id}/hdr-detect`.
 3. **Configure encode** — navigate to **Sources > Configure Encode**:
    - Select a **run script** template (`.bat`) and a **frameserver** template (`.avs` or `.vpy`).
    - Choose **chunking mode**:
@@ -418,7 +418,19 @@ migrate -path internal/db/migrations -database "$DATABASE_URL" down 1
 migrate -path internal/db/migrations -database "$DATABASE_URL" version
 ```
 
-### 4.3 Creating New Migrations
+### 4.3 Migration History Notes
+
+| Migration | Description |
+|---|---|
+| `001` | Core tables: `users`, `agents`, `sources` |
+| `002` | `jobs` and `tasks` tables; initial `job_type` constraint (`encode`, `analysis`, `audio`) |
+| `003–009` | Task logs, templates, variables, webhooks, analysis results, sessions, encode config, enrollment tokens |
+| `010` | `sources.hdr_type` and `sources.dv_profile` columns; extend `analysis_results` type constraint to include `hdr_detect` |
+| `011` | **Bugfix**: extend `jobs.job_type` CHECK constraint to include `hdr_detect` (was omitted when the job type was introduced in `010`) |
+
+> **Note:** If you are upgrading from a version prior to `011`, run migration `011` before deploying — any `hdr_detect` job insert will fail at the database level on PostgreSQL without it.
+
+### 4.4 Creating New Migrations
 
 ```bash
 migrate create -ext sql -dir internal/db/migrations -seq <description>

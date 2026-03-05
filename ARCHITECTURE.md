@@ -206,7 +206,7 @@ A distributed video encoding system that offloads encoding tasks from a central 
 | **Password hashing** | **`golang.org/x/crypto/bcrypt`** | bcrypt for local user password storage. |
 | **API Spec** | **OpenAPI 3.1** | Machine-readable API definition. Auto-generated from Go handler annotations. Powers Swagger UI, client SDK generation, and contract testing. |
 | **API Errors** | **RFC 9457** (Problem Details) | Standard `application/problem+json` error format. Structured, machine-parseable errors with correlation IDs. |
-| **CI** | **GitHub Actions** | `go build`, `go test`, `goreleaser` for release artefacts (Linux amd64, Windows amd64). |
+| **CI** | **GitHub Actions** | `go build`, `go test`, `goreleaser` for release artefacts (Linux amd64, Windows amd64). Dependabot for weekly Go module, npm, and GitHub Actions dependency updates (`.github/dependabot.yml`). |
 
 ---
 
@@ -404,7 +404,11 @@ The API is versioned via URL path (`/api/v1`). Breaking changes increment the ve
 | Method | Endpoint | Role | Description |
 |---|---|---|---|
 | GET | `/sources` | viewer+ | List all sources with state and VMAF score |
-| GET | `/sources/{id}` | viewer+ | Source detail + VMAF results |
+| POST | `/sources` | operator+ | Register a new source by UNC path. Idempotent — returns existing source if already registered. **Auto-schedules `analysis` and `hdr_detect` jobs** for genuinely new sources. |
+| GET | `/sources/{id}` | viewer+ | Source detail + VMAF results + HDR metadata |
+| POST | `/sources/{id}/analyze` | operator+ | Manually trigger an `analysis` job (histogram, VMAF, scene detection) for a source |
+| POST | `/sources/{id}/hdr-detect` | operator+ | Manually queue an `hdr_detect` job for a source |
+| PATCH | `/sources/{id}/hdr` | operator+ | Set HDR metadata directly (`hdr_type`, `dv_profile`) — used by agents after `hdr_detect` completes |
 | POST | `/sources/{id}/encode` | operator+ | Submit an encoding job for a source |
 | DELETE | `/sources/{id}` | operator+ | Remove a source record (does not delete the file) |
 | POST | `/analysis/scan` | operator+ | Trigger histogram / VMAF scan on a source file |
@@ -623,7 +627,7 @@ Transport: **mTLS** on port `9443`. Certificates auto-provisioned on first agent
 | **Analysis Coordinator** | Dispatches histogram and VMAF analysis requests to agents (or runs locally if ffmpeg/vmaf are available on the controller). Stores per-frame results in PostgreSQL JSONB columns. |
 | **Template Engine** | Go `text/template` with custom functions (`uncPath`, `escapeBat`, `gpuFlag`, etc.). Templates stored in DB, editable via web UI. |
 | **Variable Store** | Key-value global variables (e.g. `ENCODER_PATH`, `X265_PARAMS`, `OUTPUT_ROOT`). Injected at script-generation time. Exposed as `%VAR_NAME%` in `.bat` and as constants in `.avs`/`.vpy`. |
-| **Queue Manager** | Separate logical queues: `encode`, `analysis`, `audio`. Configurable concurrency per queue (default: 1 per agent). |
+| **Queue Manager** | Separate logical queues: `encode`, `analysis`, `audio`, `hdr_detect`. Configurable concurrency per queue (default: 1 per agent). |
 
 **Job State Machine:**
 
@@ -1387,8 +1391,10 @@ This prevents resource contention on the encoding machine and ensures determinis
 
 **Analysis Pipeline Overview:**
 
+Analysis is **automatically triggered** when a source is registered via `POST /api/v1/sources`. Two jobs are auto-created: an `analysis` job (histogram, VMAF, scene detection) and an `hdr_detect` job. Both can also be re-triggered manually via the web UI or the `POST /sources/{id}/analyze` and `POST /sources/{id}/hdr-detect` endpoints.
+
 ```
-  User triggers scan via Web UI / API
+  Source registered (POST /sources) — OR — operator triggers scan via Web UI / API
          │
          ▼
   ┌──────────────────────────────────────────────────────────────────────┐
@@ -1903,12 +1909,29 @@ CREATE TABLE agents (
     config          JSONB           -- agent-specific overrides
 );
 
+-- Sources (registered media files accessible via UNC)
+CREATE TABLE sources (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    filename     TEXT        NOT NULL,
+    unc_path     TEXT        NOT NULL UNIQUE,
+    size_bytes   BIGINT      NOT NULL DEFAULT 0,
+    detected_by  UUID        REFERENCES agents(id) ON DELETE SET NULL,
+    state        TEXT        NOT NULL DEFAULT 'detected'
+                             CHECK (state IN ('detected', 'scanning', 'ready', 'encoding', 'done')),
+    vmaf_score   FLOAT,
+    hdr_type     TEXT        NOT NULL DEFAULT '',    -- '', 'hdr10', 'hdr10+', 'dolby_vision', 'hlg'
+    dv_profile   SMALLINT    NOT NULL DEFAULT 0,    -- 0 = no DV, otherwise DV profile number (5,7,8,9,...)
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_sources_state ON sources (state);
+
 -- Jobs
 CREATE TABLE jobs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_path     TEXT NOT NULL,   -- UNC path
+    source_id       UUID NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,  -- normalized FK to sources
     output_path     TEXT,
-    job_type        TEXT NOT NULL,   -- encode, analysis_histogram, analysis_vmaf, scene_detect, audio
+    job_type        TEXT NOT NULL,   -- encode, analysis, audio, hdr_detect
     status          TEXT NOT NULL DEFAULT 'queued',
     priority        INT NOT NULL DEFAULT 100,
     agent_id        UUID REFERENCES agents(id),
@@ -1955,7 +1978,7 @@ CREATE TABLE global_variables (
 CREATE TABLE analysis_results (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id          UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    analysis_type   TEXT NOT NULL,   -- histogram, vmaf, scene_detect
+    analysis_type   TEXT NOT NULL,   -- histogram, vmaf, scene_detect, hdr_detect
     frame_data      JSONB,           -- per-frame array
     summary         JSONB,           -- aggregated stats
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -2566,7 +2589,6 @@ User creates job via Web UI / API
 | Area | Description |
 |---|---|
 | **Chunk-based parallel encoding** | Split source at scene boundaries, encode segments in parallel across agents, concatenate. |
-| **Dolby Vision / HDR10+ passthrough** | RPU extraction and injection in the pipeline. |
 | **Linux agent support** | The Go codebase already cross-compiles; would require systemd service integration instead of Windows Service. |
 | **S3 / object storage** | Support cloud storage as source/destination in addition to UNC shares. |
 | **Multi-controller HA** | Active-passive or active-active controllers behind a load balancer for zero-downtime upgrades. |
