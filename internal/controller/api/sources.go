@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -50,7 +51,29 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
 	}
+
+	// Automatically queue scene detection / VMAF analysis and HDR/DV detection
+	// for every new source.  Encode script generation is deferred until the
+	// operator explicitly submits an encode job.
+	s.scheduleSourceAnalysis(r.Context(), source.ID)
+
 	writeJSON(w, r, http.StatusCreated, source)
+}
+
+// scheduleSourceAnalysis creates an analysis job (VMAF + scene detection) and
+// an hdr_detect job for the given source.  Failures are logged as warnings and
+// do not affect the caller — the jobs can be re-triggered manually via the
+// individual source endpoints if needed.
+func (s *Server) scheduleSourceAnalysis(ctx context.Context, sourceID string) {
+	for _, jobType := range []string{"analysis", "hdr_detect"} {
+		if _, err := s.store.CreateJob(ctx, db.CreateJobParams{
+			SourceID: sourceID,
+			JobType:  jobType,
+		}); err != nil {
+			s.logger.Warn("auto-create analysis job failed",
+				"source_id", sourceID, "job_type", jobType, "err", err)
+		}
+	}
 }
 
 func (s *Server) handleAnalyzeSource(w http.ResponseWriter, r *http.Request) {
