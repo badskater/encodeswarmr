@@ -526,6 +526,17 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 	cmd.Dir = workDir
 
 	env := os.Environ()
+	// Inject configured tool paths so scripts can reference them via env vars.
+	if r.cfg.Tools.FFmpeg != "" {
+		env = append(env, "FFMPEG_BIN="+r.cfg.Tools.FFmpeg)
+	}
+	if r.cfg.Tools.FFprobe != "" {
+		env = append(env, "FFPROBE_BIN="+r.cfg.Tools.FFprobe)
+	}
+	if r.cfg.Tools.DoviTool != "" {
+		env = append(env, "DOVI_TOOL_BIN="+r.cfg.Tools.DoviTool)
+	}
+	// Task variables are appended last so they can override the above.
 	for k, v := range task.GetVariables() {
 		env = append(env, k+"="+v)
 	}

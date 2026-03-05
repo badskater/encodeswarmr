@@ -59,6 +59,8 @@ export interface Source {
   duration_sec: number | null
   state: 'new' | 'analysing' | 'ready' | 'encoding' | 'done' | 'error'
   vmaf_score: number | null
+  hdr_type: string
+  dv_profile: number
   created_at: string
 }
 

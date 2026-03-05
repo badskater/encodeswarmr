@@ -13,6 +13,8 @@ export default function CreateJob() {
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
+
+  const selectedSource = sources.find(s => s.id === sourceId) ?? null
   const [priority, setPriority] = useState(0)
   const [targetTags, setTargetTags] = useState('')
   const [runTemplateId, setRunTemplateId] = useState('')
@@ -77,6 +79,14 @@ export default function CreateJob() {
   const batTemplates = templates.filter(t => t.type === 'bat')
   const fsTemplates = templates.filter(t => t.type === 'avs' || t.type === 'vpy')
 
+  function hdrLabel(hdrType: string, dvProfile: number): string {
+    if (hdrType === 'dolby_vision') return dvProfile > 0 ? `Dolby Vision Profile ${dvProfile}` : 'Dolby Vision'
+    if (hdrType === 'hdr10plus') return 'HDR10+'
+    if (hdrType === 'hdr10') return 'HDR10'
+    if (hdrType === 'hlg') return 'HLG'
+    return 'Unknown / SDR'
+  }
+
   return (
     <div className="max-w-2xl space-y-4">
       <div className="flex items-center gap-3">
@@ -97,6 +107,25 @@ export default function CreateJob() {
             ))}
           </select>
         </div>
+
+        {selectedSource && (
+          <div className="rounded border border-th-border-subtle bg-th-surface-muted px-3 py-2 text-xs space-y-0.5">
+            <p className="text-th-text-muted font-medium mb-1">Source metadata</p>
+            <p className="text-th-text-secondary">
+              <span className="text-th-text-muted">HDR:</span>{' '}
+              {hdrLabel(selectedSource.hdr_type, selectedSource.dv_profile)}
+            </p>
+            {selectedSource.dv_profile > 0 && (
+              <p className="text-th-text-secondary">
+                <span className="text-th-text-muted">DV Profile:</span> {selectedSource.dv_profile}
+              </p>
+            )}
+            <p className="text-th-text-subtle mt-1">
+              Use <code className="font-mono">{'{{.HDR_TYPE}}'}</code> and{' '}
+              <code className="font-mono">{'{{.DV_PROFILE}}'}</code> in script templates.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

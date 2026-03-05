@@ -139,6 +139,15 @@ export const getSource = (id: string) => request<Source>(`/sources/${id}`)
 
 export const analyzeSource = (id: string) => request<Job>(`/sources/${id}/analyze`, { method: 'POST' })
 
+export const hdrDetectSource = (id: string) =>
+  request<{ job_id: string; source_id: string; status: string }>(`/sources/${id}/hdr-detect`, { method: 'POST' })
+
+export const updateSourceHDR = (id: string, hdr_type: string, dv_profile: number) =>
+  request<Source>(`/sources/${id}/hdr`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hdr_type, dv_profile }),
+  })
+
 export const deleteSource = (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' })
 
 export const getAnalysis = (sourceId: string) => request<AnalysisResult>(`/analysis/${sourceId}`)

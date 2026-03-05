@@ -27,6 +27,7 @@ tools:
   svt_av1: ""
   avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"
   vspipe: "C:\\Program Files\\VapourSynth\\vspipe.exe"
+  dovi_tool: ""   # optional: path to dovi_tool.exe for Dolby Vision profile detection
 
 gpu:
   enabled: true

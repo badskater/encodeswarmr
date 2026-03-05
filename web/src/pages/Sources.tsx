@@ -35,6 +35,7 @@ export default function Sources() {
   const [formName, setFormName] = useState('')
   const [formSaving, setFormSaving] = useState(false)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
+  const [detectingHDRId, setDetectingHDRId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
@@ -96,6 +97,27 @@ export default function Sources() {
     }
   }
 
+  const handleHDRDetect = async (id: string, ev: React.MouseEvent) => {
+    ev.stopPropagation()
+    setDetectingHDRId(id)
+    try {
+      await api.hdrDetectSource(id)
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to trigger HDR detection')
+    } finally {
+      setDetectingHDRId(null)
+    }
+  }
+
+  function hdrLabel(hdrType: string, dvProfile: number): string {
+    if (hdrType === 'dolby_vision') return dvProfile > 0 ? `DV P${dvProfile}` : 'Dolby Vision'
+    if (hdrType === 'hdr10plus') return 'HDR10+'
+    if (hdrType === 'hdr10') return 'HDR10'
+    if (hdrType === 'hlg') return 'HLG'
+    return '—'
+  }
+
   if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
@@ -145,7 +167,7 @@ export default function Sources() {
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
-              {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'State', 'Created', ''].map(h => (
+              {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'HDR', 'State', 'Created', ''].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
@@ -164,25 +186,41 @@ export default function Sources() {
                 <td className="px-4 py-2 text-th-text-secondary">
                   {s.vmaf_score != null ? s.vmaf_score.toFixed(1) : '—'}
                 </td>
+                <td className="px-4 py-2 text-th-text-secondary whitespace-nowrap">
+                  {hdrLabel(s.hdr_type, s.dv_profile)}
+                </td>
                 <td className="px-4 py-2"><StatusBadge status={s.state} /></td>
                 <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(s.created_at)}</td>
                 <td className="px-4 py-2">
-                  <button
-                    onClick={e => handleAnalyze(s.id, e)}
-                    disabled={analyzingId === s.id}
-                    className="text-xs px-2 py-1 rounded disabled:opacity-50"
-                    style={{
-                      backgroundColor: 'var(--th-badge-running-bg)',
-                      color: 'var(--th-badge-running-text)',
-                    }}
-                  >
-                    {analyzingId === s.id ? 'Queuing…' : 'Analyze'}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={e => handleAnalyze(s.id, e)}
+                      disabled={analyzingId === s.id}
+                      className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                      style={{
+                        backgroundColor: 'var(--th-badge-running-bg)',
+                        color: 'var(--th-badge-running-text)',
+                      }}
+                    >
+                      {analyzingId === s.id ? 'Queuing…' : 'Analyze'}
+                    </button>
+                    <button
+                      onClick={e => handleHDRDetect(s.id, e)}
+                      disabled={detectingHDRId === s.id}
+                      className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                      style={{
+                        backgroundColor: 'var(--th-badge-assigned-bg)',
+                        color: 'var(--th-badge-assigned-text)',
+                      }}
+                    >
+                      {detectingHDRId === s.id ? 'Queuing…' : 'HDR Detect'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
             {sources.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-4 text-center text-th-text-subtle">No sources found</td></tr>
+              <tr><td colSpan={9} className="px-4 py-4 text-center text-th-text-subtle">No sources found</td></tr>
             )}
           </tbody>
         </table>

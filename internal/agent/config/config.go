@@ -47,13 +47,14 @@ type AgentConfig struct {
 }
 
 type ToolsConfig struct {
-	FFmpeg  string `mapstructure:"ffmpeg"`
-	FFprobe string `mapstructure:"ffprobe"`
-	X265    string `mapstructure:"x265"`
-	X264    string `mapstructure:"x264"`
-	SvtAv1  string `mapstructure:"svt_av1"`
-	AvsPipe string `mapstructure:"avs_pipe"`
-	VSPipe  string `mapstructure:"vspipe"`
+	FFmpeg   string `mapstructure:"ffmpeg"`
+	FFprobe  string `mapstructure:"ffprobe"`
+	X265     string `mapstructure:"x265"`
+	X264     string `mapstructure:"x264"`
+	SvtAv1   string `mapstructure:"svt_av1"`
+	AvsPipe  string `mapstructure:"avs_pipe"`
+	VSPipe   string `mapstructure:"vspipe"`
+	DoviTool string `mapstructure:"dovi_tool"`
 }
 
 type GPUConfig struct {

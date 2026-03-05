@@ -25,8 +25,9 @@ tools:
   x265:     "/usr/bin/x265"
   x264:     "/usr/bin/x264"
   svt_av1:  ""
-  avs_pipe: ""    # AviSynth not available on Linux
-  vspipe:   ""    # Set if VapourSynth is installed
+  avs_pipe: ""          # AviSynth not available on Linux
+  vspipe:   ""          # Set if VapourSynth is installed
+  dovi_tool: ""         # optional: path to dovi_tool binary for Dolby Vision profile detection
 
 gpu:
   enabled: true

@@ -84,6 +84,17 @@ function VmafSparkline({ data }: { data: AnalysisFramePoint[] }) {
   )
 }
 
+const HDR_TYPES = ['', 'hdr10', 'hdr10plus', 'dolby_vision', 'hlg']
+
+function hdrLabel(hdrType: string, dvProfile: number): string {
+  if (hdrType === 'dolby_vision') return dvProfile > 0 ? `Dolby Vision Profile ${dvProfile}` : 'Dolby Vision'
+  if (hdrType === 'hdr10plus') return 'HDR10+'
+  if (hdrType === 'hdr10') return 'HDR10'
+  if (hdrType === 'hlg') return 'HLG'
+  if (hdrType === '') return 'Unknown / SDR'
+  return hdrType
+}
+
 export default function SourceDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -91,6 +102,11 @@ export default function SourceDetail() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [detectingHDR, setDetectingHDR] = useState(false)
+  const [showHDROverride, setShowHDROverride] = useState(false)
+  const [overrideHDRType, setOverrideHDRType] = useState('')
+  const [overrideDVProfile, setOverrideDVProfile] = useState(0)
+  const [savingHDR, setSavingHDR] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -99,6 +115,35 @@ export default function SourceDetail() {
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleHDRDetect = async () => {
+    if (!id) return
+    setDetectingHDR(true)
+    setError('')
+    try {
+      await api.hdrDetectSource(id)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to trigger HDR detection')
+    } finally {
+      setDetectingHDR(false)
+    }
+  }
+
+  const handleHDROverrideSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id) return
+    setSavingHDR(true)
+    setError('')
+    try {
+      const updated = await api.updateSourceHDR(id, overrideHDRType, overrideDVProfile)
+      setSource(updated)
+      setShowHDROverride(false)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to update HDR metadata')
+    } finally {
+      setSavingHDR(false)
+    }
+  }
 
   if (loading) return <p className="text-th-text-muted">Loading…</p>
   if (error) return <p className="text-red-600">{error}</p>
@@ -121,6 +166,67 @@ export default function SourceDetail() {
         <Row label="Duration" value={fmtDuration(source.duration_sec)} />
         <Row label="State" value={<StatusBadge status={source.state} />} />
         <Row label="VMAF Score" value={source.vmaf_score != null ? source.vmaf_score.toFixed(2) : '—'} />
+        <Row label="HDR Type" value={
+          <span className="flex items-center gap-2">
+            {hdrLabel(source.hdr_type, source.dv_profile)}
+            <button
+              onClick={handleHDRDetect}
+              disabled={detectingHDR}
+              className="text-xs px-2 py-0.5 rounded disabled:opacity-50"
+              style={{ backgroundColor: 'var(--th-badge-assigned-bg)', color: 'var(--th-badge-assigned-text)' }}
+            >
+              {detectingHDR ? 'Queuing…' : 'Detect'}
+            </button>
+            <button
+              onClick={() => {
+                setOverrideHDRType(source.hdr_type)
+                setOverrideDVProfile(source.dv_profile)
+                setShowHDROverride(v => !v)
+              }}
+              className="text-xs px-2 py-0.5 rounded"
+              style={{ backgroundColor: 'var(--th-badge-neutral-bg)', color: 'var(--th-badge-neutral-text)' }}
+            >
+              Override
+            </button>
+          </span>
+        } />
+        {showHDROverride && (
+          <form onSubmit={handleHDROverrideSave} className="flex items-end gap-2 py-2 pl-40">
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">HDR Type</label>
+              <select
+                value={overrideHDRType}
+                onChange={e => setOverrideHDRType(e.target.value)}
+                className="bg-th-input-bg border border-th-input-border rounded px-2 py-1 text-sm text-th-text"
+              >
+                {HDR_TYPES.map(t => (
+                  <option key={t} value={t}>{t === '' ? 'Unknown / SDR' : t}</option>
+                ))}
+              </select>
+            </div>
+            {overrideHDRType === 'dolby_vision' && (
+              <div>
+                <label className="block text-xs text-th-text-muted mb-1">DV Profile</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={9}
+                  value={overrideDVProfile}
+                  onChange={e => setOverrideDVProfile(parseInt(e.target.value) || 0)}
+                  className="w-20 bg-th-input-bg border border-th-input-border rounded px-2 py-1 text-sm text-th-text"
+                />
+              </div>
+            )}
+            <button type="submit" disabled={savingHDR}
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+              {savingHDR ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" onClick={() => setShowHDROverride(false)}
+              className="text-sm text-th-text-muted hover:text-th-text">
+              Cancel
+            </button>
+          </form>
+        )}
       </div>
 
       {analysis ? (
