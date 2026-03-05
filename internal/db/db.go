@@ -120,6 +120,9 @@ type Store interface {
 	RetryFailedTasksForJob(ctx context.Context, jobID string) error
 	ListJobLogs(ctx context.Context, p ListJobLogsParams) ([]*TaskLog, error)
 	PruneOldTaskLogs(ctx context.Context, olderThan time.Time) error
+
+	// Ping verifies the database connection is alive.
+	Ping(ctx context.Context) error
 }
 
 // pgStore implements Store using a pgx connection pool.

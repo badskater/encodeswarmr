@@ -1,11 +1,293 @@
 package engine
 
 import (
+	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/badskater/distributed-encoder/internal/db"
 )
+
+// ---------------------------------------------------------------------------
+// Stub store for ScriptGenerator tests
+// ---------------------------------------------------------------------------
+
+// scriptGenStub implements the subset of db.Store used by ScriptGenerator.
+type scriptGenStub struct {
+	variables []*db.Variable
+	template  *db.Template
+	templateErr error
+}
+
+func (s *scriptGenStub) ListVariables(_ context.Context, _ string) ([]*db.Variable, error) {
+	return s.variables, nil
+}
+func (s *scriptGenStub) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return s.template, s.templateErr
+}
+
+// Remaining Store methods are no-ops.
+func (s *scriptGenStub) CreateUser(context.Context, db.CreateUserParams) (*db.User, error)          { return nil, nil }
+func (s *scriptGenStub) GetUserByUsername(context.Context, string) (*db.User, error)                { return nil, nil }
+func (s *scriptGenStub) GetUserByOIDCSub(context.Context, string) (*db.User, error)                 { return nil, nil }
+func (s *scriptGenStub) GetUserByID(context.Context, string) (*db.User, error)                      { return nil, nil }
+func (s *scriptGenStub) ListUsers(context.Context) ([]*db.User, error)                              { return nil, nil }
+func (s *scriptGenStub) UpdateUserRole(context.Context, string, string) error                       { return nil }
+func (s *scriptGenStub) DeleteUser(context.Context, string) error                                   { return nil }
+func (s *scriptGenStub) CountAdminUsers(context.Context) (int64, error)                             { return 1, nil }
+func (s *scriptGenStub) UpsertAgent(context.Context, db.UpsertAgentParams) (*db.Agent, error)       { return nil, nil }
+func (s *scriptGenStub) GetAgentByID(context.Context, string) (*db.Agent, error)                   { return nil, nil }
+func (s *scriptGenStub) GetAgentByName(context.Context, string) (*db.Agent, error)                 { return nil, nil }
+func (s *scriptGenStub) ListAgents(context.Context) ([]*db.Agent, error)                           { return nil, nil }
+func (s *scriptGenStub) UpdateAgentStatus(context.Context, string, string) error                   { return nil }
+func (s *scriptGenStub) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error { return nil }
+func (s *scriptGenStub) SetAgentAPIKey(context.Context, string, string) error                      { return nil }
+func (s *scriptGenStub) MarkStaleAgents(context.Context, time.Duration) (int64, error)             { return 0, nil }
+func (s *scriptGenStub) CreateSource(context.Context, db.CreateSourceParams) (*db.Source, error)   { return nil, nil }
+func (s *scriptGenStub) GetSourceByID(context.Context, string) (*db.Source, error)                 { return nil, nil }
+func (s *scriptGenStub) GetSourceByUNCPath(context.Context, string) (*db.Source, error)            { return nil, nil }
+func (s *scriptGenStub) ListSources(context.Context, db.ListSourcesFilter) ([]*db.Source, int64, error) { return nil, 0, nil }
+func (s *scriptGenStub) UpdateSourceState(context.Context, string, string) error                   { return nil }
+func (s *scriptGenStub) UpdateSourceVMAF(context.Context, string, float64) error                   { return nil }
+func (s *scriptGenStub) DeleteSource(context.Context, string) error                                { return nil }
+func (s *scriptGenStub) CreateJob(context.Context, db.CreateJobParams) (*db.Job, error)            { return nil, nil }
+func (s *scriptGenStub) GetJobByID(context.Context, string) (*db.Job, error)                      { return nil, nil }
+func (s *scriptGenStub) ListJobs(context.Context, db.ListJobsFilter) ([]*db.Job, int64, error)    { return nil, 0, nil }
+func (s *scriptGenStub) UpdateJobStatus(context.Context, string, string) error                    { return nil }
+func (s *scriptGenStub) UpdateJobTaskCounts(context.Context, string) error                        { return nil }
+func (s *scriptGenStub) GetJobsNeedingExpansion(context.Context) ([]*db.Job, error)               { return nil, nil }
+func (s *scriptGenStub) CreateTask(context.Context, db.CreateTaskParams) (*db.Task, error)        { return nil, nil }
+func (s *scriptGenStub) GetTaskByID(context.Context, string) (*db.Task, error)                   { return nil, nil }
+func (s *scriptGenStub) ListTasksByJob(context.Context, string) ([]*db.Task, error)               { return nil, nil }
+func (s *scriptGenStub) ClaimNextTask(context.Context, string, []string) (*db.Task, error)        { return nil, nil }
+func (s *scriptGenStub) UpdateTaskStatus(context.Context, string, string) error                   { return nil }
+func (s *scriptGenStub) SetTaskScriptDir(context.Context, string, string) error                   { return nil }
+func (s *scriptGenStub) CompleteTask(context.Context, db.CompleteTaskParams) error                { return nil }
+func (s *scriptGenStub) FailTask(context.Context, string, int, string) error                      { return nil }
+func (s *scriptGenStub) CancelPendingTasksForJob(context.Context, string) error                   { return nil }
+func (s *scriptGenStub) InsertTaskLog(context.Context, db.InsertTaskLogParams) error              { return nil }
+func (s *scriptGenStub) ListTaskLogs(context.Context, db.ListTaskLogsParams) ([]*db.TaskLog, error) { return nil, nil }
+func (s *scriptGenStub) TailTaskLogs(context.Context, string, int64) ([]*db.TaskLog, error)      { return nil, nil }
+func (s *scriptGenStub) CreateTemplate(context.Context, db.CreateTemplateParams) (*db.Template, error) { return nil, nil }
+func (s *scriptGenStub) ListTemplates(context.Context, string) ([]*db.Template, error)            { return nil, nil }
+func (s *scriptGenStub) UpdateTemplate(context.Context, db.UpdateTemplateParams) error            { return nil }
+func (s *scriptGenStub) DeleteTemplate(context.Context, string) error                             { return nil }
+func (s *scriptGenStub) UpsertVariable(context.Context, db.UpsertVariableParams) (*db.Variable, error) { return nil, nil }
+func (s *scriptGenStub) GetVariableByName(context.Context, string) (*db.Variable, error)         { return nil, nil }
+func (s *scriptGenStub) DeleteVariable(context.Context, string) error                             { return nil }
+func (s *scriptGenStub) CreateWebhook(context.Context, db.CreateWebhookParams) (*db.Webhook, error) { return nil, nil }
+func (s *scriptGenStub) GetWebhookByID(context.Context, string) (*db.Webhook, error)             { return nil, nil }
+func (s *scriptGenStub) ListWebhooksByEvent(context.Context, string) ([]*db.Webhook, error)      { return nil, nil }
+func (s *scriptGenStub) ListWebhooks(context.Context) ([]*db.Webhook, error)                     { return nil, nil }
+func (s *scriptGenStub) UpdateWebhook(context.Context, db.UpdateWebhookParams) error             { return nil }
+func (s *scriptGenStub) DeleteWebhook(context.Context, string) error                              { return nil }
+func (s *scriptGenStub) InsertWebhookDelivery(context.Context, db.InsertWebhookDeliveryParams) error { return nil }
+func (s *scriptGenStub) ListWebhookDeliveries(context.Context, string, int, int) ([]*db.WebhookDelivery, error) { return nil, nil }
+func (s *scriptGenStub) UpsertAnalysisResult(context.Context, db.UpsertAnalysisResultParams) (*db.AnalysisResult, error) { return nil, nil }
+func (s *scriptGenStub) GetAnalysisResult(context.Context, string, string) (*db.AnalysisResult, error) { return nil, nil }
+func (s *scriptGenStub) ListAnalysisResults(context.Context, string) ([]*db.AnalysisResult, error) { return nil, nil }
+func (s *scriptGenStub) CreateSession(context.Context, db.CreateSessionParams) (*db.Session, error) { return nil, nil }
+func (s *scriptGenStub) GetSessionByToken(context.Context, string) (*db.Session, error)          { return nil, nil }
+func (s *scriptGenStub) DeleteSession(context.Context, string) error                              { return nil }
+func (s *scriptGenStub) PruneExpiredSessions(context.Context) error                               { return nil }
+func (s *scriptGenStub) CreateEnrollmentToken(context.Context, db.CreateEnrollmentTokenParams) (*db.EnrollmentToken, error) { return nil, nil }
+func (s *scriptGenStub) GetEnrollmentToken(context.Context, string) (*db.EnrollmentToken, error) { return nil, nil }
+func (s *scriptGenStub) ConsumeEnrollmentToken(context.Context, db.ConsumeEnrollmentTokenParams) error { return nil }
+func (s *scriptGenStub) ListEnrollmentTokens(context.Context) ([]*db.EnrollmentToken, error)     { return nil, nil }
+func (s *scriptGenStub) DeleteEnrollmentToken(context.Context, string) error                     { return nil }
+func (s *scriptGenStub) PruneExpiredEnrollmentTokens(context.Context) error                      { return nil }
+func (s *scriptGenStub) RetryFailedTasksForJob(context.Context, string) error                    { return nil }
+func (s *scriptGenStub) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.TaskLog, error) { return nil, nil }
+func (s *scriptGenStub) PruneOldTaskLogs(context.Context, time.Time) error                       { return nil }
+func (s *scriptGenStub) Ping(context.Context) error                                               { return nil }
+
+// ---------------------------------------------------------------------------
+// RenderSingle tests
+// ---------------------------------------------------------------------------
+
+func TestRenderSingle_NoTemplate(t *testing.T) {
+	// When no run script template is configured, RenderSingle should still
+	// succeed and return an empty directory path.
+	stub := &scriptGenStub{}
+	gen := newScriptGenerator(stub, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{ID: "job-1", JobType: "analysis", EncodeConfig: db.EncodeConfig{}}
+	task := &db.Task{
+		ID:         "task-1",
+		SourcePath: `\\nas\src.mkv`,
+		OutputPath: `\\nas\out.mkv`,
+	}
+
+	dir, err := gen.RenderSingle(context.Background(), job, task)
+	if err != nil {
+		t.Fatalf("RenderSingle() error = %v", err)
+	}
+	if dir == "" {
+		t.Error("expected a non-empty directory path")
+	}
+	if _, statErr := os.Stat(dir); statErr != nil {
+		t.Errorf("expected output dir to exist: %v", statErr)
+	}
+}
+
+func TestRenderSingle_WithTemplate(t *testing.T) {
+	// RenderSingle should render the run script and populate standard variables.
+	const tplContent = `SOURCE={{.SOURCE_PATH}}
+OUTPUT={{.OUTPUT_PATH}}
+JOB={{.JOB_ID}}
+TYPE={{.JOB_TYPE}}`
+
+	stub := &scriptGenStub{
+		template: &db.Template{
+			ID:        "tpl-1",
+			Name:      "audio_run",
+			Type:      "bat",
+			Extension: "bat",
+			Content:   tplContent,
+		},
+	}
+	gen := newScriptGenerator(stub, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{
+		ID:      "job-audio",
+		JobType: "audio",
+		EncodeConfig: db.EncodeConfig{
+			RunScriptTemplateID: "tpl-1",
+		},
+	}
+	task := &db.Task{
+		ID:         "task-audio",
+		SourcePath: `\\nas\movie.mkv`,
+		OutputPath: `\\nas\movie.flac`,
+	}
+
+	dir, err := gen.RenderSingle(context.Background(), job, task)
+	if err != nil {
+		t.Fatalf("RenderSingle() error = %v", err)
+	}
+
+	scriptPath := filepath.Join(dir, "run.bat")
+	content, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("reading rendered script: %v", err)
+	}
+
+	got := string(content)
+	checks := map[string]string{
+		"SOURCE_PATH": `\\nas\movie.mkv`,
+		"OUTPUT_PATH": `\\nas\movie.flac`,
+		"JOB_ID":      "job-audio",
+		"JOB_TYPE":    "audio",
+	}
+	for key, want := range checks {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered script missing %s=%q\nscript:\n%s", key, want, got)
+		}
+	}
+}
+
+func TestRenderSingle_GlobalVariables(t *testing.T) {
+	// Global variables from the DB must be injected into the template.
+	stub := &scriptGenStub{
+		variables: []*db.Variable{
+			{Name: "ENCODER_BIN", Value: `C:\tools\ffmpeg.exe`},
+		},
+		template: &db.Template{
+			ID: "tpl-2", Name: "t", Type: "bat", Extension: "bat",
+			Content: `{{.ENCODER_BIN}}`,
+		},
+	}
+	gen := newScriptGenerator(stub, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{
+		ID: "job-2", JobType: "audio",
+		EncodeConfig: db.EncodeConfig{RunScriptTemplateID: "tpl-2"},
+	}
+	task := &db.Task{ID: "t2", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+
+	dir, err := gen.RenderSingle(context.Background(), job, task)
+	if err != nil {
+		t.Fatalf("RenderSingle() error = %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "run.bat"))
+	if err != nil {
+		t.Fatalf("reading script: %v", err)
+	}
+	if want := `C:\tools\ffmpeg.exe`; !strings.Contains(string(content), want) {
+		t.Errorf("expected global variable %q in script, got:\n%s", want, content)
+	}
+}
+
+func TestRenderSingle_ExtraVarsOverrideGlobals(t *testing.T) {
+	// ExtraVars on the job should override global variables of the same name.
+	stub := &scriptGenStub{
+		variables: []*db.Variable{
+			{Name: "QUALITY", Value: "high"},
+		},
+		template: &db.Template{
+			ID: "tpl-3", Name: "t", Type: "bat", Extension: "bat",
+			Content: `{{.QUALITY}}`,
+		},
+	}
+	gen := newScriptGenerator(stub, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{
+		ID: "job-3", JobType: "audio",
+		EncodeConfig: db.EncodeConfig{
+			RunScriptTemplateID: "tpl-3",
+			ExtraVars:           map[string]string{"QUALITY": "ultra"},
+		},
+	}
+	task := &db.Task{ID: "t3", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+
+	dir, err := gen.RenderSingle(context.Background(), job, task)
+	if err != nil {
+		t.Fatalf("RenderSingle() error = %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "run.bat"))
+	if err != nil {
+		t.Fatalf("reading script: %v", err)
+	}
+	if want := "ultra"; !strings.Contains(string(content), want) {
+		t.Errorf("expected ExtraVar override %q in script, got:\n%s", want, content)
+	}
+}
+
+func TestRenderSingle_DirCleanedUpOnTemplateError(t *testing.T) {
+	// If template rendering fails, the directory must not be left behind.
+	stub := &scriptGenStub{
+		template: &db.Template{
+			ID: "bad", Name: "bad", Type: "bat", Extension: "bat",
+			Content: `{{ .MISSING_FUNC call }}`, // bad template
+		},
+	}
+	baseDir := t.TempDir()
+	gen := newScriptGenerator(stub, baseDir, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	job := &db.Job{
+		ID: "job-err", JobType: "audio",
+		EncodeConfig: db.EncodeConfig{RunScriptTemplateID: "bad"},
+	}
+	task := &db.Task{ID: "t-err", SourcePath: `\\s\a`, OutputPath: `\\s\b`}
+
+	_, err := gen.RenderSingle(context.Background(), job, task)
+	if err == nil {
+		t.Fatal("expected error for bad template, got nil")
+	}
+
+	// The script directory should have been cleaned up.
+	expectedDir := filepath.Join(baseDir, "job-err", "0000")
+	if _, statErr := os.Stat(expectedDir); !os.IsNotExist(statErr) {
+		t.Errorf("expected script dir %q to be removed after error, but it still exists", expectedDir)
+	}
+}
 
 func TestEscapeBat(t *testing.T) {
 	tests := []struct {

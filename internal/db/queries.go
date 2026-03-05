@@ -1409,3 +1409,9 @@ func (s *pgStore) PruneOldTaskLogs(ctx context.Context, olderThan time.Time) err
 	_, err := s.pool.Exec(ctx, q, olderThan)
 	return err
 }
+
+// Ping verifies the database connection is alive by acquiring a connection
+// and issuing a lightweight query.
+func (s *pgStore) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}

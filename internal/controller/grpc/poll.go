@@ -73,7 +73,7 @@ func (s *Server) PollTask(ctx context.Context, req *pb.PollTaskReq) (*pb.TaskAss
 		Variables:  task.Variables,
 		SourcePath: task.SourcePath,
 		OutputPath: task.OutputPath,
-		TimeoutSec: 3600,
+		TimeoutSec: int32(s.agentCfg.TaskTimeoutSec),
 		Priority:   priority,
 	}, nil
 }

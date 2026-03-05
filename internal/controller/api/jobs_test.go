@@ -147,6 +147,7 @@ func (s *stubStore) InsertWebhookDelivery(context.Context, db.InsertWebhookDeliv
 func (s *stubStore) ListWebhookDeliveries(context.Context, string, int, int) ([]*db.WebhookDelivery, error) {
 	return nil, nil
 }
+func (s *stubStore) Ping(context.Context) error { return nil }
 
 func (s *stubStore) UpsertAnalysisResult(context.Context, db.UpsertAnalysisResultParams) (*db.AnalysisResult, error) {
 	return nil, nil

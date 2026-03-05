@@ -127,7 +127,10 @@ func runServer(ctx context.Context, cfgPath string) error {
 	logger.Info("webhook delivery service started", "workers", cfg.Webhooks.WorkerCount)
 
 	// Start HTTP API server.
-	httpSrv := api.New(store, authSvc, cfg, logger, whSvc)
+	httpSrv, err := api.New(store, authSvc, cfg, logger, whSvc)
+	if err != nil {
+		return fmt.Errorf("create api server: %w", err)
+	}
 	httpErrCh := make(chan error, 1)
 	go func() {
 		logger.Info("starting HTTP server", "addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port))

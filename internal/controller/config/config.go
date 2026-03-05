@@ -70,6 +70,7 @@ type AgentConfig struct {
 	HeartbeatTimeout time.Duration `mapstructure:"heartbeat_timeout"`
 	DispatchInterval time.Duration `mapstructure:"dispatch_interval"`
 	ScriptBaseDir    string        `mapstructure:"script_base_dir"`
+	TaskTimeoutSec   int           `mapstructure:"task_timeout_sec"`
 }
 
 type WebhooksConfig struct {
@@ -109,6 +110,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("agent.dispatch_interval", "10s")
 	v.SetDefault("agent.heartbeat_timeout", "90s")
 	v.SetDefault("agent.script_base_dir", "/tmp/encoder-scripts")
+	v.SetDefault("agent.task_timeout_sec", 3600)
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "json")
 	v.SetDefault("logging.task_log_retention", "720h")

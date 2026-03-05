@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
@@ -26,7 +27,7 @@ type Server struct {
 }
 
 // New creates and configures a new HTTP API server.
-func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service) *Server {
+func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service) (*Server, error) {
 	s := &Server{
 		store:    store,
 		auth:     authSvc,
@@ -37,7 +38,9 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	mux := http.NewServeMux()
-	s.registerRoutes(mux)
+	if err := s.registerRoutes(mux); err != nil {
+		return nil, err
+	}
 
 	// Middleware chain (outermost → innermost):
 	//   requestID → CORS → rate-limit → ETag → mux
@@ -55,7 +58,7 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
-	return s
+	return s, nil
 }
 
 // Serve starts listening and blocks until ctx is cancelled or a fatal error occurs.
@@ -71,14 +74,16 @@ func (s *Server) Serve(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
-		return s.httpSrv.Shutdown(context.Background())
+		shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return s.httpSrv.Shutdown(shutCtx)
 	case err := <-errCh:
 		return fmt.Errorf("api: http server: %w", err)
 	}
 }
 
 // registerRoutes wires all route handlers onto the mux.
-func (s *Server) registerRoutes(mux *http.ServeMux) {
+func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// Unauthenticated
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPISpec)
@@ -181,7 +186,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/users/me", viewer(s.handleGetMe))
 
 	// Static UI — must be last so API routes take precedence.
-	mux.Handle("/", s.staticHandler())
+	staticH, err := s.staticHandler()
+	if err != nil {
+		return err
+	}
+	mux.Handle("/", staticH)
+	return nil
 }
 
 // requestIDMiddleware injects a correlation ID into each request and response.
