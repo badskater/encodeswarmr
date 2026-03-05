@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,12 @@ type GPUInfo struct {
 func detectGPUs() []GPUInfo {
 	var gpus []GPUInfo
 	gpus = append(gpus, detectNvidia()...)
-	gpus = append(gpus, detectWMIGPUs()...)
+	switch runtime.GOOS {
+	case "windows":
+		gpus = append(gpus, detectWMIGPUs()...)
+	case "linux":
+		gpus = append(gpus, detectLspciGPUs()...)
+	}
 	return gpus
 }
 
@@ -99,6 +105,49 @@ func detectWMIGPUs() []GPUInfo {
 			info.Vendor = "intel"
 			info.QSV = true
 		case strings.Contains(nameLower, "amd") || strings.Contains(nameLower, "radeon"):
+			info.Vendor = "amd"
+			info.AMF = true
+		default:
+			continue
+		}
+		gpus = append(gpus, info)
+	}
+	return gpus
+}
+
+// detectLspciGPUs queries lspci for Intel and AMD video controllers on Linux.
+func detectLspciGPUs() []GPUInfo {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// -mm produces machine-readable output; -v adds details.
+	out, err := exec.CommandContext(ctx, "lspci", "-mm", "-v").Output()
+	if err != nil {
+		// lspci may not be installed; fall back to a simpler query.
+		out, err = exec.CommandContext(ctx, "lspci").Output()
+		if err != nil {
+			return nil
+		}
+	}
+	var gpus []GPUInfo
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		lower := strings.ToLower(line)
+		if !strings.Contains(lower, "vga") &&
+			!strings.Contains(lower, "display") &&
+			!strings.Contains(lower, "3d controller") {
+			continue
+		}
+		var info GPUInfo
+		info.Model = strings.TrimSpace(line)
+		// Trim the PCI address prefix (e.g. "00:02.0 VGA compatible controller: ")
+		if idx := strings.Index(info.Model, ": "); idx != -1 {
+			info.Model = strings.TrimSpace(info.Model[idx+2:])
+		}
+		switch {
+		case strings.Contains(lower, "intel"):
+			info.Vendor = "intel"
+			info.QSV = true
+		case strings.Contains(lower, "amd") || strings.Contains(lower, "radeon") ||
+			strings.Contains(lower, "advanced micro"):
 			info.Vendor = "amd"
 			info.AMF = true
 		default:

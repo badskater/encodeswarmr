@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -13,12 +14,20 @@ import (
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 )
 
-const (
-	defaultConfigPath = `C:\ProgramData\distributed-encoder\agent.yaml`
-	serviceName       = "distributed-encoder-agent"
-)
+const serviceName = "distributed-encoder-agent"
 
-const usage = `Usage:
+// defaultConfigPath returns the platform-appropriate default config file path.
+func defaultConfigPath() string {
+	if runtime.GOOS == "windows" {
+		return `C:\ProgramData\distributed-encoder\agent.yaml`
+	}
+	return "/etc/distributed-encoder/agent.yaml"
+}
+
+// usageText returns the platform-appropriate usage string.
+func usageText() string {
+	if runtime.GOOS == "windows" {
+		return `Usage:
   distencoder-agent <subcommand> [flags]
 
 Subcommands:
@@ -33,6 +42,23 @@ Flags (all subcommands):
   --debug            Enable debug logging
   --http-debug       Start local debug HTTP server on :9080 (run subcommand only)
 `
+	}
+	return `Usage:
+  distencoder-agent <subcommand> [flags]
+
+Subcommands:
+  install    Install as systemd service
+  uninstall  Remove the systemd service
+  start      Start the systemd service
+  stop       Stop the systemd service
+  run        Run in foreground (default if no subcommand)
+
+Flags (all subcommands):
+  --config <path>    Config file path (default: /etc/distributed-encoder/agent.yaml)
+  --debug            Enable debug logging
+  --http-debug       Start local debug HTTP server on :9080 (run subcommand only)
+`
+}
 
 // parsedArgs holds the result of parsing CLI arguments.
 type parsedArgs struct {
@@ -45,7 +71,7 @@ type parsedArgs struct {
 // parseArgs walks the argument list extracting flags and the subcommand.
 func parseArgs(args []string) parsedArgs {
 	p := parsedArgs{
-		configPath: defaultConfigPath,
+		configPath: defaultConfigPath(),
 	}
 
 	i := 0
@@ -114,11 +140,11 @@ func Run(args []string) error {
 	case "run", "":
 		return runAgent(parsed, log)
 	case "help", "--help", "-h":
-		fmt.Print(usage)
+		fmt.Print(usageText())
 		return nil
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n", parsed.subcommand)
-		fmt.Print(usage)
+		fmt.Print(usageText())
 		return fmt.Errorf("unknown subcommand: %s", parsed.subcommand)
 	}
 }

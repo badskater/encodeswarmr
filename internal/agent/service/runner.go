@@ -425,17 +425,23 @@ func (r *runner) validateTask(task *pb.TaskAssignment) error {
 	if len(task.GetScripts()) == 0 {
 		return fmt.Errorf("validation: task contains no scripts")
 	}
-	hasBat := false
+
+	// Windows requires a .bat entrypoint; all other platforms require a .sh entrypoint.
+	requiredExt := ".sh"
+	if runtime.GOOS == "windows" {
+		requiredExt = ".bat"
+	}
+	hasEntrypoint := false
 	for name, content := range task.GetScripts() {
-		if strings.HasSuffix(strings.ToLower(name), ".bat") {
-			hasBat = true
+		if strings.HasSuffix(strings.ToLower(name), requiredExt) {
+			hasEntrypoint = true
 			if strings.TrimSpace(content) == "" {
-				return fmt.Errorf("validation: bat script %q is empty", name)
+				return fmt.Errorf("validation: script %q is empty", name)
 			}
 		}
 	}
-	if !hasBat {
-		return fmt.Errorf("validation: no .bat script found in task")
+	if !hasEntrypoint {
+		return fmt.Errorf("validation: no %s script found in task", requiredExt)
 	}
 
 	return nil
@@ -472,22 +478,32 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		return -1, fmt.Errorf("creating work dir: %w", err)
 	}
 
+	// Select the platform-appropriate script entrypoint extension.
+	entryExt := ".sh"
+	if runtime.GOOS == "windows" {
+		entryExt = ".bat"
+	}
+
 	// Write script files.
-	var batPath string
+	var entryPath string
 	for name, content := range task.GetScripts() {
 		p := filepath.Join(workDir, name)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return -1, fmt.Errorf("creating script dir for %s: %w", name, err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(strings.ToLower(name), ".sh") {
+			mode = 0o755
+		}
+		if err := os.WriteFile(p, []byte(content), mode); err != nil {
 			return -1, fmt.Errorf("writing script %s: %w", name, err)
 		}
-		if strings.HasSuffix(strings.ToLower(name), ".bat") {
-			batPath = p
+		if strings.HasSuffix(strings.ToLower(name), entryExt) {
+			entryPath = p
 		}
 	}
-	if batPath == "" {
-		return -1, fmt.Errorf("no .bat script found in task scripts")
+	if entryPath == "" {
+		return -1, fmt.Errorf("no %s script found in task scripts", entryExt)
 	}
 
 	// Apply task timeout if specified.
@@ -498,10 +514,15 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		defer cancel()
 	}
 
-	r.log.Info("executing task", "bat", batPath, "task_id", task.GetTaskId())
+	r.log.Info("executing task", "script", entryPath, "task_id", task.GetTaskId())
 
-	// §5.3 Build cmd.exe with DE_PARAM_* environment variables.
-	cmd := exec.CommandContext(execCtx, "cmd.exe", "/c", batPath)
+	// §5.3 Build the entrypoint command with DE_PARAM_* environment variables.
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(execCtx, "cmd.exe", "/c", entryPath)
+	} else {
+		cmd = exec.CommandContext(execCtx, "/bin/sh", entryPath)
+	}
 	cmd.Dir = workDir
 
 	env := os.Environ()

@@ -138,7 +138,7 @@ func (u *upgradeChecker) check(ctx context.Context, isBusy func() bool) {
 }
 
 // applyUpgrade downloads the new binary, verifies its SHA-256 checksum,
-// writes it to a staging path, and restarts the Windows Service.
+// writes it to a staging path, and restarts the platform service.
 func (u *upgradeChecker) applyUpgrade(ctx context.Context, downloadURL, expectedSHA256 string) error {
 	u.log.Info("downloading upgrade", "url", downloadURL)
 
@@ -198,15 +198,6 @@ func (u *upgradeChecker) applyUpgrade(ctx context.Context, downloadURL, expected
 
 	u.log.Info("upgrade downloaded, restart required", "staging_path", stagingPath)
 
-	// Best-effort service restart: stop, replace binary, start.
-	u.log.Info("attempting service restart")
-	if out, err := exec.CommandContext(ctx, "sc.exe", "stop", serviceName).CombinedOutput(); err != nil {
-		u.log.Warn("sc stop failed (may be running in foreground)", "error", err, "output", string(out))
-	}
-
-	// Give the service a moment to stop.
-	time.Sleep(2 * time.Second)
-
 	// Replace the executable.
 	backupPath := exePath + ".old"
 	os.Remove(backupPath) // clean up any previous backup
@@ -220,9 +211,31 @@ func (u *upgradeChecker) applyUpgrade(ctx context.Context, downloadURL, expected
 		return fmt.Errorf("replacing binary: %w", err)
 	}
 
-	if out, err := exec.CommandContext(ctx, "sc.exe", "start", serviceName).CombinedOutput(); err != nil {
-		u.log.Warn("sc start failed", "error", err, "output", string(out))
-	}
+	// Best-effort service restart using the platform service manager.
+	u.log.Info("attempting service restart")
+	u.restartService(ctx)
 
 	return nil
+}
+
+// restartService performs a best-effort service restart using the
+// platform-appropriate service manager.
+func (u *upgradeChecker) restartService(ctx context.Context) {
+	switch runtime.GOOS {
+	case "windows":
+		if out, err := exec.CommandContext(ctx, "sc.exe", "stop", serviceName).CombinedOutput(); err != nil {
+			u.log.Warn("sc stop failed (may be running in foreground)", "error", err, "output", string(out))
+		}
+		// Give the service a moment to stop.
+		time.Sleep(2 * time.Second)
+		if out, err := exec.CommandContext(ctx, "sc.exe", "start", serviceName).CombinedOutput(); err != nil {
+			u.log.Warn("sc start failed", "error", err, "output", string(out))
+		}
+	case "linux":
+		if out, err := exec.CommandContext(ctx, "systemctl", "restart", serviceName).CombinedOutput(); err != nil {
+			u.log.Warn("systemctl restart failed (may be running in foreground)", "error", err, "output", string(out))
+		}
+	default:
+		u.log.Warn("service restart not supported on this platform", "os", runtime.GOOS)
+	}
 }
