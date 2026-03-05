@@ -13,6 +13,9 @@ export default function Templates() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', type: 'bat' as Template['type'], description: '', content: '' })
   const [saving, setSaving] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState<{ name: string; description: string; content: string }>({ name: '', description: '', content: '' })
+  const [editSaving, setEditSaving] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -40,6 +43,24 @@ export default function Templates() {
       setError(e instanceof Error ? e.message : 'Failed to create')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startEdit = (t: Template) => {
+    setEditId(t.id)
+    setEditValues({ name: t.name, description: t.description ?? '', content: t.content })
+  }
+
+  const handleSaveEdit = async (id: string) => {
+    setEditSaving(true)
+    try {
+      await api.updateTemplate(id, editValues)
+      setEditId(null)
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -106,35 +127,76 @@ export default function Templates() {
         </form>
       )}
 
-      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-th-border text-sm">
-          <thead className="bg-th-surface-muted">
-            <tr>
-              {['Name', 'Type', 'Description', 'Created', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-th-border-subtle">
-            {templates.map(t => (
-              <tr key={t.id} className="hover:bg-th-surface-muted">
-                <td className="px-4 py-2 font-medium text-th-text">{t.name}</td>
-                <td className="px-4 py-2">
-                  <span className="font-mono text-xs bg-th-surface-muted px-1.5 py-0.5 rounded text-th-text-muted">.{t.type}</span>
-                </td>
-                <td className="px-4 py-2 text-th-text-muted">{t.description ?? '—'}</td>
-                <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(t.created_at)}</td>
-                <td className="px-4 py-2">
-                  <button onClick={() => handleDelete(t.id)}
-                    className="text-xs text-red-600 hover:underline">Delete</button>
-                </td>
-              </tr>
-            ))}
-            {templates.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-4 text-center text-th-text-subtle">No templates</td></tr>
+      <div className="space-y-3">
+        {templates.length === 0 && !loading && (
+          <p className="text-th-text-subtle text-sm text-center py-4">No templates</p>
+        )}
+        {templates.map(t => (
+          <div key={t.id} className="bg-th-surface rounded-lg shadow p-4">
+            {editId === t.id ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-th-text-muted mb-1">Name</label>
+                    <input
+                      value={editValues.name}
+                      onChange={e => setEditValues(v => ({ ...v, name: e.target.value }))}
+                      className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-th-text-muted mb-1">Description</label>
+                    <input
+                      value={editValues.description}
+                      onChange={e => setEditValues(v => ({ ...v, description: e.target.value }))}
+                      className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-th-text-muted mb-1">Content</label>
+                  <textarea
+                    value={editValues.content}
+                    onChange={e => setEditValues(v => ({ ...v, content: e.target.value }))}
+                    rows={12}
+                    className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSaveEdit(t.id)}
+                    disabled={editSaving}
+                    className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {editSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditId(null)}
+                    className="px-3 py-1.5 rounded text-sm text-th-text-muted border border-th-border hover:bg-th-surface-muted"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <span className="font-medium text-th-text">{t.name}</span>
+                    <span className="ml-2 font-mono text-xs bg-th-surface-muted px-1.5 py-0.5 rounded text-th-text-muted">.{t.type}</span>
+                    {t.description && <span className="ml-2 text-sm text-th-text-muted">{t.description}</span>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-th-text-subtle">{fmtDate(t.created_at)}</span>
+                    <button onClick={() => startEdit(t)} className="text-xs text-blue-600 hover:underline">Edit</button>
+                    <button onClick={() => handleDelete(t.id)} className="text-xs text-red-600 hover:underline">Delete</button>
+                  </div>
+                </div>
+                <pre className="bg-th-log-bg rounded p-3 text-xs font-mono text-th-log-text overflow-auto max-h-40">{t.content}</pre>
+              </div>
             )}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
     </div>
   )

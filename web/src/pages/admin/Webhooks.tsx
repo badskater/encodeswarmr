@@ -1,11 +1,60 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../../api/client'
-import type { Webhook } from '../../types'
+import type { Webhook, WebhookDelivery } from '../../types'
 
 const PROVIDERS = ['discord', 'teams', 'slack', 'generic'] as const
 const EVENT_OPTIONS = [
   'job.completed', 'job.failed', 'job.cancelled', 'agent.registered',
 ]
+
+function fmtDate(s: string) {
+  return new Date(s).toLocaleString()
+}
+
+function DeliveryHistory({ webhookId }: { webhookId: string }) {
+  const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.listWebhookDeliveries(webhookId)
+      .then(setDeliveries)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [webhookId])
+
+  if (loading) return <p className="text-xs text-th-text-muted px-4 py-2">Loading…</p>
+  if (deliveries.length === 0) return <p className="text-xs text-th-text-subtle px-4 py-2">No deliveries recorded</p>
+
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-th-border-subtle">
+          <th className="px-4 py-1 text-left text-th-text-muted font-medium">Event</th>
+          <th className="px-4 py-1 text-left text-th-text-muted font-medium">Status</th>
+          <th className="px-4 py-1 text-left text-th-text-muted font-medium">Response</th>
+          <th className="px-4 py-1 text-left text-th-text-muted font-medium">Attempt</th>
+          <th className="px-4 py-1 text-left text-th-text-muted font-medium">Delivered</th>
+        </tr>
+      </thead>
+      <tbody>
+        {deliveries.map(d => (
+          <tr key={d.id} className="border-b border-th-border-subtle last:border-0">
+            <td className="px-4 py-1 text-th-text-secondary">{d.event}</td>
+            <td className="px-4 py-1">
+              <span className={d.success ? 'text-green-500' : 'text-red-500'}>
+                {d.success ? '✓ OK' : '✗ Failed'}
+              </span>
+              {d.error_msg && <span className="ml-1 text-th-text-muted">({d.error_msg})</span>}
+            </td>
+            <td className="px-4 py-1 text-th-text-secondary">{d.response_code ?? '—'}</td>
+            <td className="px-4 py-1 text-th-text-secondary">{d.attempt}</td>
+            <td className="px-4 py-1 text-th-text-muted whitespace-nowrap">{fmtDate(d.delivered_at)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
 
 export default function Webhooks() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([])
@@ -18,6 +67,7 @@ export default function Webhooks() {
   })
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  const [expandedDeliveries, setExpandedDeliveries] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +128,10 @@ export default function Webhooks() {
     } finally {
       setTesting(null)
     }
+  }
+
+  const toggleDeliveries = (id: string) => {
+    setExpandedDeliveries(prev => prev === id ? null : id)
   }
 
   if (loading) return <p className="text-th-text-muted">Loading…</p>
@@ -141,47 +195,40 @@ export default function Webhooks() {
         </form>
       )}
 
-      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-th-border text-sm">
-          <thead className="bg-th-surface-muted">
-            <tr>
-              {['Name', 'Provider', 'URL', 'Events', 'Enabled', ''].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-th-border-subtle">
-            {webhooks.map(w => (
-              <tr key={w.id} className="hover:bg-th-surface-muted">
-                <td className="px-4 py-2 font-medium text-th-text">{w.name}</td>
-                <td className="px-4 py-2 text-th-text-secondary">{w.provider}</td>
-                <td className="px-4 py-2 text-th-text-muted max-w-xs truncate">{w.url}</td>
-                <td className="px-4 py-2 text-th-text-muted text-xs">{w.events.join(', ') || '—'}</td>
-                <td className="px-4 py-2">
-                  <span className={`text-xs font-medium ${w.enabled ? 'text-green-600' : 'text-th-text-subtle'}`}>
-                    {w.enabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                </td>
-                <td className="px-4 py-2 flex gap-2">
-                  <button onClick={() => handleTest(w.id)} disabled={testing === w.id}
-                    className="text-xs px-2 py-0.5 rounded disabled:opacity-50"
-                    style={{
-                      backgroundColor: 'var(--th-badge-running-bg)',
-                      color: 'var(--th-badge-running-text)',
-                    }}
-                  >
-                    {testing === w.id ? 'Testing…' : 'Test'}
-                  </button>
-                  <button onClick={() => handleDelete(w.id)}
-                    className="text-xs text-red-600 hover:underline">Delete</button>
-                </td>
-              </tr>
-            ))}
-            {webhooks.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-4 text-center text-th-text-subtle">No webhooks configured</td></tr>
+      <div className="space-y-2">
+        {webhooks.length === 0 && (
+          <p className="text-th-text-subtle text-sm text-center py-4">No webhooks configured</p>
+        )}
+        {webhooks.map(w => (
+          <div key={w.id} className="bg-th-surface rounded-lg shadow overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="font-medium text-th-text">{w.name}</span>
+              <span className="text-xs text-th-text-muted">{w.provider}</span>
+              <span className="text-xs text-th-text-muted max-w-xs truncate">{w.url}</span>
+              <span className="text-xs text-th-text-muted">{w.events.join(', ') || '—'}</span>
+              <span className={`text-xs font-medium ml-auto ${w.enabled ? 'text-green-600' : 'text-th-text-subtle'}`}>
+                {w.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <button onClick={() => toggleDeliveries(w.id)}
+                className="text-xs text-th-text-muted hover:text-th-text">
+                {expandedDeliveries === w.id ? '▲ Hide History' : '▼ History'}
+              </button>
+              <button onClick={() => handleTest(w.id)} disabled={testing === w.id}
+                className="text-xs px-2 py-0.5 rounded disabled:opacity-50"
+                style={{ backgroundColor: 'var(--th-badge-running-bg)', color: 'var(--th-badge-running-text)' }}
+              >
+                {testing === w.id ? 'Testing…' : 'Test'}
+              </button>
+              <button onClick={() => handleDelete(w.id)}
+                className="text-xs text-red-600 hover:underline">Delete</button>
+            </div>
+            {expandedDeliveries === w.id && (
+              <div className="border-t border-th-border">
+                <DeliveryHistory webhookId={w.id} />
+              </div>
             )}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 import Sources from './pages/Sources'
 import SourceDetail from './pages/SourceDetail'
 import Jobs from './pages/Jobs'
+import CreateJob from './pages/CreateJob'
 import JobDetail from './pages/JobDetail'
 import TaskDetail from './pages/TaskDetail'
 import Agents from './pages/Agents'
@@ -79,6 +80,7 @@ function App() {
         <Route path="/sources" element={<Sources />} />
         <Route path="/sources/:id" element={<SourceDetail />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/create" element={<CreateJob />} />
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />

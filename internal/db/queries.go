@@ -398,20 +398,29 @@ func (s *pgStore) CreateJob(ctx context.Context, p CreateJobParams) (*Job, error
 		return nil, fmt.Errorf("db: marshal encode_config: %w", err)
 	}
 	const q = `
-		INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, source_id, status, job_type, priority, target_tags,
-		          tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-		          encode_config, completed_at, failed_at, created_at, updated_at`
+		WITH ins AS (
+		    INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config)
+		    VALUES ($1, $2, $3, $4, $5)
+		    RETURNING id, source_id, status, job_type, priority, target_tags,
+		              tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+		              encode_config, completed_at, failed_at, created_at, updated_at
+		)
+		SELECT ins.id, ins.source_id, ins.status, ins.job_type, ins.priority, ins.target_tags,
+		       ins.tasks_total, ins.tasks_pending, ins.tasks_running, ins.tasks_completed, ins.tasks_failed,
+		       ins.encode_config, ins.completed_at, ins.failed_at, ins.created_at, ins.updated_at,
+		       COALESCE(s.unc_path, '') AS source_path
+		FROM ins LEFT JOIN sources s ON ins.source_id = s.id`
 	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON)
 	return scanJob(row)
 }
 
 func (s *pgStore) GetJobByID(ctx context.Context, id string) (*Job, error) {
-	const q = `SELECT id, source_id, status, job_type, priority, target_tags,
-	                  tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-	                  encode_config, completed_at, failed_at, created_at, updated_at
-	           FROM jobs WHERE id = $1`
+	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+	                  j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  COALESCE(s.unc_path, '') AS source_path
+	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
+	           WHERE j.id = $1`
 	return scanJob(s.pool.QueryRow(ctx, q, id))
 }
 
@@ -421,38 +430,64 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 		pageSize = 50
 	}
 
-	countQ := `SELECT COUNT(*) FROM jobs`
-	var total int64
-	countArgs := []any{}
+	var (
+		countConds []string
+		countArgs  []any
+		argN       = 1
+	)
 	if f.Status != "" {
-		countQ += ` WHERE status = $1`
+		countConds = append(countConds, fmt.Sprintf("j.status = $%d", argN))
 		countArgs = append(countArgs, f.Status)
+		argN++
 	}
+	if f.Search != "" {
+		countConds = append(countConds, fmt.Sprintf(
+			"(j.id::text ILIKE $%d OR COALESCE(s.unc_path,'') ILIKE $%d)", argN, argN))
+		countArgs = append(countArgs, "%"+f.Search+"%")
+		argN++
+	}
+
+	countQ := `SELECT COUNT(*) FROM jobs j LEFT JOIN sources s ON j.source_id = s.id`
+	if len(countConds) > 0 {
+		countQ += " WHERE " + joinConditions(countConds)
+	}
+	var total int64
 	if err := s.pool.QueryRow(ctx, countQ, countArgs...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("db: count jobs: %w", err)
 	}
 
-	q := `SELECT id, source_id, status, job_type, priority, target_tags,
-	             tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-	             encode_config, completed_at, failed_at, created_at, updated_at FROM jobs`
-	args := []any{}
-	argN := 1
-
+	// Reset for main query (argN reused from above)
+	var (
+		whereConds []string
+		args       []any
+	)
+	argN = 1
 	if f.Status != "" {
-		q += fmt.Sprintf(` WHERE status = $%d`, argN)
+		whereConds = append(whereConds, fmt.Sprintf("j.status = $%d", argN))
 		args = append(args, f.Status)
 		argN++
 	}
+	if f.Search != "" {
+		whereConds = append(whereConds, fmt.Sprintf(
+			"(j.id::text ILIKE $%d OR COALESCE(s.unc_path,'') ILIKE $%d)", argN, argN))
+		args = append(args, "%"+f.Search+"%")
+		argN++
+	}
 	if f.Cursor != "" {
-		if f.Status != "" {
-			q += fmt.Sprintf(` AND id > $%d`, argN)
-		} else {
-			q += fmt.Sprintf(` WHERE id > $%d`, argN)
-		}
+		whereConds = append(whereConds, fmt.Sprintf("j.id > $%d", argN))
 		args = append(args, f.Cursor)
 		argN++
 	}
-	q += fmt.Sprintf(` ORDER BY priority DESC, created_at ASC LIMIT $%d`, argN)
+
+	q := `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+	             j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+	             j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	             COALESCE(s.unc_path, '') AS source_path
+	      FROM jobs j LEFT JOIN sources s ON j.source_id = s.id`
+	if len(whereConds) > 0 {
+		q += " WHERE " + joinConditions(whereConds)
+	}
+	q += fmt.Sprintf(` ORDER BY j.priority DESC, j.created_at ASC LIMIT $%d`, argN)
 	args = append(args, pageSize)
 
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -474,12 +509,13 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 // GetJobsNeedingExpansion returns queued jobs that have not yet been expanded
 // into tasks (tasks_total = 0) and have a non-empty encode_config.
 func (s *pgStore) GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error) {
-	const q = `SELECT id, source_id, status, job_type, priority, target_tags,
-	                  tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-	                  encode_config, completed_at, failed_at, created_at, updated_at
-	           FROM jobs
-	           WHERE status = 'queued' AND tasks_total = 0
-	           ORDER BY priority DESC, created_at ASC`
+	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+	                  j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  COALESCE(s.unc_path, '') AS source_path
+	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
+	           WHERE j.status = 'queued' AND j.tasks_total = 0
+	           ORDER BY j.priority DESC, j.created_at ASC`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("db: get jobs needing expansion: %w", err)
@@ -539,6 +575,7 @@ func scanJob(row pgx.Row) (*Job, error) {
 		&j.ID, &j.SourceID, &j.Status, &j.JobType, &j.Priority, &j.TargetTags,
 		&j.TasksTotal, &j.TasksPending, &j.TasksRunning, &j.TasksCompleted, &j.TasksFailed,
 		&rawCfg, &j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
+		&j.SourcePath,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -552,6 +589,18 @@ func scanJob(row pgx.Row) (*Job, error) {
 		}
 	}
 	return &j, nil
+}
+
+// joinConditions joins WHERE clause conditions with AND.
+func joinConditions(conds []string) string {
+	result := ""
+	for i, c := range conds {
+		if i > 0 {
+			result += " AND "
+		}
+		result += c
+	}
+	return result
 }
 
 // ---------------------------------------------------------------------------
@@ -1060,6 +1109,32 @@ func (s *pgStore) InsertWebhookDelivery(ctx context.Context, p InsertWebhookDeli
 		p.ResponseCode, p.Success, p.Attempt, p.ErrorMsg,
 	)
 	return err
+}
+
+func (s *pgStore) ListWebhookDeliveries(ctx context.Context, webhookID string, limit, offset int) ([]*WebhookDelivery, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	const q = `SELECT id, webhook_id, event, response_code, success, attempt, error_msg, delivered_at
+	           FROM webhook_deliveries WHERE webhook_id = $1
+	           ORDER BY delivered_at DESC LIMIT $2 OFFSET $3`
+	rows, err := s.pool.Query(ctx, q, webhookID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("db: list webhook deliveries: %w", err)
+	}
+	defer rows.Close()
+	var out []*WebhookDelivery
+	for rows.Next() {
+		var d WebhookDelivery
+		if err := rows.Scan(
+			&d.ID, &d.WebhookID, &d.Event,
+			&d.ResponseCode, &d.Success, &d.Attempt, &d.ErrorMsg, &d.DeliveredAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan webhook delivery: %w", err)
+		}
+		out = append(out, &d)
+	}
+	return out, rows.Err()
 }
 
 func scanWebhook(row pgx.Row) (*Webhook, error) {

@@ -26,14 +26,22 @@ function fmtDuration(sec: number | null) {
 
 export default function Sources() {
   const [sources, setSources] = useState<Source[]>([])
+  const [nextCursor, setNextCursor] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [formPath, setFormPath] = useState('')
+  const [formName, setFormName] = useState('')
+  const [formSaving, setFormSaving] = useState(false)
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
     try {
-      const s = await api.listSources()
-      setSources(s)
+      const result = await api.listSourcesPaged({})
+      setSources(result.items)
+      setNextCursor(result.nextCursor)
       setError('')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -45,17 +53,99 @@ export default function Sources() {
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
 
+  const handleLoadMore = async () => {
+    if (!nextCursor) return
+    setLoadingMore(true)
+    try {
+      const result = await api.listSourcesPaged({ cursor: nextCursor })
+      setSources(prev => [...prev, ...result.items])
+      setNextCursor(result.nextCursor)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load more')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormSaving(true)
+    try {
+      await api.createSource({ path: formPath, name: formName || undefined })
+      setShowForm(false)
+      setFormPath('')
+      setFormName('')
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to register source')
+    } finally {
+      setFormSaving(false)
+    }
+  }
+
+  const handleAnalyze = async (id: string, ev: React.MouseEvent) => {
+    ev.stopPropagation()
+    setAnalyzingId(id)
+    try {
+      await api.analyzeSource(id)
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to trigger analysis')
+    } finally {
+      setAnalyzingId(null)
+    }
+  }
+
   if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-th-text">Sources</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-th-text">Sources</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
+        >
+          {showForm ? 'Cancel' : 'Register Source'}
+        </button>
+      </div>
+
       {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      {showForm && (
+        <form onSubmit={handleRegister} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">Register Source</h2>
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">UNC Path *</label>
+            <input
+              value={formPath}
+              onChange={e => setFormPath(e.target.value)}
+              placeholder="\\server\share\videos\file.mkv"
+              required
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">Name (optional)</label>
+            <input
+              value={formName}
+              onChange={e => setFormName(e.target.value)}
+              placeholder="Filename override"
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+            />
+          </div>
+          <button type="submit" disabled={formSaving}
+            className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            {formSaving ? 'Registering…' : 'Register'}
+          </button>
+        </form>
+      )}
+
       <div className="bg-th-surface rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
-              {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'State', 'Created'].map(h => (
+              {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'State', 'Created', ''].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
@@ -76,14 +166,39 @@ export default function Sources() {
                 </td>
                 <td className="px-4 py-2"><StatusBadge status={s.state} /></td>
                 <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(s.created_at)}</td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={e => handleAnalyze(s.id, e)}
+                    disabled={analyzingId === s.id}
+                    className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'var(--th-badge-running-bg)',
+                      color: 'var(--th-badge-running-text)',
+                    }}
+                  >
+                    {analyzingId === s.id ? 'Queuing…' : 'Analyze'}
+                  </button>
+                </td>
               </tr>
             ))}
             {sources.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-4 text-center text-th-text-subtle">No sources found</td></tr>
+              <tr><td colSpan={8} className="px-4 py-4 text-center text-th-text-subtle">No sources found</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {nextCursor && (
+        <div className="text-center">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 text-sm text-th-text-secondary border border-th-border rounded hover:bg-th-surface-muted disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

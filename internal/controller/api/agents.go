@@ -52,3 +52,27 @@ func (s *Server) handleDrainAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
+
+func (s *Server) handleApproveAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	agent, err := s.store.GetAgentByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "agent not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get agent for approve", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	if agent.Status != "pending_approval" {
+		writeProblem(w, r, http.StatusConflict, "Conflict", "agent is not pending approval")
+		return
+	}
+	if err := s.store.UpdateAgentStatus(r.Context(), id, "idle"); err != nil {
+		s.logger.Error("approve agent", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}

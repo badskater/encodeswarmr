@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Task, LogEntry } from '../types'
@@ -31,12 +31,17 @@ const streamColors: Record<string, string> = {
   agent: 'text-yellow-400',
 }
 
+const ACTIVE_STATUSES = new Set(['assigned', 'running'])
+
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>()
   const [task, setTask] = useState<Task | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const logDivRef = useRef<HTMLDivElement>(null)
+  const lastLogIdRef = useRef<number>(0)
+  const sseRef = useRef<EventSource | null>(null)
 
   const load = useCallback(async () => {
     if (!id) return
@@ -44,6 +49,9 @@ export default function TaskDetail() {
       const [t, l] = await Promise.all([api.getTask(id), api.listTaskLogs(id)])
       setTask(t)
       setLogs(l)
+      if (l.length > 0) {
+        lastLogIdRef.current = Number(l[l.length - 1].id)
+      }
       setError('')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -54,6 +62,54 @@ export default function TaskDetail() {
 
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
+
+  // SSE streaming for active tasks
+  useEffect(() => {
+    if (!task || !ACTIVE_STATUSES.has(task.status)) {
+      if (sseRef.current) {
+        sseRef.current.close()
+        sseRef.current = null
+      }
+      return
+    }
+
+    const url = api.getTaskLogsTailURL(task.id)
+    const es = new EventSource(url, { withCredentials: true })
+    sseRef.current = es
+
+    es.onmessage = (ev) => {
+      try {
+        const entry = JSON.parse(ev.data) as LogEntry
+        setLogs(prev => {
+          if (prev.some(l => l.id === entry.id)) return prev
+          return [...prev, entry]
+        })
+        lastLogIdRef.current = Number(entry.id)
+      } catch {
+        // ignore malformed events
+      }
+    }
+
+    es.onerror = () => {
+      es.close()
+      sseRef.current = null
+    }
+
+    return () => {
+      es.close()
+      sseRef.current = null
+    }
+  }, [task?.status, task?.id])
+
+  // Auto-scroll log div to bottom when new logs arrive
+  useEffect(() => {
+    const el = logDivRef.current
+    if (!el) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    if (atBottom) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [logs.length])
 
   if (loading) return <p className="text-th-text-muted">Loading…</p>
   if (error) return <p className="text-red-600">{error}</p>
@@ -74,9 +130,9 @@ export default function TaskDetail() {
         <Row label="Chunk Index" value={task.chunk_index} />
         <Row label="Agent" value={task.agent_id ? <span className="font-mono text-xs">{task.agent_id}</span> : '—'} />
         <Row label="Exit Code" value={task.exit_code != null ? task.exit_code : '—'} />
-        <Row label="Frames Encoded" value={task.frames_encoded > 0 ? task.frames_encoded.toLocaleString() : '—'} />
-        <Row label="Avg FPS" value={task.avg_fps > 0 ? task.avg_fps.toFixed(1) : '—'} />
-        <Row label="Output Size" value={task.output_size > 0 ? fmtBytes(task.output_size) : '—'} />
+        <Row label="Frames Encoded" value={task.frames_encoded != null && task.frames_encoded > 0 ? task.frames_encoded.toLocaleString() : '—'} />
+        <Row label="Avg FPS" value={task.avg_fps != null && task.avg_fps > 0 ? task.avg_fps.toFixed(1) : '—'} />
+        <Row label="Output Size" value={task.output_size != null && task.output_size > 0 ? fmtBytes(task.output_size) : '—'} />
         <Row label="Started" value={fmtDate(task.started_at)} />
         <Row label="Completed" value={fmtDate(task.completed_at)} />
         {task.error_msg && <Row label="Error" value={<span className="text-red-600 text-xs">{task.error_msg}</span>} />}
@@ -84,9 +140,14 @@ export default function TaskDetail() {
 
       <div className="bg-th-surface rounded-lg shadow">
         <div className="px-4 py-3 border-b border-th-border flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-th-text-secondary">Logs ({logs.length})</h2>
+          <h2 className="text-sm font-semibold text-th-text-secondary">
+            Logs ({logs.length})
+            {ACTIVE_STATUSES.has(task.status) && (
+              <span className="ml-2 text-xs text-th-text-subtle animate-pulse">● live</span>
+            )}
+          </h2>
         </div>
-        <div className="bg-th-log-bg rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
+        <div ref={logDivRef} className="bg-th-log-bg rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
           {logs.length === 0 ? (
             <span className="text-th-text-muted">No logs available</span>
           ) : (

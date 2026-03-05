@@ -18,6 +18,7 @@ export default function Agents() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [draining, setDraining] = useState<string | null>(null)
+  const [approving, setApproving] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +44,18 @@ export default function Agents() {
       setError(e instanceof Error ? e.message : 'Failed to drain agent')
     } finally {
       setDraining(null)
+    }
+  }
+
+  const handleApprove = async (id: string) => {
+    setApproving(id)
+    try {
+      await api.approveAgent(id)
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to approve agent')
+    } finally {
+      setApproving(null)
     }
   }
 
@@ -81,7 +94,7 @@ export default function Agents() {
                 <td className="px-4 py-2 text-th-text-muted">
                   {a.tags.length > 0 ? a.tags.join(', ') : '—'}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 flex gap-1">
                   {(a.status === 'idle' || a.status === 'running') && (
                     <button
                       onClick={() => handleDrain(a.id)}
@@ -93,6 +106,19 @@ export default function Agents() {
                       }}
                     >
                       {draining === a.id ? 'Draining…' : 'Drain'}
+                    </button>
+                  )}
+                  {a.status === 'pending_approval' && (
+                    <button
+                      onClick={() => handleApprove(a.id)}
+                      disabled={approving === a.id}
+                      className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                      style={{
+                        backgroundColor: 'var(--th-badge-success-bg)',
+                        color: 'var(--th-badge-success-text)',
+                      }}
+                    >
+                      {approving === a.id ? 'Approving…' : 'Approve'}
                     </button>
                   )}
                 </td>

@@ -95,6 +95,7 @@ type Store interface {
 	UpdateWebhook(ctx context.Context, p UpdateWebhookParams) error
 	DeleteWebhook(ctx context.Context, id string) error
 	InsertWebhookDelivery(ctx context.Context, p InsertWebhookDeliveryParams) error
+	ListWebhookDeliveries(ctx context.Context, webhookID string, limit, offset int) ([]*WebhookDelivery, error)
 
 	// --- Analysis ---
 	UpsertAnalysisResult(ctx context.Context, p UpsertAnalysisResultParams) (*AnalysisResult, error)

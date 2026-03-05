@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/badskater/distributed-encoder/internal/db"
@@ -218,6 +219,33 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "status_code": code})
+}
+
+func (s *Server) handleListWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	deliveries, err := s.store.ListWebhookDeliveries(r.Context(), id, limit, offset)
+	if err != nil {
+		s.logger.Error("list webhook deliveries", "err", err, "webhook_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	if deliveries == nil {
+		deliveries = []*db.WebhookDelivery{}
+	}
+	writeJSON(w, r, http.StatusOK, deliveries)
 }
 
 func isValidProvider(provider string) bool {

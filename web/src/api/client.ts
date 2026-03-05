@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, User, LogEntry, AnalysisResult } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -52,11 +52,58 @@ export const logout = () => fetch('/auth/logout', { method: 'POST', credentials:
 
 export const getMe = () => request<User>('/users/me')
 
+async function requestCollection<T>(path: string): Promise<{ items: T[]; total: number; nextCursor?: string }> {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  })
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}))
+    throw new ApiError(resp.status, body.detail ?? resp.statusText)
+  }
+  const json = await resp.json()
+  return {
+    items: (json.data ?? []) as T[],
+    total: json.meta?.total_count ?? 0,
+    nextCursor: json.meta?.next_cursor,
+  }
+}
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') p.set(k, String(v))
+  }
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
+
 // Jobs
-export const listJobs = (status?: string) =>
-  request<Job[]>(`/jobs${status ? `?status=${status}` : ''}`)
+export const listJobs = (status?: string, search?: string) =>
+  request<Job[]>(`/jobs${buildQuery({ status, search })}`)
+
+export const listJobsPaged = (params: { status?: string; search?: string; cursor?: string; page_size?: number }) =>
+  requestCollection<Job>(`/jobs${buildQuery(params)}`)
 
 export const getJob = (id: string) => request<Job>(`/jobs/${id}`)
+
+export interface CreateJobRequest {
+  source_id: string
+  job_type: string
+  priority?: number
+  target_tags?: string[]
+  encode_config?: {
+    run_script_template_id?: string
+    frameserver_template_id?: string
+    chunk_boundaries?: { start_frame: number; end_frame: number }[]
+    output_root?: string
+    output_extension?: string
+    extra_vars?: Record<string, string>
+  }
+}
+
+export const createJob = (body: CreateJobRequest) =>
+  request<Job>('/jobs', { method: 'POST', body: JSON.stringify(body) })
 
 export const cancelJob = (id: string) => request<void>(`/jobs/${id}/cancel`, { method: 'POST' })
 
@@ -76,10 +123,21 @@ export const getAgent = (id: string) => request<Agent>(`/agents/${id}`)
 
 export const drainAgent = (id: string) => request<void>(`/agents/${id}/drain`, { method: 'POST' })
 
+export const approveAgent = (id: string) => request<void>(`/agents/${id}/approve`, { method: 'POST' })
+
 // Sources
-export const listSources = () => request<Source[]>('/sources')
+export const listSources = (params?: { state?: string; cursor?: string; page_size?: number }) =>
+  request<Source[]>(`/sources${buildQuery(params ?? {})}`)
+
+export const listSourcesPaged = (params: { state?: string; cursor?: string; page_size?: number }) =>
+  requestCollection<Source>(`/sources${buildQuery(params)}`)
+
+export const createSource = (body: { path: string; name?: string }) =>
+  request<Source>('/sources', { method: 'POST', body: JSON.stringify(body) })
 
 export const getSource = (id: string) => request<Source>(`/sources/${id}`)
+
+export const analyzeSource = (id: string) => request<Job>(`/sources/${id}/analyze`, { method: 'POST' })
 
 export const deleteSource = (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' })
 
@@ -115,9 +173,15 @@ export const listWebhooks = () => request<Webhook[]>('/webhooks')
 export const createWebhook = (body: Partial<Webhook>) =>
   request<Webhook>('/webhooks', { method: 'POST', body: JSON.stringify(body) })
 
+export const updateWebhook = (id: string, body: Partial<Webhook> & { enabled?: boolean }) =>
+  request<Webhook>(`/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
 export const deleteWebhook = (id: string) => request<void>(`/webhooks/${id}`, { method: 'DELETE' })
 
 export const testWebhook = (id: string) => request<void>(`/webhooks/${id}/test`, { method: 'POST' })
+
+export const listWebhookDeliveries = (id: string, limit = 50, offset = 0) =>
+  request<WebhookDelivery[]>(`/webhooks/${id}/deliveries${buildQuery({ limit, offset })}`)
 
 // Users
 export const listUsers = () => request<User[]>('/users')

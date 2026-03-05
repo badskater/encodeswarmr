@@ -25,174 +25,187 @@ type ChunkBoundary struct {
 
 // User is a row from the users table.
 type User struct {
-	ID           string
-	Username     string
-	Email        string
-	Role         string
-	PasswordHash *string
-	OIDCSub      *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+	PasswordHash *string   `json:"-"`
+	OIDCSub      *string   `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Agent is a row from the agents table.
 type Agent struct {
-	ID            string
-	Name          string
-	Hostname      string
-	IPAddress     string
-	Status        string
-	Tags          []string
-	GPUVendor     string
-	GPUModel      string
-	GPUEnabled    bool
-	AgentVersion  string
-	OSVersion     string
-	CPUCount      int32
-	RAMMIB        int64
-	NVENC         bool
-	QSV           bool
-	AMF           bool
-	APIKeyHash    *string
-	LastHeartbeat *time.Time
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Hostname      string     `json:"hostname"`
+	IPAddress     string     `json:"ip_address"`
+	Status        string     `json:"status"`
+	Tags          []string   `json:"tags"`
+	GPUVendor     string     `json:"gpu_vendor"`
+	GPUModel      string     `json:"gpu_model"`
+	GPUEnabled    bool       `json:"gpu_enabled"`
+	AgentVersion  string     `json:"agent_version"`
+	OSVersion     string     `json:"os_version"`
+	CPUCount      int32      `json:"cpu_count"`
+	RAMMIB        int64      `json:"ram_mib"`
+	NVENC         bool       `json:"nvenc"`
+	QSV           bool       `json:"qsv"`
+	AMF           bool       `json:"amf"`
+	APIKeyHash    *string    `json:"-"`
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // Source is a row from the sources table.
 type Source struct {
-	ID         string
-	Filename   string
-	UNCPath    string
-	SizeBytes  int64
-	DetectedBy *string
-	State      string
-	VMafScore  *float64
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID         string     `json:"id"`
+	Filename   string     `json:"filename"`
+	UNCPath    string     `json:"path"`
+	SizeBytes  int64      `json:"size_bytes"`
+	DetectedBy *string    `json:"detected_by,omitempty"`
+	State      string     `json:"state"`
+	VMafScore  *float64   `json:"vmaf_score,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// Job is a row from the jobs table.
+// Job is a row from the jobs table, enriched with source path via JOIN.
 type Job struct {
-	ID             string
-	SourceID       string
-	Status         string
-	JobType        string
-	Priority       int
-	TargetTags     []string
-	TasksTotal     int
-	TasksPending   int
-	TasksRunning   int
-	TasksCompleted int
-	TasksFailed    int
-	EncodeConfig   EncodeConfig
-	CompletedAt    *time.Time
-	FailedAt       *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID             string       `json:"id"`
+	SourceID       string       `json:"source_id"`
+	SourcePath     string       `json:"source_path"` // populated via LEFT JOIN sources
+	Status         string       `json:"status"`
+	JobType        string       `json:"job_type"`
+	Priority       int          `json:"priority"`
+	TargetTags     []string     `json:"target_tags"`
+	TasksTotal     int          `json:"tasks_total"`
+	TasksPending   int          `json:"tasks_pending"`
+	TasksRunning   int          `json:"tasks_running"`
+	TasksCompleted int          `json:"tasks_completed"`
+	TasksFailed    int          `json:"tasks_failed"`
+	EncodeConfig   EncodeConfig `json:"encode_config"`
+	CompletedAt    *time.Time   `json:"completed_at,omitempty"`
+	FailedAt       *time.Time   `json:"failed_at,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
 }
 
 // Task is a row from the tasks table.
 type Task struct {
-	ID            string
-	JobID         string
-	ChunkIndex    int
-	Status        string
-	AgentID       *string
-	ScriptDir     string
-	SourcePath    string
-	OutputPath    string
-	Variables     map[string]string
-	ExitCode      *int
-	FramesEncoded *int64
-	AvgFPS        *float64
-	OutputSize    *int64
-	DurationSec   *int64
-	VMafScore     *float64
-	PSNR          *float64
-	SSIM          *float64
-	ErrorMsg      *string
-	StartedAt     *time.Time
-	CompletedAt   *time.Time
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            string            `json:"id"`
+	JobID         string            `json:"job_id"`
+	ChunkIndex    int               `json:"chunk_index"`
+	Status        string            `json:"status"`
+	AgentID       *string           `json:"agent_id,omitempty"`
+	ScriptDir     string            `json:"-"`
+	SourcePath    string            `json:"source_path,omitempty"`
+	OutputPath    string            `json:"output_path,omitempty"`
+	Variables     map[string]string `json:"-"`
+	ExitCode      *int              `json:"exit_code,omitempty"`
+	FramesEncoded *int64            `json:"frames_encoded,omitempty"`
+	AvgFPS        *float64          `json:"avg_fps,omitempty"`
+	OutputSize    *int64            `json:"output_size,omitempty"`
+	DurationSec   *int64            `json:"duration_sec,omitempty"`
+	VMafScore     *float64          `json:"vmaf_score,omitempty"`
+	PSNR          *float64          `json:"psnr,omitempty"`
+	SSIM          *float64          `json:"ssim,omitempty"`
+	ErrorMsg      *string           `json:"error_msg,omitempty"`
+	StartedAt     *time.Time        `json:"started_at,omitempty"`
+	CompletedAt   *time.Time        `json:"completed_at,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 // TaskLog is a row from the task_logs table.
 type TaskLog struct {
-	ID       int64
-	TaskID   string
-	JobID    string
-	Stream   string
-	Level    string
-	Message  string
-	Metadata map[string]any
-	LoggedAt time.Time
+	ID       int64          `json:"id"`
+	TaskID   string         `json:"task_id"`
+	JobID    string         `json:"job_id"`
+	Stream   string         `json:"stream"`
+	Level    string         `json:"level"`
+	Message  string         `json:"message"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+	LoggedAt time.Time      `json:"timestamp"` // "timestamp" matches the frontend LogEntry type
 }
 
 // Template is a row from the templates table.
 type Template struct {
-	ID          string
-	Name        string
-	Description string
-	Type        string
-	Extension   string
-	Content     string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Type        string    `json:"type"`
+	Extension   string    `json:"extension,omitempty"`
+	Content     string    `json:"content"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Variable is a row from the variables table.
 type Variable struct {
-	ID          string
-	Name        string
-	Value       string
-	Description string
-	Category    string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Value       string    `json:"value"`
+	Description string    `json:"description,omitempty"`
+	Category    string    `json:"category,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Webhook is a row from the webhooks table.
 type Webhook struct {
-	ID        string
-	Name      string
-	Provider  string
-	URL       string
-	Secret    *string // raw HMAC-SHA256 signing key; nil means no signing
-	Events    []string
-	Enabled   bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Provider  string    `json:"provider"`
+	URL       string    `json:"url"`
+	Secret    *string   `json:"-"` // never serialised to clients
+	Events    []string  `json:"events"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// WebhookDelivery is a row from the webhook_deliveries table.
+type WebhookDelivery struct {
+	ID           int64     `json:"id"`
+	WebhookID    string    `json:"webhook_id"`
+	Event        string    `json:"event"`
+	ResponseCode *int      `json:"response_code,omitempty"`
+	Success      bool      `json:"success"`
+	Attempt      int       `json:"attempt"`
+	ErrorMsg     *string   `json:"error_msg,omitempty"`
+	DeliveredAt  time.Time `json:"delivered_at"`
 }
 
 // AnalysisResult is a row from the analysis_results table.
 type AnalysisResult struct {
-	ID        string
-	SourceID  string
-	Type      string
-	FrameData []byte
-	Summary   []byte
-	CreatedAt time.Time
+	ID        string    `json:"id"`
+	SourceID  string    `json:"source_id"`
+	Type      string    `json:"type"`
+	FrameData []byte    `json:"frame_data,omitempty"`
+	Summary   []byte    `json:"summary,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Session is a row from the sessions table.
 type Session struct {
-	Token     string
-	UserID    string
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	Token     string    `json:"-"`
+	UserID    string    `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // EnrollmentToken is a row from the enrollment_tokens table.
 type EnrollmentToken struct {
-	ID        string
-	Token     string
-	CreatedBy string
-	UsedBy    *string
-	UsedAt    *time.Time
-	ExpiresAt time.Time
-	CreatedAt time.Time
+	ID        string     `json:"id"`
+	Token     string     `json:"token"`
+	CreatedBy string     `json:"created_by"`
+	UsedBy    *string    `json:"used_by,omitempty"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +266,7 @@ type CreateJobParams struct {
 
 type ListJobsFilter struct {
 	Status   string
+	Search   string
 	Cursor   string
 	PageSize int
 }

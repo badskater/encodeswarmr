@@ -90,6 +90,17 @@ export interface Webhook {
   created_at: string
 }
 
+export interface WebhookDelivery {
+  id: number
+  webhook_id: string
+  event: string
+  response_code: number | null
+  success: boolean
+  attempt: number
+  error_msg: string | null
+  delivered_at: string
+}
+
 export interface User {
   id: string
   username: string

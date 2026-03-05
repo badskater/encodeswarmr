@@ -131,6 +131,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
 	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
+	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 
 	// --- Agent enrollment tokens ---
 	mux.Handle("GET /api/v1/agent-tokens", admin(s.handleListEnrollmentTokens))
@@ -139,8 +140,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// --- Sources ---
 	mux.Handle("GET /api/v1/sources", viewer(s.handleListSources))
+	mux.Handle("POST /api/v1/sources", operator(s.handleCreateSource))
 	mux.Handle("GET /api/v1/sources/{id}", viewer(s.handleGetSource))
 	mux.Handle("POST /api/v1/sources/{id}/encode", operator(s.handleEncodeSource))
+	mux.Handle("POST /api/v1/sources/{id}/analyze", operator(s.handleAnalyzeSource))
 	mux.Handle("DELETE /api/v1/sources/{id}", operator(s.handleDeleteSource))
 
 	// --- Analysis ---
@@ -168,6 +171,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/v1/webhooks/{id}", admin(s.handleUpdateWebhook))
 	mux.Handle("DELETE /api/v1/webhooks/{id}", admin(s.handleDeleteWebhook))
 	mux.Handle("POST /api/v1/webhooks/{id}/test", admin(s.handleTestWebhook))
+	mux.Handle("GET /api/v1/webhooks/{id}/deliveries", admin(s.handleListWebhookDeliveries))
 
 	// --- Users ---
 	mux.Handle("GET /api/v1/users", admin(s.handleListUsers))

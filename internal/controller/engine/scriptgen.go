@@ -177,6 +177,72 @@ func (g *ScriptGenerator) Render(ctx context.Context, job *db.Job, task *db.Task
 	return dir, nil
 }
 
+// RenderSingle generates script files for a non-chunked job (analysis, audio).
+// Unlike Render, it does not require chunk boundaries.
+func (g *ScriptGenerator) RenderSingle(ctx context.Context, job *db.Job, task *db.Task) (string, error) {
+	if job.EncodeConfig.RunScriptTemplateID == "" {
+		// No run script template: nothing to render, return an empty dir.
+		dir := filepath.Join(g.baseDir, job.ID, "0000")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", fmt.Errorf("scriptgen: create dir: %w", err)
+		}
+		return dir, nil
+	}
+
+	vars, err := g.store.ListVariables(ctx, "")
+	if err != nil {
+		return "", fmt.Errorf("scriptgen: load variables: %w", err)
+	}
+
+	data := make(map[string]string, len(vars)+10)
+	for _, v := range vars {
+		data[v.Name] = v.Value
+	}
+	for k, v := range job.EncodeConfig.ExtraVars {
+		data[k] = v
+	}
+	for k, v := range task.Variables {
+		data[k] = v
+	}
+
+	data["SOURCE_PATH"] = task.SourcePath
+	data["OUTPUT_PATH"] = task.OutputPath
+	data["JOB_ID"] = job.ID
+	data["TASK_ID"] = task.ID
+	data["JOB_TYPE"] = job.JobType
+
+	dir := filepath.Join(g.baseDir, job.ID, "0000")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("scriptgen: create dir: %w", err)
+	}
+
+	cleanup := true
+	defer func() {
+		if cleanup {
+			os.RemoveAll(dir)
+		}
+	}()
+
+	runTpl, err := g.store.GetTemplateByID(ctx, job.EncodeConfig.RunScriptTemplateID)
+	if err != nil {
+		return "", fmt.Errorf("scriptgen: load run script template: %w", err)
+	}
+	runFile := filepath.Join(dir, "run."+runTpl.Extension)
+	if err := renderToFile(runTpl.Name, runTpl.Content, data, runFile); err != nil {
+		return "", fmt.Errorf("scriptgen: render run script: %w", err)
+	}
+
+	g.logger.Info("single task scripts rendered",
+		slog.String("job_id", job.ID),
+		slog.String("task_id", task.ID),
+		slog.String("job_type", job.JobType),
+		slog.String("dir", dir),
+	)
+
+	cleanup = false
+	return dir, nil
+}
+
 // renderToFile parses the template content, executes it with data, and writes
 // the result to the given path.
 func renderToFile(name, content string, data map[string]string, path string) error {

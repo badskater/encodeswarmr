@@ -5,10 +5,78 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/distributed-encoder/internal/shared"
 )
+
+func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path string `json:"path"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if !shared.IsUNCPath(req.Path) {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path must be a UNC path (\\\\server\\share\\...)")
+		return
+	}
+	filename := req.Name
+	if filename == "" {
+		filename = filepath.Base(req.Path)
+	}
+
+	existing, err := s.store.GetSourceByUNCPath(r.Context(), req.Path)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		s.logger.Error("check source by unc path", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	if existing != nil {
+		writeJSON(w, r, http.StatusOK, existing)
+		return
+	}
+
+	source, err := s.store.CreateSource(r.Context(), db.CreateSourceParams{
+		Filename: filename,
+		UNCPath:  req.Path,
+	})
+	if err != nil {
+		s.logger.Error("create source", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusCreated, source)
+}
+
+func (s *Server) handleAnalyzeSource(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	_, err := s.store.GetSourceByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "source not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get source for analyze", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	job, err := s.store.CreateJob(r.Context(), db.CreateJobParams{
+		SourceID: id,
+		JobType:  "analysis",
+	})
+	if err != nil {
+		s.logger.Error("create analysis job", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusCreated, job)
+}
 
 func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
