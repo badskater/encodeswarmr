@@ -306,7 +306,8 @@ begin
     'TLS Certificates',
     'Select the folder containing the agent TLS certificate files.',
     'Required files: ca.crt,  <hostname>.crt,  <hostname>.key' + #13#10 +
-    'These will be copied into the install directory.');
+    'These will be copied into the install directory.',
+    False, '');
   PageCerts.Add('');
 
   { Page 8: Tool verification (read-only memo) }
