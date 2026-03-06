@@ -409,14 +409,14 @@ func (r *runner) validateTask(task *pb.TaskAssignment) error {
 		}
 	}
 
-	// UNC path validation.
+	// Share path validation (UNC and NFS mount paths).
 	if path := task.GetSourcePath(); path != "" {
-		if err := r.validateUNCPath(path); err != nil {
+		if err := r.validateSharePath(path); err != nil {
 			return fmt.Errorf("validation: source_path: %w", err)
 		}
 	}
 	if path := task.GetOutputPath(); path != "" {
-		if err := r.validateUNCPath(path); err != nil {
+		if err := r.validateSharePath(path); err != nil {
 			return fmt.Errorf("validation: output_path: %w", err)
 		}
 	}
@@ -447,9 +447,11 @@ func (r *runner) validateTask(task *pb.TaskAssignment) error {
 	return nil
 }
 
-// validateUNCPath checks that path is within one of the configured allowed
-// shares per AGENTS.md §7.2. If allowed_shares is empty, all paths pass.
-func (r *runner) validateUNCPath(path string) error {
+// validateSharePath checks that path is within one of the configured allowed
+// shares per AGENTS.md §7.2. Accepts both UNC (\servershare) and POSIX
+// absolute (/mnt/nas) paths for NFS mounts. If allowed_shares is empty, all
+// paths pass.
+func (r *runner) validateSharePath(path string) error {
 	if len(r.cfg.AllowedShares) == 0 {
 		return nil
 	}

@@ -22,8 +22,8 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
 		return
 	}
-	if !shared.IsUNCPath(req.Path) {
-		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path must be a UNC path (\\\\server\\share\\...)")
+	if !shared.IsSharePath(req.Path) {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path must be a UNC path (\\\\server\\share\\...) or NFS mount path (/mnt/nas/...)")
 		return
 	}
 	filename := req.Name

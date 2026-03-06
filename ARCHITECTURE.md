@@ -2589,7 +2589,8 @@ User creates job via Web UI / API
 | Area | Description |
 |---|---|
 | **Chunk-based parallel encoding** | Split source at scene boundaries, encode segments in parallel across agents, concatenate. |
-| **Linux agent support** | The Go codebase already cross-compiles; would require systemd service integration instead of Windows Service. |
-| **S3 / object storage** | Support cloud storage as source/destination in addition to UNC shares. |
+| **Linux agent support** | Path validation now accepts POSIX absolute paths for NFS mounts alongside UNC paths. Remaining work: systemd service integration to replace the Windows Service wrapper. |
+| **NFS support** | ✅ Implemented — allowed_shares and source path validation accept POSIX absolute paths (/mnt/nas/media) for NFS mounts alongside Windows UNC paths. Linux agents can mount NFS shares natively. |
+| **S3 / object storage** | Support cloud storage as source/destination in addition to UNC/NFS shares. |
 | **Multi-controller HA** | Active-passive or active-active controllers behind a load balancer for zero-downtime upgrades. |
 | **Web-based VNC/RDP** | View agent desktops from the web UI for debugging encode issues. |
