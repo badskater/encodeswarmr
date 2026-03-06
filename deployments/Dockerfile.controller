@@ -33,7 +33,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 #   libflac      — FLAC audio (also available as native encoder)
 #   HDR/DV       — Full HDR10/HDR10+/HLG/Dolby Vision stream and side-data support
 # Static binaries require no runtime libraries.
-FROM mwader/static-ffmpeg:7 AS ffmpeg-source
+FROM mwader/static-ffmpeg:latest AS ffmpeg-source
 
 # ── Stage 4: dovi_tool ────────────────────────────────────────────────────────
 # dovi_tool is an optional binary for precise Dolby Vision RPU profile extraction.
