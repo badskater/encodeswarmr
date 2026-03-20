@@ -224,7 +224,7 @@ logging:
                    └────────────────────
 ```
 
-**Registration & Approval**: When the agent registers for the first time, the Controller creates a server record with status `pending_approval`. The agent remains in this state until an admin approves it via the web UI or CLI (`controller server approve <name>`). Auto-approval can be enabled in the controller's `config.yaml` (`agent.auto_approve: true`) for trusted networks.
+**Registration & Approval**: When the agent registers for the first time, the Controller creates a server record with status `pending_approval`. The agent remains in this state until an admin approves it via the web UI or CLI (`controller agent approve <name>`). Auto-approval can be enabled in the controller's `config.yaml` (`agent.auto_approve: true`) for trusted networks.
 
 ---
 

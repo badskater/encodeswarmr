@@ -109,22 +109,10 @@ func (r *runner) run(ctx context.Context) error {
 	return nil
 }
 
-// connect establishes a gRPC connection to the controller using exponential
-// backoff.
+// connect creates a gRPC client for the controller. The actual TCP connection
+// is established lazily by grpc.NewClient — connection failures surface when
+// the first RPC (Register) is called, which has its own retry loop.
 func (r *runner) connect(ctx context.Context) error {
-	delay := r.cfg.Controller.Reconnect.InitialDelay
-	if delay == 0 {
-		delay = 5 * time.Second
-	}
-	maxDelay := r.cfg.Controller.Reconnect.MaxDelay
-	if maxDelay == 0 {
-		maxDelay = 5 * time.Minute
-	}
-	multiplier := r.cfg.Controller.Reconnect.Multiplier
-	if multiplier < 1 {
-		multiplier = 2.0
-	}
-
 	var creds grpc.DialOption
 	if r.cfg.Controller.TLS.Cert != "" && r.cfg.Controller.TLS.Key != "" && r.cfg.Controller.TLS.CA != "" {
 		tlsCfg, err := buildTLSConfig(r.cfg.Controller.TLS)
@@ -137,29 +125,15 @@ func (r *runner) connect(ctx context.Context) error {
 		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}
 
-	currentDelay := delay
-	for {
-		r.log.Info("connecting to controller", "address", r.cfg.Controller.Address)
-		conn, err := grpc.NewClient(r.cfg.Controller.Address, creds)
-		if err == nil {
-			r.conn = conn
-			r.client = pb.NewAgentServiceClient(conn)
-			r.log.Info("connected to controller")
-			return nil
-		}
-		r.log.Error("connection failed, retrying", "error", err, "delay", currentDelay)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(currentDelay):
-		}
-
-		currentDelay = time.Duration(float64(currentDelay) * multiplier)
-		if currentDelay > maxDelay {
-			currentDelay = maxDelay
-		}
+	r.log.Info("creating gRPC client", "address", r.cfg.Controller.Address)
+	conn, err := grpc.NewClient(r.cfg.Controller.Address, creds)
+	if err != nil {
+		return fmt.Errorf("create grpc client: %w", err)
 	}
+	r.conn = conn
+	r.client = pb.NewAgentServiceClient(conn)
+	r.log.Info("gRPC client created", "address", r.cfg.Controller.Address)
+	return nil
 }
 
 // buildTLSConfig creates a mutual TLS configuration from the agent's cert,

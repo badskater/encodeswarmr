@@ -281,7 +281,7 @@ The agent exposes a local debug HTTP server on `localhost:9080` when `--http-deb
 After installation, approve the agent in the web UI or via the CLI:
 
 ```bash
-controller server approve <agent-hostname>
+controller agent approve <agent-hostname>
 ```
 
 ---
@@ -294,7 +294,7 @@ After `docker compose up -d` and `make migrate-up`, open `http://localhost:8080`
 
 1. **Approve an agent** — Agents start in `PENDING_APPROVAL`. Go to **Farm Servers** and click **Approve**, or run:
    ```bash
-   controller server approve <agent-hostname>
+   controller agent approve <agent-hostname>
    ```
 
 2. **Add a source** — Go to **Sources → Add Source** and enter the UNC path to a media file (e.g., `\\NAS01\media\movie.m2ts`). Saving it automatically queues an `analysis` job and an `hdr_detect` job — no manual scan step required. These run on the next available idle agent.
