@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Derive version
         id: ver
@@ -57,7 +57,7 @@ jobs:
           Write-Host "Installer: $($exe.Name)  ($mb MB)"
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: distencoder-agent-setup-${{ steps.ver.outputs.v }}
           path: dist\distencoder-agent-setup.exe

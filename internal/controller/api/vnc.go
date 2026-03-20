@@ -45,7 +45,7 @@ func (s *Server) handleAgentVNCProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := fmt.Sprintf("%s:%d", agent.IPAddress, agent.VNCPort)
+	target := net.JoinHostPort(agent.IPAddress, fmt.Sprintf("%d", agent.VNCPort))
 
 	// Open TCP connection to the agent's VNC port before upgrading WebSocket
 	// so we can return a clean HTTP error if the connection fails.
