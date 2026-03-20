@@ -341,8 +341,8 @@ When agents first connect, they appear in the web UI with a **pending_approval**
 Alternatively, approve via CLI:
 
 ```bash
-controller server approve ENCODE-01
-controller server approve --all    # approve all pending agents (trusted networks only)
+controller agent approve ENCODE-01
+controller agent approve --all    # approve all pending agents (trusted networks only)
 ```
 
 For trusted networks, set `agent.auto_approve: true` in `config.yaml` to skip manual approval.
@@ -1199,8 +1199,8 @@ controller <command> [flags]
 | Command | Description |
 |---|---|
 | `controller run` | Start the HTTP + gRPC server (primary production command) |
-| `controller server approve <hostname>` | Approve a pending agent |
-| `controller server revoke <hostname>` | Revoke an approved agent |
+| `controller agent approve <hostname>` | Approve a pending agent |
+| `controller agent disable <hostname>` | Disable an approved agent |
 | `controller agent list` | List all registered agents and their state |
 | `controller source list` | List all registered media sources |
 | `controller source scan <id>` | Trigger a rescan of a source directory |
@@ -1218,7 +1218,7 @@ controller <command> [flags]
 
 ```bash
 # Approve a newly connected agent
-controller server approve ENCODE-01
+controller agent approve ENCODE-01
 
 # List all jobs in running state
 controller job list --status running

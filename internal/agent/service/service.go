@@ -175,6 +175,29 @@ func runAgent(parsed parsedArgs, log *slog.Logger) error {
 		return fmt.Errorf("loading config from %s: %w", parsed.configPath, err)
 	}
 
+	// Set up file-based logging if log_dir is configured. This is critical
+	// for Windows Service mode where stderr is discarded by the SCM.
+	if cfg.Agent.LogDir != "" {
+		logLevel := slog.LevelInfo
+		if parsed.debug {
+			logLevel = slog.LevelDebug
+		}
+		logWriter, closeLog, logErr := setupLogWriter(
+			cfg.Agent.LogDir,
+			cfg.Logging.MaxSizeMB,
+			cfg.Logging.MaxBackups,
+		)
+		if logErr != nil {
+			log.Warn("failed to set up file logging, using stderr only", "error", logErr)
+		} else {
+			defer closeLog()
+			log = slog.New(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{
+				Level: logLevel,
+			}))
+			slog.SetDefault(log)
+		}
+	}
+
 	runFn := func(ctx context.Context) error {
 		r := &runner{
 			cfg:   cfg,

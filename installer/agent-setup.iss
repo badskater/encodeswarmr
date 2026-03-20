@@ -46,7 +46,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; ── [Messages] ────────────────────────────────────────────────────────────────
 [Messages]
 WelcomeLabel2=This wizard will install [name/ver] on your computer.%n%nThe installer will:%n  - Download the agent binary from GitHub Releases%n  - Create the required directory structure%n  - Copy your TLS certificate files%n  - Write the agent configuration file%n  - Install and start the Windows Service%n%nClick Next to continue.
-FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe service %"distributed-encoder-agent%" is now running.%n%nNext step: approve this agent in the web UI (Farm Servers -%n Approve) or run:%n%n  docker compose exec controller /app/controller server approve <hostname>
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe service %"distributed-encoder-agent%" is now running.%n%nNext step: approve this agent in the web UI (Farm Servers -%n Approve) or run:%n%n  docker compose exec controller /app/controller agent approve <hostname>
 
 ; ── [Dirs] ────────────────────────────────────────────────────────────────────
 [Dirs]
@@ -295,8 +295,8 @@ begin
     PageAgent.ID,
     'Agent Binary',
     'The installer will download the agent binary from GitHub Releases.',
-    'Leave blank only if you have already placed the binary manually at:' + #13#10 +
-    ExpandConstant('{app}') + '\distencoder-agent.exe');
+    'Leave blank only if you have already placed the binary at:' + #13#10 +
+    '<install-dir>\distencoder-agent.exe');
   PageVersion.Add('Release version to download (e.g. 1.2.0 — without the v prefix):', False);
   PageVersion.Values[0] := '';
 

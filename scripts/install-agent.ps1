@@ -223,13 +223,13 @@ agent:
   keep_failed_jobs: 10
 
 tools:
-  ffmpeg:   "C:\\\\Tools\\\\ffmpeg\\\\ffmpeg.exe"
-  ffprobe:  "C:\\\\Tools\\\\ffmpeg\\\\ffprobe.exe"
-  x265:     "C:\\\\Tools\\\\x265\\\\x265.exe"
-  x264:     "C:\\\\Tools\\\\x264\\\\x264.exe"
+  ffmpeg:   "C:\\Tools\\ffmpeg\\ffmpeg.exe"
+  ffprobe:  "C:\\Tools\\ffmpeg\\ffprobe.exe"
+  x265:     "C:\\Tools\\x265\\x265.exe"
+  x264:     "C:\\Tools\\x264\\x264.exe"
   svt_av1:  ""
-  avs_pipe: "C:\\\\Program Files\\\\AviSynth+\\\\avs2pipemod.exe"
-  vspipe:   "C:\\\\Program Files\\\\VapourSynth\\\\vspipe.exe"
+  avs_pipe: "C:\\Program Files\\AviSynth+\\avs2pipemod.exe"
+  vspipe:   "C:\\Program Files\\VapourSynth\\vspipe.exe"
 
 gpu:
   enabled: true
@@ -338,7 +338,7 @@ Write-Host ''
 Write-Host '  Next step: approve this agent.' -ForegroundColor Yellow
 Write-Host '  Option A — web UI: open the web UI → Farm Servers → Approve.' -ForegroundColor Yellow
 Write-Host '  Option B — CLI on the controller host:' -ForegroundColor Yellow
-Write-Host "    docker compose exec controller /app/controller server approve $AgentHostname" -ForegroundColor Yellow
+Write-Host "    docker compose exec controller /app/controller agent approve $AgentHostname" -ForegroundColor Yellow
 Write-Host ''
 Write-Host '  Useful commands:'
 Write-Host "    Get-Service $serviceName"

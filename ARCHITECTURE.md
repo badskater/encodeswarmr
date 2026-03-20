@@ -1227,9 +1227,9 @@ The web UI and REST API require authentication. Two providers are supported and 
 The controller binary exposes a CLI (via `cobra`) for operators:
 
 ```
-controller server list                        # show all servers + state (incl. pending_approval)
-controller server approve <name>              # approve a dynamically registered agent
-controller server enable/disable <name>       # toggle a server
+controller agent list                         # show all agents + state (incl. pending_approval)
+controller agent approve <name>               # approve a dynamically registered agent
+controller agent enable/disable <name>        # toggle an agent
 
 controller source list                        # list all sources with state + VMAF score
 controller source status <id>                 # show source detail: VMAF results, linked jobs
@@ -1383,7 +1383,7 @@ Servers register themselves dynamically. When an agent starts for the first time
 
 1. Agent starts and calls `Register()` (gRPC) with its hostname, IP, GPU info, and tags.
 2. Controller creates the server in `pending_approval` state. The agent receives an acknowledgement.
-3. An admin approves the server via the web UI or CLI (`controller server approve <name>`).
+3. An admin approves the agent via the web UI or CLI (`controller agent approve <name>`).
 4. Once approved, the server moves to `idle` and the agent begins receiving work on its next poll.
 
 Auto-approval can be enabled in `config.yaml` (`agent.auto_approve: true`) for trusted networks where any agent should be accepted immediately.

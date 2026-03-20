@@ -230,9 +230,9 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
             go build -ldflags="-s -w -X main.Version=${VERSION}" \
-            -o dist/distencoder-agent.exe ./cmd/agent
+            -o dist/agent-windows-amd64.exe ./cmd/agent
 
       - name: Upload agent .exe to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/distencoder-agent.exe
+          files: dist/agent-windows-amd64.exe
