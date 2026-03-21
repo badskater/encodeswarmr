@@ -272,10 +272,10 @@ export const getRecentActivity = (limit = 10) =>
   request<ActivityEvent[]>(`/metrics/activity${buildQuery({ limit })}`)
 
 // Plugins
-export const listPlugins = () => request<Plugin[]>('/admin/plugins')
+export const listPlugins = () => request<Plugin[]>('/plugins')
 
-export const updatePlugin = (id: string, enabled: boolean) =>
-  request<Plugin>(`/admin/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) })
+export const togglePlugin = (name: string, enable: boolean) =>
+  request<Plugin>(`/plugins/${name}/${enable ? 'enable' : 'disable'}`, { method: 'PUT' })
 
 // Audit Log
 export interface AuditEntry {

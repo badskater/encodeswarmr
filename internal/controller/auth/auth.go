@@ -93,6 +93,9 @@ func (s *Service) AuthenticateAPIKey(ctx context.Context, plaintext string) (*db
 	if err != nil {
 		return nil, fmt.Errorf("auth: api key lookup: %w", err)
 	}
+	if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
+		return nil, ErrInvalidCredentials // key expired
+	}
 	user, err := s.store.GetUserByID(ctx, key.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("auth: api key user lookup: %w", err)

@@ -3,6 +3,7 @@ server:
   port: 8080
   read_timeout: 30s
   write_timeout: 30s
+  allowed_origins: []  # CORS origins. Empty = same-origin only
 
 database:
   url: "postgres://distencoder:password@localhost:5432/distencoder"
@@ -63,6 +64,9 @@ webhooks:
   worker_count: 4
   delivery_timeout: 10s
   max_retries: 3
+
+vnc:
+  novnc_base_url: ""  # Default: unpkg CDN. Set for air-gapped: "/static/novnc"
 
 tls:
   cert: "certs/controller.crt"

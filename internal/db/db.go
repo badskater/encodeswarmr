@@ -169,6 +169,11 @@ type Store interface {
 	// there is no historical data.
 	GetAvgFPSStats(ctx context.Context, sourceID string) (avgFPS float64, sampleCount int64, err error)
 
+	// --- Dashboard metrics ---
+	GetThroughputStats(ctx context.Context, hours int) ([]*ThroughputPoint, error)
+	GetQueueStats(ctx context.Context) (*QueueStats, error)
+	GetRecentActivity(ctx context.Context, limit int) ([]*ActivityEvent, error)
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }

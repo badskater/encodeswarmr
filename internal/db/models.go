@@ -594,3 +594,29 @@ type InsertAgentMetricParams struct {
 	GPUPct  float32
 	MemPct  float32
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard metrics models
+// ---------------------------------------------------------------------------
+
+// ThroughputPoint represents the number of jobs completed in a single hour bucket.
+type ThroughputPoint struct {
+	Hour  time.Time `json:"hour"`
+	Count int64     `json:"count"`
+}
+
+// QueueStats holds the current pending/running task counts and an estimated
+// completion time in minutes.
+type QueueStats struct {
+	Pending           int64   `json:"pending"`
+	Running           int64   `json:"running"`
+	EstimatedMinutes  float64 `json:"estimated_minutes"`
+}
+
+// ActivityEvent represents a single recent job status change.
+type ActivityEvent struct {
+	JobID      string    `json:"job_id"`
+	Status     string    `json:"status"`
+	SourceName string    `json:"source_name"`
+	Timestamp  time.Time `json:"timestamp"`
+}

@@ -1933,6 +1933,121 @@ func (s *pgStore) ClearAgentUpgradeRequested(ctx context.Context, agentID string
 // failed task, with retry_count incremented and retry_after set to
 // now() + (2^retryCount * 30 seconds).  The original failed task is left
 // unchanged.  Returns the newly created task row.
+// ---------------------------------------------------------------------------
+// Dashboard metrics
+// ---------------------------------------------------------------------------
+
+// GetThroughputStats returns the count of completed jobs grouped by hour over
+// the last N hours.
+func (s *pgStore) GetThroughputStats(ctx context.Context, hours int) ([]*ThroughputPoint, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	const q = `
+		SELECT date_trunc('hour', updated_at) AS hour, count(*) AS count
+		FROM   jobs
+		WHERE  status = 'completed'
+		  AND  updated_at > now() - ($1 * interval '1 hour')
+		GROUP  BY 1
+		ORDER  BY 1`
+	rows, err := s.pool.Query(ctx, q, hours)
+	if err != nil {
+		return nil, fmt.Errorf("db: get throughput stats: %w", err)
+	}
+	defer rows.Close()
+	var out []*ThroughputPoint
+	for rows.Next() {
+		var p ThroughputPoint
+		if err := rows.Scan(&p.Hour, &p.Count); err != nil {
+			return nil, fmt.Errorf("db: get throughput stats scan: %w", err)
+		}
+		out = append(out, &p)
+	}
+	return out, rows.Err()
+}
+
+// GetQueueStats returns the current counts of pending and running tasks, plus
+// an estimated time to completion based on average task duration.
+func (s *pgStore) GetQueueStats(ctx context.Context) (*QueueStats, error) {
+	// Count pending and running tasks.
+	const countQ = `
+		SELECT status, count(*)
+		FROM   tasks
+		WHERE  status IN ('pending', 'running')
+		GROUP  BY status`
+	rows, err := s.pool.Query(ctx, countQ)
+	if err != nil {
+		return nil, fmt.Errorf("db: get queue stats count: %w", err)
+	}
+	defer rows.Close()
+
+	stats := &QueueStats{}
+	for rows.Next() {
+		var status string
+		var cnt int64
+		if err := rows.Scan(&status, &cnt); err != nil {
+			return nil, fmt.Errorf("db: get queue stats scan: %w", err)
+		}
+		switch status {
+		case "pending":
+			stats.Pending = cnt
+		case "running":
+			stats.Running = cnt
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Estimate completion from average task duration of recently completed tasks.
+	const avgQ = `
+		SELECT COALESCE(avg(extract(epoch FROM (completed_at - started_at))), 0)
+		FROM   tasks
+		WHERE  status = 'completed'
+		  AND  started_at IS NOT NULL
+		  AND  completed_at IS NOT NULL
+		  AND  completed_at > now() - interval '24 hours'`
+	var avgSec float64
+	if err := s.pool.QueryRow(ctx, avgQ).Scan(&avgSec); err != nil {
+		return nil, fmt.Errorf("db: get queue stats avg: %w", err)
+	}
+
+	remaining := float64(stats.Pending + stats.Running)
+	if avgSec > 0 && remaining > 0 {
+		stats.EstimatedMinutes = (remaining * avgSec) / 60.0
+	}
+
+	return stats, nil
+}
+
+// GetRecentActivity returns the most recent job status changes, joining to
+// sources to include the source name.
+func (s *pgStore) GetRecentActivity(ctx context.Context, limit int) ([]*ActivityEvent, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	const q = `
+		SELECT j.id, j.status, s.name AS source_name, j.updated_at
+		FROM   jobs j
+		JOIN   sources s ON j.source_id = s.id
+		ORDER  BY j.updated_at DESC
+		LIMIT  $1`
+	rows, err := s.pool.Query(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("db: get recent activity: %w", err)
+	}
+	defer rows.Close()
+	var out []*ActivityEvent
+	for rows.Next() {
+		var e ActivityEvent
+		if err := rows.Scan(&e.JobID, &e.Status, &e.SourceName, &e.Timestamp); err != nil {
+			return nil, fmt.Errorf("db: get recent activity scan: %w", err)
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
 func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retryCount int) (*Task, error) {
 	// backoffSeconds = 2^retryCount * 30 (capped at 1 hour = 3600 s).
 	backoffSeconds := (1 << retryCount) * 30

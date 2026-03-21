@@ -179,5 +179,10 @@ func (Stub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error
 // --- Estimation ---
 func (Stub) GetAvgFPSStats(_ context.Context, _ string) (float64, int64, error) { return 0, 0, nil }
 
+// --- Dashboard metrics ---
+func (Stub) GetThroughputStats(_ context.Context, _ int) ([]*db.ThroughputPoint, error) { return nil, nil }
+func (Stub) GetQueueStats(_ context.Context) (*db.QueueStats, error)                    { return nil, nil }
+func (Stub) GetRecentActivity(_ context.Context, _ int) ([]*db.ActivityEvent, error)    { return nil, nil }
+
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }
