@@ -535,12 +535,12 @@ Tests live alongside the code they cover in `internal/**/...`. Integration tests
 - [x] Dark mode toggle in web UI
 - [x] Capacity planning documentation
 
-### Future
+### Phase 5 — Advanced Features
 
-- Multi-controller HA (active-passive failover)
-- Cloud storage source support (S3, GCS, Azure Blob)
-- Job scheduling / cron (recurring encodes)
-- OpenAPI-generated client SDKs
+- [ ] Multi-controller HA (active-passive failover)
+- [ ] Cloud storage source support (S3, GCS, Azure Blob)
+- [ ] Job scheduling / cron (recurring encodes)
+- [ ] OpenAPI-generated client SDKs
 
 ---
 
