@@ -77,7 +77,7 @@ All documentation lives in the **[Wiki](https://github.com/badskater/distributed
 | [Roadmap](https://github.com/badskater/distributed-encoder/wiki/Roadmap) | All 6 completed phases |
 | [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions - Used to help build commits and documentations |
 
-Also in repo: [ARCHITECTURE.md](ARCHITECTURE.md) (detailed system design), [CLAUDE.md](CLAUDE.md) (contributor instructions)
+Also in repo: [ARCHITECTURE.md](ARCHITECTURE.md) (detailed system design)
 
 ## License
 
