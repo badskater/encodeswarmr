@@ -34,10 +34,13 @@ jobs:
           go-version-file: go.mod
 
       - name: Install @hey-api/openapi-ts
-        run: npm install --no-save @hey-api/openapi-ts @hey-api/client-fetch
+        run: npm install --no-save @hey-api/openapi-ts
 
       - name: Generate TypeScript client
-        run: npx @hey-api/openapi-ts --config api/openapi-ts.config.ts
+        # Run from api/ so openapi-ts.config.ts is auto-discovered and relative
+        # paths inside the config resolve correctly. --config was removed in v0.73.0.
+        working-directory: api
+        run: npx @hey-api/openapi-ts
 
       - name: Generate Go client
         run: |

@@ -15,9 +15,9 @@ import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
   client: "@hey-api/client-fetch",
-  input: "api/openapi.yaml",
+  input: "openapi.yaml",
   output: {
-    path: "api/generated/ts",
+    path: "generated/ts",
     format: "prettier",
     lint: "eslint",
   },
