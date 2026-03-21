@@ -139,6 +139,15 @@ type Store interface {
 	InsertAgentMetric(ctx context.Context, p InsertAgentMetricParams) error
 	ListAgentMetrics(ctx context.Context, agentID string, since time.Time) ([]*AgentMetric, error)
 
+	// --- Schedules ---
+	CreateSchedule(ctx context.Context, p CreateScheduleParams) (*Schedule, error)
+	GetScheduleByID(ctx context.Context, id string) (*Schedule, error)
+	ListSchedules(ctx context.Context) ([]*Schedule, error)
+	UpdateSchedule(ctx context.Context, p UpdateScheduleParams) (*Schedule, error)
+	DeleteSchedule(ctx context.Context, id string) error
+	ListDueSchedules(ctx context.Context) ([]*Schedule, error)
+	MarkScheduleRun(ctx context.Context, p MarkScheduleRunParams) error
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }

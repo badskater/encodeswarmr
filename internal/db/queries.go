@@ -1608,3 +1608,122 @@ func (s *pgStore) ListAgentMetrics(ctx context.Context, agentID string, since ti
 	}
 	return out, rows.Err()
 }
+
+// ---------------------------------------------------------------------------
+// Schedules
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateSchedule(ctx context.Context, p CreateScheduleParams) (*Schedule, error) {
+	const q = `
+		INSERT INTO schedules (name, cron_expr, job_template, enabled, next_run_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, cron_expr, job_template, enabled, last_run_at, next_run_at, created_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.CronExpr, p.JobTemplate, p.Enabled, p.NextRunAt)
+	return scanSchedule(row)
+}
+
+func (s *pgStore) GetScheduleByID(ctx context.Context, id string) (*Schedule, error) {
+	const q = `SELECT id, name, cron_expr, job_template, enabled, last_run_at, next_run_at, created_at
+	           FROM schedules WHERE id = $1`
+	return scanSchedule(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListSchedules(ctx context.Context) ([]*Schedule, error) {
+	const q = `SELECT id, name, cron_expr, job_template, enabled, last_run_at, next_run_at, created_at
+	           FROM schedules ORDER BY name`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list schedules: %w", err)
+	}
+	defer rows.Close()
+	var out []*Schedule
+	for rows.Next() {
+		sc, err := scanSchedule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sc)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateSchedule(ctx context.Context, p UpdateScheduleParams) (*Schedule, error) {
+	const q = `
+		UPDATE schedules
+		SET name = $2, cron_expr = $3, job_template = $4, enabled = $5, next_run_at = $6
+		WHERE id = $1
+		RETURNING id, name, cron_expr, job_template, enabled, last_run_at, next_run_at, created_at`
+	row := s.pool.QueryRow(ctx, q, p.ID, p.Name, p.CronExpr, p.JobTemplate, p.Enabled, p.NextRunAt)
+	sc, err := scanSchedule(row)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return sc, nil
+}
+
+func (s *pgStore) DeleteSchedule(ctx context.Context, id string) error {
+	const q = `DELETE FROM schedules WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete schedule: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListDueSchedules returns enabled schedules whose next_run_at is at or before now.
+func (s *pgStore) ListDueSchedules(ctx context.Context) ([]*Schedule, error) {
+	const q = `SELECT id, name, cron_expr, job_template, enabled, last_run_at, next_run_at, created_at
+	           FROM schedules
+	           WHERE enabled = true AND next_run_at <= now()
+	           ORDER BY next_run_at ASC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list due schedules: %w", err)
+	}
+	defer rows.Close()
+	var out []*Schedule
+	for rows.Next() {
+		sc, err := scanSchedule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sc)
+	}
+	return out, rows.Err()
+}
+
+// MarkScheduleRun updates last_run_at and next_run_at after a schedule fires.
+func (s *pgStore) MarkScheduleRun(ctx context.Context, p MarkScheduleRunParams) error {
+	const q = `UPDATE schedules SET last_run_at = $2, next_run_at = $3 WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.LastRunAt, p.NextRunAt)
+	if err != nil {
+		return fmt.Errorf("db: mark schedule run: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanSchedule(row pgx.Row) (*Schedule, error) {
+	var sc Schedule
+	var rawTmpl []byte
+	err := row.Scan(
+		&sc.ID, &sc.Name, &sc.CronExpr, &rawTmpl, &sc.Enabled,
+		&sc.LastRunAt, &sc.NextRunAt, &sc.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan schedule: %w", err)
+	}
+	sc.JobTemplate = rawTmpl
+	return &sc, nil
+}

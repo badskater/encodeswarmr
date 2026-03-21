@@ -1,6 +1,9 @@
 package db
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // EncodeConfig holds the job-level configuration used to expand a queued job
 // into individual tasks and to generate per-task script files.
@@ -476,6 +479,46 @@ type CreateAuditEntryParams struct {
 	ResourceID string
 	Detail     []byte
 	IPAddress  string
+}
+
+// Schedule is a row from the schedules table.
+// JobTemplate holds the raw JSON that will be decoded into CreateJobParams
+// when the scheduler fires.
+type Schedule struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	CronExpr    string          `json:"cron_expr"`
+	JobTemplate json.RawMessage `json:"job_template"`
+	Enabled     bool            `json:"enabled"`
+	LastRunAt   *time.Time      `json:"last_run_at,omitempty"`
+	NextRunAt   *time.Time      `json:"next_run_at,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// CreateScheduleParams holds values for inserting a new schedule row.
+type CreateScheduleParams struct {
+	Name        string
+	CronExpr    string
+	JobTemplate json.RawMessage
+	Enabled     bool
+	NextRunAt   *time.Time
+}
+
+// UpdateScheduleParams holds values for updating an existing schedule row.
+type UpdateScheduleParams struct {
+	ID          string
+	Name        string
+	CronExpr    string
+	JobTemplate json.RawMessage
+	Enabled     bool
+	NextRunAt   *time.Time
+}
+
+// MarkScheduleRunParams records a completed run and advances next_run_at.
+type MarkScheduleRunParams struct {
+	ID        string
+	LastRunAt time.Time
+	NextRunAt *time.Time
 }
 
 // AgentMetric is a row from the agent_metrics table.
