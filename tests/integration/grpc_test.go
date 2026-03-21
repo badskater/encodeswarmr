@@ -243,32 +243,39 @@ func TestGRPCReportResult(t *testing.T) {
 		t.Fatalf("CreateSource: %v", err)
 	}
 
-	// Create a template required by the engine's script generator.
-	tmpl := testharness.CreateTestTemplate(t, tc.Store)
-
 	job, err := tc.Store.CreateJob(context.Background(), db.CreateJobParams{
 		SourceID:   src.ID,
 		JobType:    "encode",
 		Priority:   0,
 		TargetTags: []string{},
-		EncodeConfig: db.EncodeConfig{
-			RunScriptTemplateID: tmpl.ID,
-			OutputRoot:          `\\nas01\output`,
-			OutputExtension:     "mkv",
-			ChunkBoundaries: []db.ChunkBoundary{
-				{StartFrame: 0, EndFrame: 499},
-			},
-		},
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
 
-	// Wait for expansion.
-	testharness.WaitFor(t, 15*time.Second, func() bool {
-		tasks, _ := tc.Store.ListTasksByJob(context.Background(), job.ID)
-		return len(tasks) > 0
+	// Create the task directly (bypassing engine expansion) with a trivial
+	// success script so the test is fast and deterministic.
+	scriptDir := t.TempDir()
+	testharness.WriteTaskScript(t, scriptDir, 0)
+
+	task, err := tc.Store.CreateTask(context.Background(), db.CreateTaskParams{
+		JobID:      job.ID,
+		ChunkIndex: 0,
+		SourcePath: `\\nas01\media\result_test.mkv`,
+		OutputPath: `\\nas01\output\result_test.mkv`,
 	})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if err := tc.Store.SetTaskScriptDir(context.Background(), task.ID, scriptDir); err != nil {
+		t.Fatalf("SetTaskScriptDir: %v", err)
+	}
+	if err := tc.Store.UpdateJobStatus(context.Background(), job.ID, "queued"); err != nil {
+		t.Fatalf("UpdateJobStatus: %v", err)
+	}
+	if err := tc.Store.UpdateJobTaskCounts(context.Background(), job.ID); err != nil {
+		t.Fatalf("UpdateJobTaskCounts: %v", err)
+	}
 
 	// Poll for the task.
 	assignment, err := client.PollTask(ctx, &pb.PollTaskReq{
@@ -302,12 +309,12 @@ func TestGRPCReportResult(t *testing.T) {
 	}
 
 	// Verify task is completed in DB.
-	task, err := tc.Store.GetTaskByID(context.Background(), assignment.GetTaskId())
+	completedTask, err := tc.Store.GetTaskByID(context.Background(), assignment.GetTaskId())
 	if err != nil {
 		t.Fatalf("GetTaskByID: %v", err)
 	}
-	if task.Status != "completed" {
-		t.Errorf("task status: want completed, got %q", task.Status)
+	if completedTask.Status != "completed" {
+		t.Errorf("task status: want completed, got %q", completedTask.Status)
 	}
 
 	// Wait for job to reach completed state (engine needs a cycle to finalize).

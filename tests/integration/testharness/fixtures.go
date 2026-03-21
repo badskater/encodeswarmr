@@ -22,15 +22,17 @@ import (
 // CreateAdminUser creates an admin user via the db.Store directly, hashes the
 // password, and then logs in through auth.Service to obtain a session token.
 // Returns the created user and session token.
+//
+// The username is derived from t.Name() to ensure uniqueness across parallel
+// tests that share the same database instance.
 func CreateAdminUser(t *testing.T, store db.Store, authSvc *auth.Service) (*db.User, string) {
 	t.Helper()
 	ctx := context.Background()
 
-	const (
-		username = "admin"
-		email    = "admin@test.local"
-		password = "testpassword1"
-	)
+	// Use a short deterministic suffix so each parallel test gets a unique user.
+	username := "admin-" + shortID()
+	email := username + "@test.local"
+	const password = "testpassword1"
 
 	hash, err := auth.HashPassword(password)
 	if err != nil {

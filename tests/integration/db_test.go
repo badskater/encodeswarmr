@@ -1422,12 +1422,12 @@ func TestEnrollmentTokens(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("ConsumeEnrollmentToken: %v", err)
 		}
-		et, err := store.GetEnrollmentToken(ctx, "enroll-consume")
-		if err != nil {
-			t.Fatalf("GetEnrollmentToken after consume: %v", err)
-		}
-		if et.UsedBy == nil || *et.UsedBy != agent.ID {
-			t.Errorf("used_by: got %v", et.UsedBy)
+		// ConsumeEnrollmentToken marks the token as used (sets used_at).
+		// GetEnrollmentToken filters WHERE used_at IS NULL, so a consumed token
+		// is intentionally unretrievable — verify it returns ErrNotFound.
+		_, err = store.GetEnrollmentToken(ctx, "enroll-consume")
+		if !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("GetEnrollmentToken after consume: expected ErrNotFound, got %v", err)
 		}
 	})
 

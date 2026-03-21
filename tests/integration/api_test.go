@@ -188,8 +188,10 @@ func TestAuthFlow(t *testing.T) {
 	}
 	var me map[string]any
 	decodeJSON(t, resp, &me)
-	if me["username"] != "admin" {
-		t.Errorf("GET /me: username want admin, got %v", me["username"])
+	// Response is wrapped: {"data": {"username": "...", ...}, "meta": {...}}
+	meData, _ := me["data"].(map[string]any)
+	if meData["username"] != "admin" {
+		t.Errorf("GET /me: username want admin, got %v", meData["username"])
 	}
 
 	// POST /auth/logout → 200.
@@ -284,12 +286,12 @@ func TestSourcesCRUD(t *testing.T) {
 	}
 	drainClose(resp)
 
-	// DELETE /api/v1/sources/{id} → 200.
+	// DELETE /api/v1/sources/{id} → 204 No Content.
 	req, _ = http.NewRequest(http.MethodDelete, tc.HTTPBaseURL+"/api/v1/sources/"+srcID, nil)
 	resp = mustDo(t, authed, req)
 	drainClose(resp)
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("delete source: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete source: expected 204, got %d", resp.StatusCode)
 	}
 }
 

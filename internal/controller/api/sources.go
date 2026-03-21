@@ -106,8 +106,9 @@ func isCloudURI(uri string) bool {
 func (s *Server) scheduleSourceAnalysis(ctx context.Context, sourceID string) {
 	for _, jobType := range []string{"analysis", "hdr_detect"} {
 		if _, err := s.store.CreateJob(ctx, db.CreateJobParams{
-			SourceID: sourceID,
-			JobType:  jobType,
+			SourceID:   sourceID,
+			JobType:    jobType,
+			TargetTags: []string{},
 		}); err != nil {
 			s.logger.Warn("auto-create analysis job failed",
 				"source_id", sourceID, "job_type", jobType, "err", err)
