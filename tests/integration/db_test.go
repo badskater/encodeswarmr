@@ -2149,7 +2149,7 @@ func TestFlows(t *testing.T) {
 	})
 
 	t.Run("GetFlowByID_NotFound", func(t *testing.T) {
-		_, err := store.GetFlowByID(ctx, "nonexistent-flow-id")
+		_, err := store.GetFlowByID(ctx, "00000000-0000-0000-0000-000000000000")
 		if !errors.Is(err, db.ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got %v", err)
 		}
