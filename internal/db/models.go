@@ -250,6 +250,19 @@ type EnrollmentToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// AuditEntry is a row from the audit_log table.
+type AuditEntry struct {
+	ID         int64     `json:"id"`
+	UserID     *string   `json:"user_id,omitempty"`
+	Username   string    `json:"username"`
+	Action     string    `json:"action"`
+	Resource   string    `json:"resource"`
+	ResourceID string    `json:"resource_id"`
+	Detail     []byte    `json:"detail,omitempty"` // raw JSON
+	IPAddress  string    `json:"ip_address"`
+	LoggedAt   time.Time `json:"logged_at"`
+}
+
 // ---------------------------------------------------------------------------
 // Parameter structs — one per write operation
 // ---------------------------------------------------------------------------
@@ -449,4 +462,32 @@ type UpdatePathMappingParams struct {
 	WindowsPrefix string
 	LinuxPrefix   string
 	Enabled       bool
+}
+
+type CreateAuditEntryParams struct {
+	UserID     *string
+	Username   string
+	Action     string
+	Resource   string
+	ResourceID string
+	Detail     []byte
+	IPAddress  string
+}
+
+// AgentMetric is a row from the agent_metrics table.
+type AgentMetric struct {
+	ID         int64     `json:"id"`
+	AgentID    string    `json:"agent_id"`
+	CPUPct     float32   `json:"cpu_pct"`
+	GPUPct     float32   `json:"gpu_pct"`
+	MemPct     float32   `json:"mem_pct"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// InsertAgentMetricParams holds values for recording one metric sample.
+type InsertAgentMetricParams struct {
+	AgentID string
+	CPUPct  float32
+	GPUPct  float32
+	MemPct  float32
 }

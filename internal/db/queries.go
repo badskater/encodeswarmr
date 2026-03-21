@@ -1537,3 +1537,73 @@ func scanPathMapping(row pgx.Row) (*PathMapping, error) {
 	}
 	return &m, nil
 }
+
+// ---------------------------------------------------------------------------
+// Audit Log
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateAuditEntry(ctx context.Context, p CreateAuditEntryParams) error {
+	const q = `INSERT INTO audit_log (user_id, username, action, resource, resource_id, detail, ip_address)
+	           VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err := s.pool.Exec(ctx, q, p.UserID, p.Username, p.Action, p.Resource, p.ResourceID, p.Detail, p.IPAddress)
+	return err
+}
+
+func (s *pgStore) ListAuditLog(ctx context.Context, limit, offset int) ([]*AuditEntry, int, error) {
+	const countQ = `SELECT COUNT(*) FROM audit_log`
+	var total int
+	if err := s.pool.QueryRow(ctx, countQ).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("db: count audit log: %w", err)
+	}
+	const q = `SELECT id, user_id, username, action, resource, resource_id, detail, ip_address, logged_at
+	           FROM audit_log ORDER BY logged_at DESC LIMIT $1 OFFSET $2`
+	rows, err := s.pool.Query(ctx, q, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list audit log: %w", err)
+	}
+	defer rows.Close()
+	var entries []*AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(
+			&e.ID, &e.UserID, &e.Username, &e.Action,
+			&e.Resource, &e.ResourceID, &e.Detail, &e.IPAddress, &e.LoggedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("db: scan audit entry: %w", err)
+		}
+		entries = append(entries, &e)
+	}
+	return entries, total, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Agent Metrics
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) InsertAgentMetric(ctx context.Context, p InsertAgentMetricParams) error {
+	const q = `INSERT INTO agent_metrics (agent_id, cpu_pct, gpu_pct, mem_pct)
+	           VALUES ($1, $2, $3, $4)`
+	_, err := s.pool.Exec(ctx, q, p.AgentID, p.CPUPct, p.GPUPct, p.MemPct)
+	return err
+}
+
+func (s *pgStore) ListAgentMetrics(ctx context.Context, agentID string, since time.Time) ([]*AgentMetric, error) {
+	const q = `SELECT id, agent_id, cpu_pct, gpu_pct, mem_pct, recorded_at
+	           FROM agent_metrics
+	           WHERE agent_id = $1 AND recorded_at >= $2
+	           ORDER BY recorded_at ASC`
+	rows, err := s.pool.Query(ctx, q, agentID, since)
+	if err != nil {
+		return nil, fmt.Errorf("db: list agent metrics: %w", err)
+	}
+	defer rows.Close()
+	var out []*AgentMetric
+	for rows.Next() {
+		var m AgentMetric
+		if err := rows.Scan(&m.ID, &m.AgentID, &m.CPUPct, &m.GPUPct, &m.MemPct, &m.RecordedAt); err != nil {
+			return nil, fmt.Errorf("db: scan agent metric: %w", err)
+		}
+		out = append(out, &m)
+	}
+	return out, rows.Err()
+}

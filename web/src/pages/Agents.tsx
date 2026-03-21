@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback } from 'react'
 import * as api from '../api/client'
 import type { Agent } from '../types'
 import StatusBadge from '../components/StatusBadge'
+import AgentMetricsGraph from '../components/AgentMetricsGraph'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
 function fmtBytes(n: number) {
@@ -19,6 +20,9 @@ export default function Agents() {
   const [error, setError] = useState('')
   const [draining, setDraining] = useState<string | null>(null)
   const [approving, setApproving] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkApproving, setBulkApproving] = useState(false)
+  const [expandedMetrics, setExpandedMetrics] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -59,16 +63,77 @@ export default function Agents() {
     }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelected(s => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  const pendingSelected = agents.filter(a => selected.has(a.id) && a.status === 'pending_approval')
+
+  const allChecked = agents.length > 0 && agents.every(a => selected.has(a.id))
+  const someChecked = agents.some(a => selected.has(a.id))
+
+  const toggleAll = () => {
+    if (allChecked) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(agents.map(a => a.id)))
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    setBulkApproving(true)
+    setError('')
+    try {
+      for (const a of pendingSelected) {
+        await api.approveAgent(a.id)
+      }
+      setSelected(new Set())
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to bulk approve agents')
+    } finally {
+      setBulkApproving(false)
+    }
+  }
+
   if (loading) return <p className="text-th-text-muted">Loading…</p>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-th-text">Agents</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-th-text">Agents</h1>
+        {pendingSelected.length > 0 && (
+          <button
+            onClick={handleBulkApprove}
+            disabled={bulkApproving}
+            className="text-sm px-3 py-1.5 rounded font-medium disabled:opacity-50"
+            style={{
+              backgroundColor: 'var(--th-badge-success-bg)',
+              color: 'var(--th-badge-success-text)',
+            }}
+          >
+            {bulkApproving ? 'Approving…' : `Approve Selected (${pendingSelected.length})`}
+          </button>
+        )}
+      </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <div className="bg-th-surface rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
+              <th className="px-4 py-2 text-left">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  ref={el => { if (el) el.indeterminate = someChecked && !allChecked }}
+                  onChange={toggleAll}
+                  className="rounded border-th-input-border"
+                />
+              </th>
               {['Name', 'Hostname', 'IP', 'Status', 'CPU', 'RAM', 'GPU', 'Last Heartbeat', 'Tags', ''].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
@@ -76,8 +141,24 @@ export default function Agents() {
           </thead>
           <tbody className="divide-y divide-th-border-subtle">
             {agents.map(a => (
-              <tr key={a.id} className="hover:bg-th-surface-muted">
-                <td className="px-4 py-2 font-medium text-th-text">{a.name}</td>
+              <Fragment key={a.id}>
+              <tr className="hover:bg-th-surface-muted">
+                <td className="px-4 py-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(a.id)}
+                    onChange={() => toggleSelect(a.id)}
+                    className="rounded border-th-input-border"
+                  />
+                </td>
+                <td
+                  className="px-4 py-2 font-medium text-th-text cursor-pointer hover:underline"
+                  title="Click to toggle resource utilisation graph"
+                  onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
+                >
+                  {a.name}
+                  <span className="ml-1 text-xs text-th-text-muted">{expandedMetrics === a.id ? '▲' : '▼'}</span>
+                </td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.hostname}</td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.ip_address}</td>
                 <td className="px-4 py-2"><StatusBadge status={a.status} /></td>
@@ -139,9 +220,20 @@ export default function Agents() {
                   )}
                 </td>
               </tr>
+              {expandedMetrics === a.id && (
+                <tr className="bg-th-surface-muted">
+                  <td colSpan={11} className="px-6 py-3">
+                    <p className="text-xs font-medium text-th-text-muted mb-2 uppercase tracking-wide">
+                      Resource Utilisation — last hour
+                    </p>
+                    <AgentMetricsGraph agentId={a.id} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {agents.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-4 text-center text-th-text-subtle">No agents registered</td></tr>
+              <tr><td colSpan={11} className="px-4 py-4 text-center text-th-text-subtle">No agents registered</td></tr>
             )}
           </tbody>
         </table>

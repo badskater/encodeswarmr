@@ -131,6 +131,14 @@ type Store interface {
 	ListJobLogs(ctx context.Context, p ListJobLogsParams) ([]*TaskLog, error)
 	PruneOldTaskLogs(ctx context.Context, olderThan time.Time) error
 
+	// --- Audit Log ---
+	CreateAuditEntry(ctx context.Context, params CreateAuditEntryParams) error
+	ListAuditLog(ctx context.Context, limit, offset int) ([]*AuditEntry, int, error)
+
+	// --- Agent Metrics ---
+	InsertAgentMetric(ctx context.Context, p InsertAgentMetricParams) error
+	ListAgentMetrics(ctx context.Context, agentID string, since time.Time) ([]*AgentMetric, error)
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }

@@ -136,6 +136,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Agents ---
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
 	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
+	mux.Handle("GET /api/v1/agents/{id}/metrics", viewer(s.handleGetAgentMetrics))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 
@@ -201,6 +202,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("DELETE /api/v1/users/{id}", admin(s.handleDeleteUser))
 	mux.Handle("PUT /api/v1/users/{id}/role", admin(s.handleUpdateUserRole))
 	mux.Handle("GET /api/v1/users/me", viewer(s.handleGetMe))
+
+	// --- Audit Log ---
+	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
 
 	// Static UI — must be last so API routes take precedence.
 	staticH, err := s.staticHandler()
