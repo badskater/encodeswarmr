@@ -1944,10 +1944,12 @@ func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retry
 		INSERT INTO tasks
 		    (job_id, chunk_index, task_type, source_path, output_path, variables,
 		     retry_count, retry_after)
-		SELECT job_id, chunk_index, task_type, source_path, output_path, variables,
+		SELECT job_id,
+		       (SELECT COALESCE(MAX(t2.chunk_index), 0) + 1 FROM tasks t2 WHERE t2.job_id = t.job_id),
+		       task_type, source_path, output_path, variables,
 		       $2, now() + ($3 * interval '1 second')
-		FROM   tasks
-		WHERE  id = $1
+		FROM   tasks t
+		WHERE  t.id = $1
 		RETURNING id, job_id, chunk_index, task_type, status, agent_id,
 		          script_dir, source_path, output_path, variables,
 		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,

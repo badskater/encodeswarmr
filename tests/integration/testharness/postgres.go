@@ -113,7 +113,10 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 		webhooks,
 		enrollment_tokens,
 		analysis_results,
-		path_mappings
+		path_mappings,
+		api_keys,
+		notification_preferences,
+		schedules
 	CASCADE`
 
 	if _, err := pool.Exec(ctx, q); err != nil {

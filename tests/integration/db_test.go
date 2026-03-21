@@ -1739,3 +1739,363 @@ func TestConcurrentClaim(t *testing.T) {
 		t.Errorf("expected exactly %d claim(s), got %d: %+v", numTasks, len(claimList), claimList)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// API Keys
+// ---------------------------------------------------------------------------
+
+func TestDBAPIKeys(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	hash := "bcrypt_placeholder"
+	user, err := store.CreateUser(ctx, db.CreateUserParams{
+		Username:     "apikey-user",
+		Email:        "apikey-user@test.local",
+		Role:         "admin",
+		PasswordHash: &hash,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	const keyHash = "sha256-test-key-hash-abc123"
+	var key *db.APIKey
+
+	t.Run("CreateAPIKey", func(t *testing.T) {
+		k, err := store.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+			UserID:  user.ID,
+			Name:    "my-key",
+			KeyHash: keyHash,
+		})
+		if err != nil {
+			t.Fatalf("CreateAPIKey: %v", err)
+		}
+		if k.ID == "" {
+			t.Error("expected non-empty ID")
+		}
+		key = k
+	})
+
+	t.Run("GetAPIKeyByHash", func(t *testing.T) {
+		if key == nil {
+			t.Skip("depends on CreateAPIKey")
+		}
+		k, err := store.GetAPIKeyByHash(ctx, keyHash)
+		if err != nil {
+			t.Fatalf("GetAPIKeyByHash: %v", err)
+		}
+		if k.ID != key.ID {
+			t.Errorf("ID mismatch: got %q want %q", k.ID, key.ID)
+		}
+	})
+
+	t.Run("ListAPIKeysByUser", func(t *testing.T) {
+		if key == nil {
+			t.Skip("depends on CreateAPIKey")
+		}
+		keys, err := store.ListAPIKeysByUser(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("ListAPIKeysByUser: %v", err)
+		}
+		if len(keys) != 1 {
+			t.Errorf("expected 1 key, got %d", len(keys))
+		}
+	})
+
+	t.Run("DeleteAPIKey", func(t *testing.T) {
+		if key == nil {
+			t.Skip("depends on CreateAPIKey")
+		}
+		if err := store.DeleteAPIKey(ctx, key.ID); err != nil {
+			t.Fatalf("DeleteAPIKey: %v", err)
+		}
+	})
+
+	t.Run("ListAPIKeysByUser_afterDelete", func(t *testing.T) {
+		if key == nil {
+			t.Skip("depends on CreateAPIKey")
+		}
+		keys, err := store.ListAPIKeysByUser(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("ListAPIKeysByUser: %v", err)
+		}
+		if len(keys) != 0 {
+			t.Errorf("expected 0 keys after delete, got %d", len(keys))
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Notification Preferences
+// ---------------------------------------------------------------------------
+
+func TestNotificationPreferences(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	hash := "bcrypt_placeholder"
+	user, err := store.CreateUser(ctx, db.CreateUserParams{
+		Username:     "notifpref-user",
+		Email:        "notifpref-user@test.local",
+		Role:         "admin",
+		PasswordHash: &hash,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	t.Run("GetNotificationPrefs_notFound", func(t *testing.T) {
+		_, err := store.GetNotificationPrefs(ctx, user.ID)
+		if !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("expected ErrNotFound for new user, got %v", err)
+		}
+	})
+
+	t.Run("UpsertNotificationPrefs_create", func(t *testing.T) {
+		if err := store.UpsertNotificationPrefs(ctx, db.UpsertNotificationPrefsParams{
+			UserID:              user.ID,
+			NotifyOnJobComplete: true,
+			NotifyOnJobFailed:   true,
+			NotifyOnAgentStale:  false,
+		}); err != nil {
+			t.Fatalf("UpsertNotificationPrefs: %v", err)
+		}
+	})
+
+	t.Run("GetNotificationPrefs_afterCreate", func(t *testing.T) {
+		prefs, err := store.GetNotificationPrefs(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetNotificationPrefs: %v", err)
+		}
+		if !prefs.NotifyOnJobComplete {
+			t.Error("notify_on_job_complete: want true")
+		}
+		if !prefs.NotifyOnJobFailed {
+			t.Error("notify_on_job_failed: want true")
+		}
+		if prefs.NotifyOnAgentStale {
+			t.Error("notify_on_agent_stale: want false")
+		}
+	})
+
+	t.Run("UpsertNotificationPrefs_update", func(t *testing.T) {
+		if err := store.UpsertNotificationPrefs(ctx, db.UpsertNotificationPrefsParams{
+			UserID:              user.ID,
+			NotifyOnJobComplete: false,
+			NotifyOnJobFailed:   true,
+			NotifyOnAgentStale:  true,
+		}); err != nil {
+			t.Fatalf("UpsertNotificationPrefs (update): %v", err)
+		}
+		prefs, err := store.GetNotificationPrefs(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetNotificationPrefs after update: %v", err)
+		}
+		if prefs.NotifyOnJobComplete {
+			t.Error("notify_on_job_complete after update: want false")
+		}
+		if !prefs.NotifyOnAgentStale {
+			t.Error("notify_on_agent_stale after update: want true")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Task Retry
+// ---------------------------------------------------------------------------
+
+func TestTaskRetry(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	src := testharness.CreateTestSource(t, store)
+
+	job, err := store.CreateJob(ctx, db.CreateJobParams{
+		SourceID:   src.ID,
+		JobType:    "encode",
+		TargetTags: []string{},
+		MaxRetries: 3,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	task, err := store.CreateTask(ctx, db.CreateTaskParams{
+		JobID:      job.ID,
+		ChunkIndex: 0,
+		SourcePath: src.UNCPath,
+		OutputPath: `\\nas01\out\retry.mkv`,
+	})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	// Fail the task.
+	if err := store.FailTask(ctx, task.ID, 1, "test failure"); err != nil {
+		t.Fatalf("FailTask: %v", err)
+	}
+
+	// RetryTaskWithBackoff → creates new pending task with retry_count=1.
+	retried, err := store.RetryTaskWithBackoff(ctx, task.ID, 1)
+	if err != nil {
+		t.Fatalf("RetryTaskWithBackoff: %v", err)
+	}
+	if retried == nil {
+		t.Fatal("RetryTaskWithBackoff: expected a new task, got nil")
+	}
+	if retried.RetryCount != 2 {
+		t.Errorf("retry_count: want 2, got %d", retried.RetryCount)
+	}
+	if retried.RetryAfter == nil {
+		t.Error("retry_after: expected non-nil after RetryTaskWithBackoff")
+	}
+	if retried.Status != "pending" {
+		t.Errorf("status: want pending, got %q", retried.Status)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Agent Upgrade Flag
+// ---------------------------------------------------------------------------
+
+func TestAgentUpgradeFlag(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	agent, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
+		Name:      "upgrade-flag-agent",
+		Hostname:  "WIN-UPGRADE",
+		IPAddress: "10.10.0.1",
+		Tags:      []string{},
+	})
+	if err != nil {
+		t.Fatalf("UpsertAgent: %v", err)
+	}
+
+	t.Run("SetAgentUpgradeRequested_true", func(t *testing.T) {
+		if err := store.SetAgentUpgradeRequested(ctx, agent.ID, true); err != nil {
+			t.Fatalf("SetAgentUpgradeRequested: %v", err)
+		}
+		updated, err := store.GetAgentByID(ctx, agent.ID)
+		if err != nil {
+			t.Fatalf("GetAgentByID: %v", err)
+		}
+		if !updated.UpgradeRequested {
+			t.Error("upgrade_requested: want true, got false")
+		}
+	})
+
+	t.Run("ClearAgentUpgradeRequested", func(t *testing.T) {
+		if err := store.ClearAgentUpgradeRequested(ctx, agent.ID); err != nil {
+			t.Fatalf("ClearAgentUpgradeRequested: %v", err)
+		}
+		updated, err := store.GetAgentByID(ctx, agent.ID)
+		if err != nil {
+			t.Fatalf("GetAgentByID: %v", err)
+		}
+		if updated.UpgradeRequested {
+			t.Error("upgrade_requested after clear: want false, got true")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Schedules
+// ---------------------------------------------------------------------------
+
+func TestSchedules(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	jobTemplate := []byte(`{"source_id":"placeholder","job_type":"encode"}`)
+	var sched *db.Schedule
+
+	t.Run("CreateSchedule", func(t *testing.T) {
+		s, err := store.CreateSchedule(ctx, db.CreateScheduleParams{
+			Name:        "nightly-encode",
+			CronExpr:    "0 2 * * *",
+			JobTemplate: jobTemplate,
+			Enabled:     true,
+		})
+		if err != nil {
+			t.Fatalf("CreateSchedule: %v", err)
+		}
+		if s.ID == "" {
+			t.Error("expected non-empty ID")
+		}
+		sched = s
+	})
+
+	t.Run("GetScheduleByID", func(t *testing.T) {
+		if sched == nil {
+			t.Skip("depends on CreateSchedule")
+		}
+		got, err := store.GetScheduleByID(ctx, sched.ID)
+		if err != nil {
+			t.Fatalf("GetScheduleByID: %v", err)
+		}
+		if got.Name != "nightly-encode" {
+			t.Errorf("name: got %q want nightly-encode", got.Name)
+		}
+	})
+
+	t.Run("ListSchedules", func(t *testing.T) {
+		if sched == nil {
+			t.Skip("depends on CreateSchedule")
+		}
+		schedules, err := store.ListSchedules(ctx)
+		if err != nil {
+			t.Fatalf("ListSchedules: %v", err)
+		}
+		if len(schedules) < 1 {
+			t.Errorf("expected at least 1 schedule, got %d", len(schedules))
+		}
+	})
+
+	t.Run("UpdateSchedule", func(t *testing.T) {
+		if sched == nil {
+			t.Skip("depends on CreateSchedule")
+		}
+		updated, err := store.UpdateSchedule(ctx, db.UpdateScheduleParams{
+			ID:          sched.ID,
+			Name:        "nightly-encode-updated",
+			CronExpr:    "0 3 * * *",
+			JobTemplate: jobTemplate,
+			Enabled:     false,
+		})
+		if err != nil {
+			t.Fatalf("UpdateSchedule: %v", err)
+		}
+		if updated.Name != "nightly-encode-updated" {
+			t.Errorf("name after update: got %q want nightly-encode-updated", updated.Name)
+		}
+		if updated.CronExpr != "0 3 * * *" {
+			t.Errorf("cron_expr after update: got %q want 0 3 * * *", updated.CronExpr)
+		}
+		if updated.Enabled {
+			t.Error("enabled after update: want false, got true")
+		}
+	})
+
+	t.Run("DeleteSchedule", func(t *testing.T) {
+		if sched == nil {
+			t.Skip("depends on CreateSchedule")
+		}
+		if err := store.DeleteSchedule(ctx, sched.ID); err != nil {
+			t.Fatalf("DeleteSchedule: %v", err)
+		}
+	})
+
+	t.Run("ListSchedules_afterDelete", func(t *testing.T) {
+		schedules, err := store.ListSchedules(ctx)
+		if err != nil {
+			t.Fatalf("ListSchedules after delete: %v", err)
+		}
+		for _, s := range schedules {
+			if s.ID == sched.ID {
+				t.Error("deleted schedule still present in list")
+			}
+		}
+	})
+}
