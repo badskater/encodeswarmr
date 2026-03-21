@@ -184,5 +184,12 @@ func (Stub) GetThroughputStats(_ context.Context, _ int) ([]*db.ThroughputPoint,
 func (Stub) GetQueueStats(_ context.Context) (*db.QueueStats, error)                    { return nil, nil }
 func (Stub) GetRecentActivity(_ context.Context, _ int) ([]*db.ActivityEvent, error)    { return nil, nil }
 
+// --- Flows ---
+func (Stub) CreateFlow(_ context.Context, _ db.CreateFlowParams) (*db.Flow, error) { return nil, nil }
+func (Stub) GetFlowByID(_ context.Context, _ string) (*db.Flow, error)             { return nil, nil }
+func (Stub) ListFlows(_ context.Context) ([]*db.Flow, error)                       { return nil, nil }
+func (Stub) UpdateFlow(_ context.Context, _ db.UpdateFlowParams) (*db.Flow, error) { return nil, nil }
+func (Stub) DeleteFlow(_ context.Context, _ string) error                          { return nil }
+
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }

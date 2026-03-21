@@ -66,6 +66,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		Priority     int             `json:"priority"`
 		TargetTags   []string        `json:"target_tags"`
 		EncodeConfig db.EncodeConfig `json:"encode_config"`
+		// FlowID is an optional flow pipeline to use for job expansion.
+		// When set it is stored in EncodeConfig.FlowID and the engine will
+		// call the FlowEngine instead of the default template-based path.
+		FlowID string `json:"flow_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
@@ -80,7 +84,10 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "job_type must be \"encode\", \"analysis\", or \"audio\"")
 		return
 	}
-	if req.JobType == "encode" {
+
+	// When a flow_id is provided, skip the template-based validation — the
+	// flow engine will determine task structure at expansion time.
+	if req.FlowID == "" && req.JobType == "encode" {
 		if req.EncodeConfig.RunScriptTemplateID == "" {
 			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "encode_config.run_script_template_id is required for encode jobs")
 			return
@@ -89,6 +96,11 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "encode_config.chunk_boundaries must not be empty for encode jobs")
 			return
 		}
+	}
+
+	// Propagate flow_id into EncodeConfig so it travels with the job record.
+	if req.FlowID != "" {
+		req.EncodeConfig.FlowID = req.FlowID
 	}
 
 	job, err := s.store.CreateJob(r.Context(), db.CreateJobParams{

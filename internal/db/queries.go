@@ -2078,3 +2078,98 @@ func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retry
 	}
 	return t, nil
 }
+
+// ---------------------------------------------------------------------------
+// Flows
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateFlow(ctx context.Context, p CreateFlowParams) (*Flow, error) {
+	graph := p.Graph
+	if len(graph) == 0 {
+		graph = json.RawMessage(`{"nodes":[],"edges":[]}`)
+	}
+	const q = `
+		INSERT INTO flows (name, description, graph)
+		VALUES ($1, $2, $3)
+		RETURNING id, name, description, graph, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Description, []byte(graph))
+	return scanFlow(row)
+}
+
+func (s *pgStore) GetFlowByID(ctx context.Context, id string) (*Flow, error) {
+	const q = `
+		SELECT id, name, description, graph, created_at, updated_at
+		FROM flows WHERE id = $1`
+	return scanFlow(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListFlows(ctx context.Context) ([]*Flow, error) {
+	const q = `
+		SELECT id, name, description, graph, created_at, updated_at
+		FROM flows ORDER BY updated_at DESC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list flows: %w", err)
+	}
+	defer rows.Close()
+	var out []*Flow
+	for rows.Next() {
+		f, err := scanFlow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateFlow(ctx context.Context, p UpdateFlowParams) (*Flow, error) {
+	graph := p.Graph
+	if len(graph) == 0 {
+		graph = json.RawMessage(`{"nodes":[],"edges":[]}`)
+	}
+	const q = `
+		UPDATE flows
+		SET name = $2, description = $3, graph = $4, updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, description, graph, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.ID, p.Name, p.Description, []byte(graph))
+	f, err := scanFlow(row)
+	if err != nil {
+		return nil, fmt.Errorf("db: update flow: %w", err)
+	}
+	return f, nil
+}
+
+func (s *pgStore) DeleteFlow(ctx context.Context, id string) error {
+	const q = `DELETE FROM flows WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete flow: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanFlow(row pgx.Row) (*Flow, error) {
+	var f Flow
+	var graph []byte
+	err := row.Scan(
+		&f.ID, &f.Name, &f.Description, &graph,
+		&f.CreatedAt, &f.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan flow: %w", err)
+	}
+	if len(graph) > 0 {
+		f.Graph = json.RawMessage(graph)
+	} else {
+		f.Graph = json.RawMessage(`{"nodes":[],"edges":[]}`)
+	}
+	return &f, nil
+}

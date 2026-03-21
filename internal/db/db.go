@@ -163,6 +163,13 @@ type Store interface {
 	ListDueSchedules(ctx context.Context) ([]*Schedule, error)
 	MarkScheduleRun(ctx context.Context, p MarkScheduleRunParams) error
 
+	// --- Flows ---
+	CreateFlow(ctx context.Context, p CreateFlowParams) (*Flow, error)
+	GetFlowByID(ctx context.Context, id string) (*Flow, error)
+	ListFlows(ctx context.Context) ([]*Flow, error)
+	UpdateFlow(ctx context.Context, p UpdateFlowParams) (*Flow, error)
+	DeleteFlow(ctx context.Context, id string) error
+
 	// --- Estimation ---
 	// GetAvgFPSStats returns the average encoding FPS and sample count from
 	// completed encode tasks for the given source.  Returns (0, 0, nil) when
