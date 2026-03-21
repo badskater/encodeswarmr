@@ -12,6 +12,46 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// metricsMiddleware wraps an HTTP handler and records each request in the
+// in-memory HTTP counter that is exposed via /metrics.  It captures the
+// response status code written by the downstream handler.
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip counting /metrics itself to avoid a feedback loop.
+		if r.URL.Path == "/metrics" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		rw := &statusCapture{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rw, r)
+		IncrHTTPRequest(r.Method, r.URL.Path, rw.status)
+	})
+}
+
+// statusCapture wraps ResponseWriter so we can read the status code after the
+// downstream handler has written it.
+type statusCapture struct {
+	http.ResponseWriter
+	status  int
+	written bool
+}
+
+func (sc *statusCapture) WriteHeader(code int) {
+	if !sc.written {
+		sc.status = code
+		sc.written = true
+	}
+	sc.ResponseWriter.WriteHeader(code)
+}
+
+func (sc *statusCapture) Write(b []byte) (int, error) {
+	if !sc.written {
+		sc.status = http.StatusOK
+		sc.written = true
+	}
+	return sc.ResponseWriter.Write(b)
+}
+
 // corsMiddleware sets CORS headers based on the provided allowed origins and
 // handles preflight OPTIONS requests.
 func corsMiddleware(origins []string, next http.Handler) http.Handler {

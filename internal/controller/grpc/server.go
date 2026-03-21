@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 
+	"github.com/badskater/distributed-encoder/internal/controller/api"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
 	"github.com/badskater/distributed-encoder/internal/controller/engine"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
@@ -94,6 +95,8 @@ func (s *Server) loggingUnaryInterceptor(
 	resp, err := handler(ctx, req)
 	dur := time.Since(start)
 
+	api.IncrGRPCRequest(info.FullMethod)
+
 	if err != nil {
 		s.logger.Warn("gRPC unary call",
 			"method", info.FullMethod,
@@ -119,6 +122,8 @@ func (s *Server) loggingStreamInterceptor(
 	start := time.Now()
 	err := handler(srv, ss)
 	dur := time.Since(start)
+
+	api.IncrGRPCRequest(info.FullMethod)
 
 	if err != nil {
 		s.logger.Warn("gRPC stream call",
