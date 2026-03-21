@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/distributed-encoder/internal/db/teststore"
 )
 
 // ---------------------------------------------------------------------------
@@ -19,6 +19,7 @@ import (
 
 // scriptGenStub implements the subset of db.Store used by ScriptGenerator.
 type scriptGenStub struct {
+	teststore.Stub
 	variables []*db.Variable
 	template  *db.Template
 	templateErr error
@@ -30,106 +31,6 @@ func (s *scriptGenStub) ListVariables(_ context.Context, _ string) ([]*db.Variab
 func (s *scriptGenStub) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
 	return s.template, s.templateErr
 }
-
-// Remaining Store methods are no-ops.
-func (s *scriptGenStub) CreateUser(context.Context, db.CreateUserParams) (*db.User, error)          { return nil, nil }
-func (s *scriptGenStub) GetUserByUsername(context.Context, string) (*db.User, error)                { return nil, nil }
-func (s *scriptGenStub) GetUserByOIDCSub(context.Context, string) (*db.User, error)                 { return nil, nil }
-func (s *scriptGenStub) GetUserByID(context.Context, string) (*db.User, error)                      { return nil, nil }
-func (s *scriptGenStub) ListUsers(context.Context) ([]*db.User, error)                              { return nil, nil }
-func (s *scriptGenStub) UpdateUserRole(context.Context, string, string) error                       { return nil }
-func (s *scriptGenStub) DeleteUser(context.Context, string) error                                   { return nil }
-func (s *scriptGenStub) CountAdminUsers(context.Context) (int64, error)                             { return 1, nil }
-func (s *scriptGenStub) UpsertAgent(context.Context, db.UpsertAgentParams) (*db.Agent, error)       { return nil, nil }
-func (s *scriptGenStub) GetAgentByID(context.Context, string) (*db.Agent, error)                   { return nil, nil }
-func (s *scriptGenStub) GetAgentByName(context.Context, string) (*db.Agent, error)                 { return nil, nil }
-func (s *scriptGenStub) ListAgents(context.Context) ([]*db.Agent, error)                           { return nil, nil }
-func (s *scriptGenStub) UpdateAgentStatus(context.Context, string, string) error                   { return nil }
-func (s *scriptGenStub) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error { return nil }
-func (s *scriptGenStub) UpdateAgentVNCPort(context.Context, string, int) error                     { return nil }
-func (s *scriptGenStub) SetAgentAPIKey(context.Context, string, string) error                      { return nil }
-func (s *scriptGenStub) MarkStaleAgents(context.Context, time.Duration) (int64, error)             { return 0, nil }
-func (s *scriptGenStub) CreateSource(context.Context, db.CreateSourceParams) (*db.Source, error)   { return nil, nil }
-func (s *scriptGenStub) GetSourceByID(context.Context, string) (*db.Source, error)                 { return nil, nil }
-func (s *scriptGenStub) GetSourceByUNCPath(context.Context, string) (*db.Source, error)            { return nil, nil }
-func (s *scriptGenStub) ListSources(context.Context, db.ListSourcesFilter) ([]*db.Source, int64, error) { return nil, 0, nil }
-func (s *scriptGenStub) UpdateSourceState(context.Context, string, string) error                   { return nil }
-func (s *scriptGenStub) UpdateSourceVMAF(context.Context, string, float64) error                   { return nil }
-func (s *scriptGenStub) UpdateSourceHDR(context.Context, db.UpdateSourceHDRParams) error           { return nil }
-func (s *scriptGenStub) DeleteSource(context.Context, string) error                                { return nil }
-func (s *scriptGenStub) CreateJob(context.Context, db.CreateJobParams) (*db.Job, error)            { return nil, nil }
-func (s *scriptGenStub) GetJobByID(context.Context, string) (*db.Job, error)                      { return nil, nil }
-func (s *scriptGenStub) ListJobs(context.Context, db.ListJobsFilter) ([]*db.Job, int64, error)    { return nil, 0, nil }
-func (s *scriptGenStub) UpdateJobStatus(context.Context, string, string) error                    { return nil }
-func (s *scriptGenStub) UpdateJobTaskCounts(context.Context, string) error                        { return nil }
-func (s *scriptGenStub) GetJobsNeedingExpansion(context.Context) ([]*db.Job, error)               { return nil, nil }
-func (s *scriptGenStub) CreateTask(context.Context, db.CreateTaskParams) (*db.Task, error)        { return nil, nil }
-func (s *scriptGenStub) GetTaskByID(context.Context, string) (*db.Task, error)                   { return nil, nil }
-func (s *scriptGenStub) ListTasksByJob(context.Context, string) ([]*db.Task, error)               { return nil, nil }
-func (s *scriptGenStub) ClaimNextTask(context.Context, string, []string) (*db.Task, error)        { return nil, nil }
-func (s *scriptGenStub) UpdateTaskStatus(context.Context, string, string) error                   { return nil }
-func (s *scriptGenStub) SetTaskScriptDir(context.Context, string, string) error                   { return nil }
-func (s *scriptGenStub) CompleteTask(context.Context, db.CompleteTaskParams) error                { return nil }
-func (s *scriptGenStub) FailTask(context.Context, string, int, string) error                      { return nil }
-func (s *scriptGenStub) CancelPendingTasksForJob(context.Context, string) error                   { return nil }
-func (s *scriptGenStub) InsertTaskLog(context.Context, db.InsertTaskLogParams) error              { return nil }
-func (s *scriptGenStub) ListTaskLogs(context.Context, db.ListTaskLogsParams) ([]*db.TaskLog, error) { return nil, nil }
-func (s *scriptGenStub) TailTaskLogs(context.Context, string, int64) ([]*db.TaskLog, error)      { return nil, nil }
-func (s *scriptGenStub) CreateTemplate(context.Context, db.CreateTemplateParams) (*db.Template, error) { return nil, nil }
-func (s *scriptGenStub) ListTemplates(context.Context, string) ([]*db.Template, error)            { return nil, nil }
-func (s *scriptGenStub) UpdateTemplate(context.Context, db.UpdateTemplateParams) error            { return nil }
-func (s *scriptGenStub) DeleteTemplate(context.Context, string) error                             { return nil }
-func (s *scriptGenStub) UpsertVariable(context.Context, db.UpsertVariableParams) (*db.Variable, error) { return nil, nil }
-func (s *scriptGenStub) GetVariableByName(context.Context, string) (*db.Variable, error)         { return nil, nil }
-func (s *scriptGenStub) DeleteVariable(context.Context, string) error                             { return nil }
-func (s *scriptGenStub) CreateWebhook(context.Context, db.CreateWebhookParams) (*db.Webhook, error) { return nil, nil }
-func (s *scriptGenStub) GetWebhookByID(context.Context, string) (*db.Webhook, error)             { return nil, nil }
-func (s *scriptGenStub) ListWebhooksByEvent(context.Context, string) ([]*db.Webhook, error)      { return nil, nil }
-func (s *scriptGenStub) ListWebhooks(context.Context) ([]*db.Webhook, error)                     { return nil, nil }
-func (s *scriptGenStub) UpdateWebhook(context.Context, db.UpdateWebhookParams) error             { return nil }
-func (s *scriptGenStub) DeleteWebhook(context.Context, string) error                              { return nil }
-func (s *scriptGenStub) InsertWebhookDelivery(context.Context, db.InsertWebhookDeliveryParams) error { return nil }
-func (s *scriptGenStub) ListWebhookDeliveries(context.Context, string, int, int) ([]*db.WebhookDelivery, error) { return nil, nil }
-func (s *scriptGenStub) UpsertAnalysisResult(context.Context, db.UpsertAnalysisResultParams) (*db.AnalysisResult, error) { return nil, nil }
-func (s *scriptGenStub) GetAnalysisResult(context.Context, string, string) (*db.AnalysisResult, error) { return nil, nil }
-func (s *scriptGenStub) ListAnalysisResults(context.Context, string) ([]*db.AnalysisResult, error) { return nil, nil }
-func (s *scriptGenStub) CreateSession(context.Context, db.CreateSessionParams) (*db.Session, error) { return nil, nil }
-func (s *scriptGenStub) GetSessionByToken(context.Context, string) (*db.Session, error)          { return nil, nil }
-func (s *scriptGenStub) DeleteSession(context.Context, string) error                              { return nil }
-func (s *scriptGenStub) PruneExpiredSessions(context.Context) error                               { return nil }
-func (s *scriptGenStub) CreateEnrollmentToken(context.Context, db.CreateEnrollmentTokenParams) (*db.EnrollmentToken, error) { return nil, nil }
-func (s *scriptGenStub) GetEnrollmentToken(context.Context, string) (*db.EnrollmentToken, error) { return nil, nil }
-func (s *scriptGenStub) ConsumeEnrollmentToken(context.Context, db.ConsumeEnrollmentTokenParams) error { return nil }
-func (s *scriptGenStub) ListEnrollmentTokens(context.Context) ([]*db.EnrollmentToken, error)     { return nil, nil }
-func (s *scriptGenStub) DeleteEnrollmentToken(context.Context, string) error                     { return nil }
-func (s *scriptGenStub) PruneExpiredEnrollmentTokens(context.Context) error                      { return nil }
-func (s *scriptGenStub) RetryFailedTasksForJob(context.Context, string) error                    { return nil }
-func (s *scriptGenStub) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.TaskLog, error) { return nil, nil }
-func (s *scriptGenStub) PruneOldTaskLogs(context.Context, time.Time) error                       { return nil }
-func (s *scriptGenStub) Ping(context.Context) error                                               { return nil }
-func (s *scriptGenStub) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *scriptGenStub) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *scriptGenStub) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
-func (s *scriptGenStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *scriptGenStub) DeletePathMapping(context.Context, string) error                         { return nil }
-func (s *scriptGenStub) DeleteTasksByJobID(_ context.Context, _ string) error                    { return nil }
-func (s *scriptGenStub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error   { return nil }
-func (s *scriptGenStub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
-func (s *scriptGenStub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
-func (s *scriptGenStub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
-func (s *scriptGenStub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
-func (s *scriptGenStub) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
-func (s *scriptGenStub) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
-func (s *scriptGenStub) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
-func (s *scriptGenStub) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
-func (s *scriptGenStub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
-func (s *scriptGenStub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // RenderSingle tests
