@@ -362,3 +362,126 @@ func TestLoad_LogRetentionDefaults(t *testing.T) {
 		t.Errorf("TaskLogMaxLinesPerJob = %d, want 500000", cfg.Logging.TaskLogMaxLinesPerJob)
 	}
 }
+
+// TestLoad_LogRetentionOverride verifies that logging retention config fields
+// can be overridden.
+func TestLoad_LogRetentionOverride(t *testing.T) {
+	path := writeTempConfig(t, `
+database:
+  url: "postgres://localhost/encoder"
+logging:
+  task_log_retention: "168h"
+  task_log_cleanup_interval: "1h"
+  task_log_max_lines_per_job: 100000
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Logging.TaskLogRetention != 168*time.Hour {
+		t.Errorf("TaskLogRetention = %v, want 168h", cfg.Logging.TaskLogRetention)
+	}
+	if cfg.Logging.TaskLogCleanupInterval != 1*time.Hour {
+		t.Errorf("TaskLogCleanupInterval = %v, want 1h", cfg.Logging.TaskLogCleanupInterval)
+	}
+	if cfg.Logging.TaskLogMaxLinesPerJob != 100000 {
+		t.Errorf("TaskLogMaxLinesPerJob = %d, want 100000", cfg.Logging.TaskLogMaxLinesPerJob)
+	}
+}
+
+// TestLoad_WebhooksDeliveryTimeout verifies webhook config fields round-trip.
+func TestLoad_WebhooksDeliveryTimeout(t *testing.T) {
+	path := writeTempConfig(t, `
+database:
+  url: "postgres://localhost/encoder"
+webhooks:
+  worker_count: 2
+  delivery_timeout: "30s"
+  max_retries: 10
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Webhooks.WorkerCount != 2 {
+		t.Errorf("Webhooks.WorkerCount = %d, want 2", cfg.Webhooks.WorkerCount)
+	}
+	if cfg.Webhooks.DeliveryTimeout != 30*time.Second {
+		t.Errorf("Webhooks.DeliveryTimeout = %v, want 30s", cfg.Webhooks.DeliveryTimeout)
+	}
+	if cfg.Webhooks.MaxRetries != 10 {
+		t.Errorf("Webhooks.MaxRetries = %d, want 10", cfg.Webhooks.MaxRetries)
+	}
+}
+
+// TestLoad_ServerTimeouts verifies that server read/write timeout fields are decoded.
+func TestLoad_ServerTimeouts(t *testing.T) {
+	path := writeTempConfig(t, `
+database:
+  url: "postgres://localhost/encoder"
+server:
+  read_timeout: "15s"
+  write_timeout: "45s"
+  allowed_origins:
+    - "https://app.example.com"
+    - "https://admin.example.com"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Server.ReadTimeout != 15*time.Second {
+		t.Errorf("Server.ReadTimeout = %v, want 15s", cfg.Server.ReadTimeout)
+	}
+	if cfg.Server.WriteTimeout != 45*time.Second {
+		t.Errorf("Server.WriteTimeout = %v, want 45s", cfg.Server.WriteTimeout)
+	}
+	if len(cfg.Server.AllowedOrigins) != 2 {
+		t.Errorf("Server.AllowedOrigins len = %d, want 2", len(cfg.Server.AllowedOrigins))
+	}
+}
+
+// TestLoad_DatabaseFields verifies database config sub-fields are decoded.
+func TestLoad_DatabaseFields(t *testing.T) {
+	path := writeTempConfig(t, `
+database:
+  url: "postgres://user:pass@db:5432/encoder"
+  max_conns: 20
+  min_conns: 2
+  max_conn_lifetime: "1h"
+  migrations_path: "/app/migrations"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Database.MaxConns != 20 {
+		t.Errorf("Database.MaxConns = %d, want 20", cfg.Database.MaxConns)
+	}
+	if cfg.Database.MinConns != 2 {
+		t.Errorf("Database.MinConns = %d, want 2", cfg.Database.MinConns)
+	}
+	if cfg.Database.MaxConnLifetime != 1*time.Hour {
+		t.Errorf("Database.MaxConnLifetime = %v, want 1h", cfg.Database.MaxConnLifetime)
+	}
+	if cfg.Database.MigrationsPath != "/app/migrations" {
+		t.Errorf("Database.MigrationsPath = %q", cfg.Database.MigrationsPath)
+	}
+}
+
+// TestLoad_UpgradeDefaults verifies upgrade config defaults.
+func TestLoad_UpgradeDefaults(t *testing.T) {
+	path := writeTempConfig(t, `database:
+  url: "postgres://localhost/encoder"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Upgrade.BinDir != "/var/lib/distributed-encoder/agent-bins" {
+		t.Errorf("Upgrade.BinDir default = %q", cfg.Upgrade.BinDir)
+	}
+	if cfg.Upgrade.Version != "0.0.0" {
+		t.Errorf("Upgrade.Version default = %q", cfg.Upgrade.Version)
+	}
+}

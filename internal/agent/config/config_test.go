@@ -318,3 +318,110 @@ gpu:
 		t.Error("GPU.Enabled = true, want false")
 	}
 }
+
+// TestLoad_VNCEnabledWithPassword verifies that VNC config fields round-trip
+// correctly, exercising the VNCConfig mapstructure decoder.
+func TestLoad_VNCEnabledWithPassword(t *testing.T) {
+	path := writeTempAgentConfig(t, `
+vnc:
+  enabled: true
+  port: 5902
+  password: "s3cr3t"
+  installer_url: "http://example.com/tightvnc.msi"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.VNC.Enabled {
+		t.Error("VNC.Enabled = false, want true")
+	}
+	if cfg.VNC.Port != 5902 {
+		t.Errorf("VNC.Port = %d, want 5902", cfg.VNC.Port)
+	}
+	if cfg.VNC.Password != "s3cr3t" {
+		t.Errorf("VNC.Password = %q", cfg.VNC.Password)
+	}
+	if cfg.VNC.InstallerURL != "http://example.com/tightvnc.msi" {
+		t.Errorf("VNC.InstallerURL = %q", cfg.VNC.InstallerURL)
+	}
+}
+
+// TestLoad_AllowedSharesField verifies that the allowed_shares list is decoded
+// correctly from YAML.
+func TestLoad_AllowedSharesField(t *testing.T) {
+	path := writeTempAgentConfig(t, `
+allowed_shares:
+  - "\\\\NAS01\\media"
+  - "\\\\NAS02\\archive"
+  - "\\\\NAS03\\backup"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.AllowedShares) != 3 {
+		t.Errorf("AllowedShares len = %d, want 3", len(cfg.AllowedShares))
+	}
+}
+
+// TestLoad_ToolsAllFields verifies all tools config fields are decoded.
+func TestLoad_ToolsAllFields(t *testing.T) {
+	path := writeTempAgentConfig(t, `
+tools:
+  ffmpeg:    "/usr/bin/ffmpeg"
+  ffprobe:   "/usr/bin/ffprobe"
+  x265:      "/usr/local/bin/x265"
+  x264:      "/usr/local/bin/x264"
+  svt_av1:   "/usr/local/bin/SvtAv1EncApp"
+  avs_pipe:  "/usr/local/bin/avspipe"
+  vspipe:    "/usr/local/bin/vspipe"
+  dovi_tool: "/usr/local/bin/dovi_tool"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Tools.FFmpeg != "/usr/bin/ffmpeg" {
+		t.Errorf("Tools.FFmpeg = %q", cfg.Tools.FFmpeg)
+	}
+	if cfg.Tools.FFprobe != "/usr/bin/ffprobe" {
+		t.Errorf("Tools.FFprobe = %q", cfg.Tools.FFprobe)
+	}
+	if cfg.Tools.SvtAv1 != "/usr/local/bin/SvtAv1EncApp" {
+		t.Errorf("Tools.SvtAv1 = %q", cfg.Tools.SvtAv1)
+	}
+	if cfg.Tools.AvsPipe != "/usr/local/bin/avspipe" {
+		t.Errorf("Tools.AvsPipe = %q", cfg.Tools.AvsPipe)
+	}
+	if cfg.Tools.VSPipe != "/usr/local/bin/vspipe" {
+		t.Errorf("Tools.VSPipe = %q", cfg.Tools.VSPipe)
+	}
+	if cfg.Tools.DoviTool != "/usr/local/bin/dovi_tool" {
+		t.Errorf("Tools.DoviTool = %q", cfg.Tools.DoviTool)
+	}
+}
+
+// TestLoad_LogDirAndOfflineDB verifies that Agent sub-fields log_dir and
+// offline_db are decoded properly.
+func TestLoad_LogDirAndOfflineDB(t *testing.T) {
+	path := writeTempAgentConfig(t, `
+agent:
+  work_dir:   "/tmp/work"
+  log_dir:    "/tmp/logs"
+  offline_db: "/tmp/offline.db"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Agent.WorkDir != "/tmp/work" {
+		t.Errorf("Agent.WorkDir = %q", cfg.Agent.WorkDir)
+	}
+	if cfg.Agent.LogDir != "/tmp/logs" {
+		t.Errorf("Agent.LogDir = %q", cfg.Agent.LogDir)
+	}
+	if cfg.Agent.OfflineDB != "/tmp/offline.db" {
+		t.Errorf("Agent.OfflineDB = %q", cfg.Agent.OfflineDB)
+	}
+}

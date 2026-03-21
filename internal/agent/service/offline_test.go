@@ -1,6 +1,7 @@
 package service
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -295,6 +296,62 @@ func TestOfflineStore_PruneOldSynced_Compatibility(t *testing.T) {
 	// empty store.
 	if err := s.pruneOldSynced(); err != nil {
 		t.Errorf("pruneOldSynced: %v", err)
+	}
+}
+
+// --- error paths ---
+
+// TestNewOfflineStore_InvalidPath verifies that newOfflineStore returns an
+// error when the path is not usable as a SQLite file (directory that cannot be
+// written to).
+func TestNewOfflineStore_SchemaError(t *testing.T) {
+	// Pass a path whose parent directory does not exist so that SQLite cannot
+	// create the file.  The pure-Go modernc SQLite driver returns an error from
+	// Exec (schema creation) when it cannot open the DB file.
+	badPath := filepath.Join(t.TempDir(), "nonexistent", "deep", "offline.db")
+	_, err := newOfflineStore(badPath)
+	if err == nil {
+		t.Fatal("expected error for newOfflineStore with unreachable path, got nil")
+	}
+}
+
+// TestOfflineStore_PendingResults_ClosedDB verifies that pendingResults returns
+// an error when the underlying database has been closed.
+func TestOfflineStore_PendingResults_ClosedDB(t *testing.T) {
+	s := openMemoryStore(t)
+	// Close the DB to make subsequent queries fail.
+	if err := s.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	_, err := s.pendingResults()
+	if err == nil {
+		t.Fatal("expected error from pendingResults on closed DB, got nil")
+	}
+}
+
+// TestOfflineStore_PendingLogs_ClosedDB verifies that pendingLogs returns an
+// error when the underlying database has been closed.
+func TestOfflineStore_PendingLogs_ClosedDB(t *testing.T) {
+	s := openMemoryStore(t)
+	if err := s.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	_, err := s.pendingLogs()
+	if err == nil {
+		t.Fatal("expected error from pendingLogs on closed DB, got nil")
+	}
+}
+
+// TestOfflineStore_PruneJournal_ClosedDB verifies that PruneJournal returns an
+// error when the underlying database has been closed.
+func TestOfflineStore_PruneJournal_ClosedDB(t *testing.T) {
+	s := openMemoryStore(t)
+	if err := s.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	err := s.PruneJournal(7 * 24 * time.Hour)
+	if err == nil {
+		t.Fatal("expected error from PruneJournal on closed DB, got nil")
 	}
 }
 

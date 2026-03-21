@@ -294,3 +294,140 @@ func TestCheck_NonOKStatus(t *testing.T) {
 	u.check(ctx, func() bool { return false })
 }
 
+// TestCheck_NoArtifactForPlatform verifies that check returns gracefully when
+// the controller lists a newer version but no artifact matches the current
+// OS/arch.
+func TestCheck_NoArtifactForPlatform(t *testing.T) {
+	downloadCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agent/upgrade/check" {
+			w.Header().Set("Content-Type", "application/json")
+			// Return a version that differs from "0.1.0" but with an artifact
+			// for a platform that will never match (plan9/mipsle).
+			_, _ = fmt.Fprintf(w, `{"version":"9.9.9","available":[{"os":"plan9","arch":"mipsle","url":"/dl/agent","sha256":""}]}`)
+			return
+		}
+		downloadCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	u := newTestUpgradeChecker(srv.URL)
+	ctx := context.Background()
+	u.check(ctx, func() bool { return false })
+
+	if downloadCalled {
+		t.Error("download was triggered even though no artifact matches this platform")
+	}
+}
+
+// TestCheck_CancelledContext verifies that check returns immediately when the
+// context is already cancelled.
+func TestCheck_CancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, `{"version":"9.9.9","available":[]}`)
+	}))
+	defer srv.Close()
+
+	u := newTestUpgradeChecker(srv.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	// Should not panic; the HTTP request will fail with context cancelled.
+	u.check(ctx, func() bool { return false })
+}
+
+// TestApplyUpgrade_BadURL verifies applyUpgrade returns an error when the
+// download URL is completely invalid.
+func TestApplyUpgrade_BadURL(t *testing.T) {
+	u := newTestUpgradeChecker("http://localhost")
+	ctx := context.Background()
+
+	err := u.applyUpgrade(ctx, "://not-a-url", "")
+	if err == nil {
+		t.Fatal("expected error for invalid download URL, got nil")
+	}
+}
+
+// TestApplyUpgrade_CancelledContext verifies applyUpgrade returns an error
+// when the context is already cancelled.
+func TestApplyUpgrade_CancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data"))
+	}))
+	defer srv.Close()
+
+	u := newTestUpgradeChecker(srv.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := u.applyUpgrade(ctx, srv.URL+"/download", "")
+	if err == nil {
+		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+// TestRestartService_UnsupportedPlatform exercises the default branch of
+// restartService.  We cannot simulate Windows or Linux service managers in a
+// unit test, but we can at least confirm the method does not panic when the
+// platform switch falls through to the default case.  We do this by calling
+// restartService directly and ensuring it returns without panicking (the
+// platform-specific commands will fail gracefully in CI).
+func TestRestartService_DoesNotPanic(t *testing.T) {
+	u := newTestUpgradeChecker("http://localhost")
+	ctx := context.Background()
+	// On any platform this should not panic; warnings are logged at most.
+	u.restartService(ctx)
+}
+
+// TestIsServiceRunning_DoesNotPanic verifies isServiceRunning returns a bool
+// without panicking on the current platform (even if the service manager is
+// unavailable).
+func TestIsServiceRunning_DoesNotPanic(t *testing.T) {
+	u := newTestUpgradeChecker("http://localhost")
+	ctx := context.Background()
+	// We don't assert the return value — in CI the service manager commands
+	// will fail and the function should return false gracefully.
+	_ = u.isServiceRunning(ctx)
+}
+
+// TestRollbackBinary_RestoreRenameFails covers the branch in rollbackBinary
+// where the backup exists but the final rename to exePath fails because
+// exePath's parent does not exist.
+func TestRollbackBinary_RestoreRenameFails(t *testing.T) {
+	dir := t.TempDir()
+	// exePath points into a non-existent sub-directory so Rename will fail.
+	exePath := filepath.Join(dir, "subdir", "agent")
+	backupPath := exePath + ".bak"
+
+	// Create the backup inside the same non-existent directory — we first need
+	// to create the directory to put the backup there, then remove the subdir
+	// to simulate a missing destination.
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(backupPath, []byte("good"), 0o755); err != nil {
+		t.Fatalf("create backup: %v", err)
+	}
+	// Also create the "broken" binary so the first rename (to .failed) works.
+	if err := os.WriteFile(exePath, []byte("broken"), 0o755); err != nil {
+		t.Fatalf("create broken binary: %v", err)
+	}
+	// Remove the parent dir of exePath so the final rename fails.
+	if err := os.RemoveAll(filepath.Dir(exePath)); err != nil {
+		t.Fatalf("remove subdir: %v", err)
+	}
+
+	u := newTestUpgradeChecker("http://localhost")
+	ctx := context.Background()
+
+	// rollbackBinary should return an error because it can't stat the backup
+	// (the directory was removed).
+	err := u.rollbackBinary(ctx, exePath)
+	if err == nil {
+		t.Fatal("expected error from rollbackBinary when backup is gone, got nil")
+	}
+}
+

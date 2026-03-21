@@ -388,6 +388,104 @@ func TestWriteResult_MetricsRoundTrip(t *testing.T) {
 	}
 }
 
+// --- Error paths (closed DB) ---
+
+// openClosedJournal opens a Journal, closes it, and returns it so that
+// subsequent method calls will operate on a closed database.
+func openClosedJournal(t *testing.T) *sqlite.Journal {
+	t.Helper()
+	j := openTempJournal(t)
+	// Close immediately; subsequent calls must return errors.
+	if err := j.Close(); err != nil {
+		t.Fatalf("openClosedJournal: close: %v", err)
+	}
+	return j
+}
+
+func TestOpen_InvalidPath(t *testing.T) {
+	// A path whose parent directory does not exist causes SQLite to fail.
+	badPath := t.TempDir() + "/nonexistent/deep/journal.db"
+	_, err := sqlite.Open(badPath)
+	if err == nil {
+		t.Fatal("expected error for Open with unreachable path, got nil")
+	}
+}
+
+func TestWriteResult_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	r := sqlite.OfflineResult{
+		TaskID:      "task-x",
+		JobID:       "job-x",
+		Success:     true,
+		StartedAt:   now(),
+		CompletedAt: now(),
+	}
+	err := j.WriteResult(ctx, r)
+	if err == nil {
+		t.Fatal("expected error from WriteResult on closed DB, got nil")
+	}
+}
+
+func TestWriteLog_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	l := sqlite.OfflineLog{
+		TaskID:   "task-x",
+		JobID:    "job-x",
+		Stream:   "stdout",
+		Level:    "info",
+		Message:  "hello",
+		LoggedAt: now(),
+	}
+	err := j.WriteLog(ctx, l)
+	if err == nil {
+		t.Fatal("expected error from WriteLog on closed DB, got nil")
+	}
+}
+
+func TestUnsyncedResults_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	_, err := j.UnsyncedResults(ctx)
+	if err == nil {
+		t.Fatal("expected error from UnsyncedResults on closed DB, got nil")
+	}
+}
+
+func TestMarkResultSynced_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	err := j.MarkResultSynced(ctx, 999)
+	if err == nil {
+		t.Fatal("expected error from MarkResultSynced on closed DB, got nil")
+	}
+}
+
+func TestMarkLogsSynced_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	err := j.MarkLogsSynced(ctx, "task-x")
+	if err == nil {
+		t.Fatal("expected error from MarkLogsSynced on closed DB, got nil")
+	}
+}
+
+func TestPruneSynced_ClosedDB(t *testing.T) {
+	j := openClosedJournal(t)
+	ctx := context.Background()
+
+	err := j.PruneSynced(ctx)
+	if err == nil {
+		t.Fatal("expected error from PruneSynced on closed DB, got nil")
+	}
+}
+
 // --- Close ---
 
 func TestClose_Idempotent(t *testing.T) {

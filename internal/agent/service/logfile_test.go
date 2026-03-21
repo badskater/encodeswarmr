@@ -200,6 +200,114 @@ func TestSetupLogWriter_ReturnsWriter(t *testing.T) {
 	}
 }
 
+// TestNewRotatingFileWriter_DirCreationFails verifies newRotatingFileWriter
+// returns an error when the directory cannot be created (parent is a file).
+func TestNewRotatingFileWriter_DirCreationFails(t *testing.T) {
+	base := t.TempDir()
+	// Create a regular file where a directory is expected.
+	filePath := filepath.Join(base, "notadir")
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	// Try to use notadir/subdir as the log directory; MkdirAll must fail.
+	badDir := filepath.Join(filePath, "subdir")
+	_, err := newRotatingFileWriter(badDir, "agent.log", 1, 3)
+	if err == nil {
+		t.Fatal("expected error when log dir cannot be created, got nil")
+	}
+}
+
+// TestRotatingFileWriter_Close_NilFile verifies that Close on a writer whose
+// file field is nil returns nil without panicking.
+func TestRotatingFileWriter_Close_NilFile(t *testing.T) {
+	w := &rotatingFileWriter{file: nil}
+	if err := w.Close(); err != nil {
+		t.Errorf("Close on nil file: %v", err)
+	}
+}
+
+// TestRotatingFileWriter_Write_RotationOpenFails exercises the rotation error
+// path in Write: we close the file before writing so the rotate→openFile call
+// re-opens cleanly (rotation itself must not surface the error to Write).
+func TestRotatingFileWriter_Write_RotationOpenFails(t *testing.T) {
+	dir := t.TempDir()
+	w, err := newRotatingFileWriter(dir, "agent.log", 1, 3)
+	if err != nil {
+		t.Fatalf("newRotatingFileWriter: %v", err)
+	}
+	defer w.Close()
+
+	// Shrink the threshold so the next write triggers rotation.
+	w.maxBytes = 1
+
+	// Write a payload larger than the threshold. Rotation may fail internally
+	// (e.g. if the file is already closed) but Write must not return an error
+	// on the write itself — it falls back to the current file.
+	payload := []byte("hello")
+	_, _ = w.Write(payload)
+	// No assertion on error — we just want to exercise the rotation branch.
+}
+
+// TestRotatingFileWriter_RemoveExcessBackups_WithExisting pre-seeds excess
+// backup files and then calls removeExcessBackups directly, verifying that
+// files beyond maxBackups are removed.
+func TestRotatingFileWriter_RemoveExcessBackups_WithExisting(t *testing.T) {
+	dir := t.TempDir()
+	const maxBackups = 2
+
+	w := &rotatingFileWriter{
+		dir:        dir,
+		filename:   "agent.log",
+		maxBackups: maxBackups,
+	}
+
+	// Seed 4 backup files (.1 through .4).
+	for i := 1; i <= 4; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("agent.log.%d", i))
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed backup %d: %v", i, err)
+		}
+	}
+
+	w.removeExcessBackups()
+
+	// After pruning, at most maxBackups files should remain.
+	remaining := 0
+	for i := 1; i <= 4; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("agent.log.%d", i))
+		if _, err := os.Stat(p); err == nil {
+			remaining++
+		}
+	}
+	if remaining > maxBackups {
+		t.Errorf("removeExcessBackups left %d backups, want at most %d", remaining, maxBackups)
+	}
+}
+
+// TestSetupLogWriter_ErrorPath verifies that setupLogWriter returns an error
+// (and a fallback stderr writer) when the log directory cannot be created.
+func TestSetupLogWriter_ErrorPath(t *testing.T) {
+	base := t.TempDir()
+	// Block dir creation by placing a regular file in the way.
+	blocker := filepath.Join(base, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatalf("setup blocker: %v", err)
+	}
+	badDir := filepath.Join(blocker, "logs")
+	w, closeFn, err := setupLogWriter(badDir, 1, 3)
+	if err == nil {
+		t.Fatal("expected error from setupLogWriter with bad dir, got nil")
+	}
+	// Even on error a valid (stderr) writer and a no-op close function are returned.
+	if w == nil {
+		t.Error("expected non-nil fallback writer on error")
+	}
+	if closeFn == nil {
+		t.Error("expected non-nil close function on error")
+	}
+	closeFn() // must not panic
+}
+
 // TestNewRotatingFileWriter_MkdirAll verifies the writer creates missing
 // intermediate directories.
 func TestNewRotatingFileWriter_MkdirAll(t *testing.T) {

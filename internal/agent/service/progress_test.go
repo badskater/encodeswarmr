@@ -171,6 +171,75 @@ func TestParseProgress_NoMatch(t *testing.T) {
 	}
 }
 
+// TestParseProgress_SVT_ZeroTotal verifies that a zero total frame count does
+// not cause a division-by-zero in the SVT-AV1 parser.
+func TestParseProgress_SVT_ZeroTotal(t *testing.T) {
+	line := "Encoding frame 0/0"
+	pm := parseProgress(line)
+	if pm == nil {
+		t.Fatal("parseProgress returned nil for SVT zero/zero line")
+	}
+	if pm.Percent != 0 {
+		t.Errorf("Percent = %f, want 0 for zero total frames", pm.Percent)
+	}
+}
+
+// TestParseProgress_X264_ZeroTotal verifies that a zero total frame count
+// does not panic in the x264 parser.
+func TestParseProgress_X264_ZeroTotal(t *testing.T) {
+	line := "0/0 frames, 0.00 fps"
+	pm := parseProgress(line)
+	if pm == nil {
+		t.Fatal("parseProgress returned nil for x264 zero/zero line")
+	}
+	if pm.Percent != 0 {
+		t.Errorf("Percent = %f, want 0", pm.Percent)
+	}
+}
+
+// TestParseProgress_FFmpeg_ZeroFPS verifies that a zero fps value is handled.
+func TestParseProgress_FFmpeg_ZeroFPS(t *testing.T) {
+	line := "frame=0 fps=0"
+	pm := parseProgress(line)
+	if pm == nil {
+		t.Fatal("parseProgress returned nil for ffmpeg zero fps line")
+	}
+	if pm.FPS != 0 {
+		t.Errorf("FPS = %f, want 0", pm.FPS)
+	}
+}
+
+// TestParseProgress_FFmpeg_SpacedFormat verifies the spaced-out FFmpeg format
+// used in real ffmpeg output.
+func TestParseProgress_FFmpeg_SpacedFormat(t *testing.T) {
+	line := "frame=   500 fps=  25.0 size=   2048kB time=00:00:20.00 bitrate=819.2kbits/s speed=1.05x"
+	pm := parseProgress(line)
+	if pm == nil {
+		t.Fatal("parseProgress returned nil for spaced FFmpeg line")
+	}
+	if pm.Frame != 500 {
+		t.Errorf("Frame = %d, want 500", pm.Frame)
+	}
+}
+
+// TestParseProgress_X265_LargeValues verifies x265 format with large frame counts.
+func TestParseProgress_X265_LargeValues(t *testing.T) {
+	line := "[99.99%] 99990/100000 frames, 120.00 fps, eta 0:00:01"
+	pm := parseProgress(line)
+	if pm == nil {
+		t.Fatal("parseProgress returned nil for large-value x265 line")
+	}
+	if pm.Frame != 99990 {
+		t.Errorf("Frame = %d, want 99990", pm.Frame)
+	}
+	if pm.TotalFrames != 100000 {
+		t.Errorf("TotalFrames = %d, want 100000", pm.TotalFrames)
+	}
+	if pm.ETASec != 1 {
+		t.Errorf("ETASec = %d, want 1", pm.ETASec)
+	}
+}
+
 // --- stateLabel (health.go) ---
 
 func TestStateLabel_AllStates(t *testing.T) {
