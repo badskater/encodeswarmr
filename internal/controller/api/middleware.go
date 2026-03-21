@@ -104,6 +104,24 @@ func (rb *responseBuffer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+// securityHeadersMiddleware sets standard HTTP security headers on every
+// response to mitigate common web vulnerabilities (XSS, clickjacking, MIME
+// sniffing, etc.).  HSTS is only added when the request was received over TLS.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if r.TLS != nil {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // etagMiddleware computes a SHA-256 ETag for GET /api/v1/* responses that
 // return 200 OK and returns 304 Not Modified when the client already has the
 // current version.

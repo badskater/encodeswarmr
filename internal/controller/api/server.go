@@ -46,11 +46,13 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	// Middleware chain (outermost → innermost):
-	//   requestID → CORS → rate-limit → ETag → mux
+	//   requestID → security-headers → CORS → rate-limit → ETag → mux
 	handler := s.requestIDMiddleware(
-		corsMiddleware(cfg.Server.AllowedOrigins,
-			rateLimitMiddleware(
-				etagMiddleware(mux),
+		securityHeadersMiddleware(
+			corsMiddleware(cfg.Server.AllowedOrigins,
+				rateLimitMiddleware(
+					etagMiddleware(mux),
+				),
 			),
 		),
 	)
@@ -206,6 +208,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("DELETE /api/v1/users/{id}", admin(s.handleDeleteUser))
 	mux.Handle("PUT /api/v1/users/{id}/role", admin(s.handleUpdateUserRole))
 	mux.Handle("GET /api/v1/users/me", viewer(s.handleGetMe))
+
+	// --- API Keys ---
+	mux.Handle("POST /api/v1/api-keys", viewer(s.handleCreateAPIKey))
+	mux.Handle("GET /api/v1/api-keys", viewer(s.handleListAPIKeys))
+	mux.Handle("DELETE /api/v1/api-keys/{id}", viewer(s.handleDeleteAPIKey))
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))

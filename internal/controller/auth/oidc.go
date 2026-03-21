@@ -48,6 +48,8 @@ func (s *Service) OIDCRedirectURL(state string) (string, error) {
 
 // OIDCCallback exchanges the authorization code for tokens, verifies the ID
 // token, and creates or retrieves the user account before issuing a session.
+// When RoleMappings are configured the user's groups claim is inspected and the
+// highest-privilege matching role is applied on every login.
 func (s *Service) OIDCCallback(ctx context.Context, code string) (*db.Session, error) {
 	if s.oidc == nil {
 		return nil, fmt.Errorf("auth: OIDC not configured")
@@ -64,17 +66,22 @@ func (s *Service) OIDCCallback(ctx context.Context, code string) (*db.Session, e
 	if err != nil {
 		return nil, fmt.Errorf("auth: oidc: id_token verify: %w", err)
 	}
-	var claims struct {
-		Sub   string `json:"sub"`
-		Email string `json:"email"`
-		Name  string `json:"preferred_username"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
+
+	// Decode all claims into a raw map so we can extract both the standard
+	// fields and the configurable groups claim.
+	var rawClaims map[string]any
+	if err := idToken.Claims(&rawClaims); err != nil {
 		return nil, fmt.Errorf("auth: oidc: extract claims: %w", err)
 	}
+	sub, _ := rawClaims["sub"].(string)
+	email, _ := rawClaims["email"].(string)
+	preferredUsername, _ := rawClaims["preferred_username"].(string)
+
+	// Resolve the role from the groups claim when mappings are configured.
+	role := s.resolveOIDCRole(rawClaims)
 
 	// Look up existing user by OIDC subject.
-	user, err := s.store.GetUserByOIDCSub(ctx, claims.Sub)
+	user, err := s.store.GetUserByOIDCSub(ctx, sub)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return nil, fmt.Errorf("auth: oidc: get user: %w", err)
 	}
@@ -82,21 +89,82 @@ func (s *Service) OIDCCallback(ctx context.Context, code string) (*db.Session, e
 		if !s.oidc.cfg.AutoProvision {
 			return nil, fmt.Errorf("auth: oidc: user not found and auto-provision is disabled")
 		}
-		username := claims.Name
+		username := preferredUsername
 		if username == "" {
-			username = claims.Email
+			username = email
 		}
-		oidcSub := claims.Sub
+		oidcSub := sub
 		user, err = s.store.CreateUser(ctx, db.CreateUserParams{
 			Username: username,
-			Email:    claims.Email,
-			Role:     "viewer",
+			Email:    email,
+			Role:     role,
 			OIDCSub:  &oidcSub,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("auth: oidc: create user: %w", err)
 		}
-		s.logger.Info("auto-provisioned OIDC user", "username", user.Username, "sub", claims.Sub)
+		s.logger.Info("auto-provisioned OIDC user", "username", user.Username, "sub", sub, "role", role)
+	} else if user.Role != role && len(s.oidc.cfg.RoleMappings) > 0 {
+		// Sync the role on subsequent logins when mappings are active.
+		if err := s.store.UpdateUserRole(ctx, user.ID, role); err != nil {
+			s.logger.Warn("oidc: failed to sync user role", "user_id", user.ID, "role", role, "err", err)
+		} else {
+			user.Role = role
+		}
 	}
 	return s.createSession(ctx, user.ID)
+}
+
+// resolveOIDCRole extracts the groups claim from raw token claims and returns
+// the highest-privilege role that has a mapping entry.  Falls back to
+// DefaultRole (default: "viewer") when no mapping matches or when no mappings
+// are configured.
+func (s *Service) resolveOIDCRole(rawClaims map[string]any) string {
+	cfg := s.oidc.cfg
+
+	// If no role mappings are defined, return the configured default.
+	if len(cfg.RoleMappings) == 0 {
+		if cfg.DefaultRole != "" {
+			return cfg.DefaultRole
+		}
+		return "viewer"
+	}
+
+	groupsClaim := cfg.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
+
+	// The groups claim may be []string or []any.
+	var groups []string
+	switch v := rawClaims[groupsClaim].(type) {
+	case []string:
+		groups = v
+	case []any:
+		for _, g := range v {
+			if gs, ok := g.(string); ok {
+				groups = append(groups, gs)
+			}
+		}
+	}
+
+	roleOrder := map[string]int{"viewer": 1, "operator": 2, "admin": 3}
+	best := ""
+	bestRank := 0
+	for _, g := range groups {
+		if mapped, ok := cfg.RoleMappings[g]; ok {
+			if rank := roleOrder[mapped]; rank > bestRank {
+				bestRank = rank
+				best = mapped
+			}
+		}
+	}
+	if best != "" {
+		return best
+	}
+
+	if cfg.DefaultRole != "" {
+		return cfg.DefaultRole
+	}
+	return "viewer"
 }
