@@ -252,6 +252,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("PUT /api/v1/plugins/{name}/enable", admin(s.handleEnablePlugin))
 	mux.Handle("PUT /api/v1/plugins/{name}/disable", admin(s.handleDisablePlugin))
 
+	// --- Flows ---
+	mux.Handle("GET /api/v1/flows", viewer(s.handleListFlows))
+	mux.Handle("GET /api/v1/flows/{id}", viewer(s.handleGetFlow))
+	mux.Handle("POST /api/v1/flows", operator(s.handleCreateFlow))
+	mux.Handle("PUT /api/v1/flows/{id}", operator(s.handleUpdateFlow))
+	mux.Handle("DELETE /api/v1/flows/{id}", admin(s.handleDeleteFlow))
+
 	// --- Dashboard metrics ---
 	mux.Handle("GET /api/v1/metrics/throughput", viewer(s.handleThroughput))
 	mux.Handle("GET /api/v1/metrics/queue", viewer(s.handleQueueSummary))

@@ -18,6 +18,10 @@ type EncodeConfig struct {
 	// from the job-creation UI.  When present, the engine may use it for future
 	// automatic boundary generation; currently it is stored for reference.
 	ChunkingConfig *ChunkingConfig `json:"chunking_config,omitempty"`
+	// FlowID is an optional reference to a flow pipeline to use for job
+	// expansion instead of the template-based path.  Stored in the JSONB
+	// encode_config column so no schema migration is required.
+	FlowID string `json:"flow_id,omitempty"`
 }
 
 // ChunkBoundary defines the inclusive frame range for one encoding task.
@@ -515,6 +519,32 @@ type UpsertNotificationPrefsParams struct {
 	NotifyOnJobFailed     bool
 	NotifyOnAgentStale    bool
 	WebhookFilterUserOnly bool
+}
+
+// Flow is a row from the flows table.
+// Graph holds the raw JSON that describes the visual node/edge pipeline graph.
+type Flow struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Graph       json.RawMessage `json:"graph"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// CreateFlowParams holds values for inserting a new flow row.
+type CreateFlowParams struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Graph       json.RawMessage `json:"graph"`
+}
+
+// UpdateFlowParams holds values for updating an existing flow row.
+type UpdateFlowParams struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Graph       json.RawMessage `json:"graph"`
 }
 
 // Schedule is a row from the schedules table.

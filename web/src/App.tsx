@@ -23,6 +23,8 @@ import EnrollmentTokens from './pages/admin/EnrollmentTokens'
 import Schedules from './pages/admin/Schedules'
 import Plugins from './pages/admin/Plugins'
 import ThemeSettings from './pages/admin/ThemeSettings'
+import Flows from './pages/Flows'
+import FlowEditor from './pages/FlowEditor'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -91,6 +93,9 @@ function App() {
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/audio-convert" element={<AudioConvert />} />
+        <Route path="/flows" element={<Flows />} />
+        <Route path="/flows/editor" element={<FlowEditor />} />
+        <Route path="/flows/editor/:id" element={<FlowEditor />} />
         {user.role === 'admin' && (
           <>
             <Route path="/admin/templates" element={<Templates />} />

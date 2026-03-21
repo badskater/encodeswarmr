@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/badskater/distributed-encoder/internal/db"
 )
@@ -27,7 +28,14 @@ func (e *Engine) expandPendingJobs(ctx context.Context) error {
 // expandJob dispatches to the appropriate expansion strategy based on job type.
 // When an AnalysisRunner is configured, analysis/hdr_detect/audio jobs run
 // directly on the controller host instead of being dispatched to an agent.
+// When EncodeConfig.FlowID is set, flow-based expansion is used instead of
+// the default template path.
 func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
+	// If a flow pipeline is attached, delegate to the flow engine.
+	if job.EncodeConfig.FlowID != "" {
+		return e.expandFlowJob(ctx, job)
+	}
+
 	// Route analysis-type jobs to the controller runner when available.
 	if e.analysis != nil && isControllerAnalysisJob(job.JobType) {
 		return e.expandControllerAnalysisJob(ctx, job)
@@ -44,6 +52,89 @@ func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
 		e.logger.Error("engine: unknown job type, skipping", "job_id", job.ID, "job_type", job.JobType)
 		return nil
 	}
+}
+
+// expandFlowJob uses the FlowEngine to translate a flow graph into TaskSteps
+// and then creates one task per step.  This is the entry point for jobs that
+// carry a flow_id in their EncodeConfig.
+func (e *Engine) expandFlowJob(ctx context.Context, job *db.Job) error {
+	flowID := job.EncodeConfig.FlowID
+
+	flow, err := e.store.GetFlowByID(ctx, flowID)
+	if err != nil {
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return fmt.Errorf("engine: expand flow job: get flow %s: %w", flowID, err)
+	}
+
+	fe := NewFlowEngine(e.store, e.logger)
+	steps, err := fe.ExecuteFlow(ctx, flow, job.SourceID)
+	if err != nil {
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return fmt.Errorf("engine: expand flow job: execute flow %s: %w", flowID, err)
+	}
+
+	if len(steps) == 0 {
+		e.logger.Warn("engine: flow produced no steps, marking job failed",
+			"job_id", job.ID, "flow_id", flowID)
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return nil
+	}
+
+	// failJob cleans up any tasks already created before returning the error.
+	failJob := func(cause error) error {
+		if delErr := e.store.DeleteTasksByJobID(ctx, job.ID); delErr != nil {
+			e.logger.Error("engine: cleanup orphan tasks (flow)",
+				"job_id", job.ID, "error", delErr)
+		}
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return cause
+	}
+
+	for i, step := range steps {
+		vars := make(map[string]string)
+		for k, v := range step.Config {
+			if s, ok := v.(string); ok {
+				vars[k] = s
+			}
+		}
+		vars["flow_node_id"] = step.NodeID
+		vars["flow_node_type"] = step.NodeType
+
+		// Log webhook steps rather than creating a DB task — webhook delivery
+		// will be wired in a subsequent iteration.
+		if step.NodeType == "webhook" {
+			e.logger.Info("engine: flow webhook step (pending delivery wiring)",
+				"job_id", job.ID,
+				"flow_id", flowID,
+				"node_id", step.NodeID,
+				slog.Any("config", step.Config),
+			)
+			continue
+		}
+
+		source, srcErr := e.store.GetSourceByID(ctx, job.SourceID)
+		if srcErr != nil {
+			return failJob(fmt.Errorf("engine: expand flow job step %d get source: %w", i, srcErr))
+		}
+
+		if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+			JobID:      job.ID,
+			ChunkIndex: i,
+			TaskType:   db.TaskTypeEncode,
+			SourcePath: source.UNCPath,
+			Variables:  vars,
+		}); err != nil {
+			return failJob(fmt.Errorf("engine: expand flow job create task step %d: %w", i, err))
+		}
+	}
+
+	if err := e.store.UpdateJobTaskCounts(ctx, job.ID); err != nil {
+		return fmt.Errorf("engine: expand flow job update task counts: %w", err)
+	}
+	if err := e.store.UpdateJobStatus(ctx, job.ID, "queued"); err != nil {
+		return fmt.Errorf("engine: expand flow job update status: %w", err)
+	}
+	return nil
 }
 
 // expandControllerAnalysisJob runs an analysis/hdr_detect/audio job directly

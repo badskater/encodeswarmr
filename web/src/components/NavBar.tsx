@@ -55,6 +55,7 @@ export default function NavBar({ role, onLogout }: Props) {
               <NavLink to="/jobs" className={linkCls}>Jobs</NavLink>
               <NavLink to="/agents" className={linkCls}>Agents</NavLink>
               <NavLink to="/audio-convert" className={linkCls}>Audio</NavLink>
+              <NavLink to="/flows" className={linkCls}>Flows</NavLink>
               {role === 'admin' && (
                 <>
                   <NavLink to="/admin/templates" className={linkCls}>Templates</NavLink>
@@ -114,6 +115,7 @@ export default function NavBar({ role, onLogout }: Props) {
             <NavLink to="/jobs" className={mobileLinkCls} onClick={closeMenu}>Jobs</NavLink>
             <NavLink to="/agents" className={mobileLinkCls} onClick={closeMenu}>Agents</NavLink>
             <NavLink to="/audio-convert" className={mobileLinkCls} onClick={closeMenu}>Audio</NavLink>
+            <NavLink to="/flows" className={mobileLinkCls} onClick={closeMenu}>Flows</NavLink>
             {role === 'admin' && (
               <>
                 <div className="px-4 pt-2 pb-1 text-xs text-th-nav-text opacity-50 uppercase tracking-wide">Admin</div>
