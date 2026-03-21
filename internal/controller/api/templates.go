@@ -50,9 +50,9 @@ func (s *Server) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "name, type, extension, and content are required")
 		return
 	}
-	validTypes := map[string]bool{"run": true, "frameserver": true, "avs": true, "vpy": true, "bat": true}
+	validTypes := map[string]bool{"run": true, "run_script": true, "frameserver": true, "avs": true, "vpy": true, "bat": true}
 	if !validTypes[req.Type] {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "invalid template type: must be one of run, frameserver, avs, vpy, bat")
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "invalid template type: must be one of run, run_script, frameserver, avs, vpy, bat")
 		return
 	}
 
