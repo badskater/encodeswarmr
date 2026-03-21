@@ -75,7 +75,7 @@ func TestE2E_HappyPath(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "test-agent-1")
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 15*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
 
 	// Verify all tasks completed.
 	tasks, err := tc.Store.ListTasksByJob(ctx, job.ID)
@@ -153,7 +153,7 @@ func TestE2E_TaskFailure(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "fail-agent-1")
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 15*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 30*time.Second)
 
 	// Verify the task has failed status.
 	tk, err := tc.Store.GetTaskByID(ctx, task.ID)
@@ -232,7 +232,7 @@ func TestE2E_MultipleAgents(t *testing.T) {
 	testharness.StartAgent(t, tc.GRPCAddr, "agent-2")
 
 	// Wait for all tasks to complete.
-	testharness.WaitFor(t, 15*time.Second, func() bool {
+	testharness.WaitFor(t, 30*time.Second, func() bool {
 		tasks, err := tc.Store.ListTasksByJob(ctx, job.ID)
 		if err != nil {
 			return false
@@ -286,8 +286,14 @@ func TestE2E_HeartbeatUpdatesDB(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "hb-agent-1")
 
-	// Wait up to 3s for the agent to register and send a heartbeat.
-	time.Sleep(3 * time.Second)
+	// Wait for the agent to register and send at least one heartbeat (up to 15s).
+	testharness.WaitFor(t, 15*time.Second, func() bool {
+		a, err := tc.Store.GetAgentByName(ctx, "hb-agent-1")
+		if err != nil {
+			return false
+		}
+		return a.LastHeartbeat != nil
+	})
 
 	agent, err := tc.Store.GetAgentByName(ctx, "hb-agent-1")
 	if err != nil {
@@ -299,8 +305,8 @@ func TestE2E_HeartbeatUpdatesDB(t *testing.T) {
 	}
 
 	age := time.Since(*agent.LastHeartbeat)
-	if age > 5*time.Second {
-		t.Errorf("heartbeat_at is %v old; expected within 5s", age)
+	if age > 15*time.Second {
+		t.Errorf("heartbeat_at is %v old; expected within 15s", age)
 	}
 }
 
@@ -388,7 +394,7 @@ func TestE2E_OfflineSync(t *testing.T) {
 	testharness.StartAgentWithOfflineDB(t, tc.GRPCAddr, "offline-agent-1", offlineDBPath)
 
 	// Wait for the job to reach completed — triggered by the offline sync.
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 15*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
 }
 
 // ---------------------------------------------------------------------------

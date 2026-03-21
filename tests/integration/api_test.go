@@ -11,6 +11,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -285,6 +286,17 @@ func TestSourcesCRUD(t *testing.T) {
 		t.Fatalf("get source: expected 200, got %d", resp.StatusCode)
 	}
 	drainClose(resp)
+
+	// Delete any jobs that were auto-created for this source (analysis, hdr_detect)
+	// so that the source FK constraint (ON DELETE RESTRICT) does not block deletion.
+	// There is no DeleteJob API endpoint, so we use the pool directly.
+	cleanupCtx := context.Background()
+	if _, err := tc.Pool.Exec(cleanupCtx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE source_id = $1)", srcID); err != nil {
+		t.Logf("delete source tasks: %v", err)
+	}
+	if _, err := tc.Pool.Exec(cleanupCtx, "DELETE FROM jobs WHERE source_id = $1", srcID); err != nil {
+		t.Fatalf("delete source jobs: %v", err)
+	}
 
 	// DELETE /api/v1/sources/{id} → 204 No Content.
 	req, _ = http.NewRequest(http.MethodDelete, tc.HTTPBaseURL+"/api/v1/sources/"+srcID, nil)
