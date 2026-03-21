@@ -338,7 +338,7 @@ func (g *ScriptGenerator) RenderConcat(ctx context.Context, job *db.Job, task *d
 	batBuf.WriteString("@echo off\r\n")
 	batBuf.WriteString("setlocal\r\n")
 	batBuf.WriteString("if not defined FFMPEG_BIN set FFMPEG_BIN=ffmpeg\r\n")
-	batBuf.WriteString(fmt.Sprintf(`"%FFMPEG_BIN%" -y -f concat -safe 0 -i "%s" -c copy "%s"`,
+	batBuf.WriteString(fmt.Sprintf(`"%%FFMPEG_BIN%%" -y -f concat -safe 0 -i "%s" -c copy "%s"`,
 		listFile, finalOutputPath))
 	batBuf.WriteString("\r\n")
 	batBuf.WriteString("if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%\r\n")
