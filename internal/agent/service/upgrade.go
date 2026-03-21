@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
@@ -199,7 +200,7 @@ func (u *upgradeChecker) applyUpgrade(ctx context.Context, downloadURL, expected
 	u.log.Info("upgrade downloaded, restart required", "staging_path", stagingPath)
 
 	// Replace the executable.
-	backupPath := exePath + ".old"
+	backupPath := exePath + ".bak"
 	os.Remove(backupPath) // clean up any previous backup
 	if err := os.Rename(exePath, backupPath); err != nil {
 		u.log.Error("backup current binary failed", "error", err)
@@ -211,11 +212,28 @@ func (u *upgradeChecker) applyUpgrade(ctx context.Context, downloadURL, expected
 		return fmt.Errorf("replacing binary: %w", err)
 	}
 
-	// Best-effort service restart using the platform service manager.
+	// Restart the service and verify it comes up. Roll back if it does not.
 	u.log.Info("attempting service restart")
 	u.restartService(ctx)
 
+	// Wait for the new process to initialise before checking.
+	time.Sleep(4 * time.Second)
+
+	if !u.isServiceRunning(ctx) {
+		u.log.Warn("service did not start after upgrade, attempting rollback")
+		if rollbackErr := u.rollback(ctx, exePath); rollbackErr != nil {
+			u.log.Error("rollback failed", "error", rollbackErr)
+		}
+	}
+
 	return nil
+}
+
+// rollback restores the previous binary from the .bak file and restarts the
+// service. It is the primary rollback entry point called when the upgraded
+// service fails to start.
+func (u *upgradeChecker) rollback(ctx context.Context, exePath string) error {
+	return u.rollbackBinary(ctx, exePath)
 }
 
 // restartService performs a best-effort service restart using the
@@ -238,4 +256,54 @@ func (u *upgradeChecker) restartService(ctx context.Context) {
 	default:
 		u.log.Warn("service restart not supported on this platform", "os", runtime.GOOS)
 	}
+}
+
+// isServiceRunning checks whether the agent service is currently active using
+// the platform-appropriate service manager. Returns false on any error or when
+// the platform is not supported.
+func (u *upgradeChecker) isServiceRunning(ctx context.Context) bool {
+	switch runtime.GOOS {
+	case "windows":
+		out, err := exec.CommandContext(ctx, "sc.exe", "query", serviceName).CombinedOutput()
+		if err != nil {
+			u.log.Warn("sc query failed during service check", "error", err)
+			return false
+		}
+		return strings.Contains(string(out), "RUNNING")
+	case "linux":
+		out, err := exec.CommandContext(ctx, "systemctl", "is-active", serviceName).CombinedOutput()
+		if err != nil {
+			u.log.Warn("systemctl is-active failed during service check", "error", err)
+			return false
+		}
+		return strings.TrimSpace(string(out)) == "active"
+	default:
+		u.log.Warn("service status check not supported on this platform", "os", runtime.GOOS)
+		return false
+	}
+}
+
+// rollbackBinary restores the previous binary from the .bak file and
+// attempts to restart the service with the restored binary.
+func (u *upgradeChecker) rollbackBinary(ctx context.Context, exePath string) error {
+	backupPath := exePath + ".bak"
+	if _, err := os.Stat(backupPath); err != nil {
+		return fmt.Errorf("rollback: backup not found at %s: %w", backupPath, err)
+	}
+
+	// Move the broken new binary aside so we can inspect it if needed.
+	failedPath := exePath + ".new.failed"
+	if err := os.Rename(exePath, failedPath); err != nil {
+		// Non-fatal — we still attempt to put the old binary back.
+		u.log.Warn("rollback: could not rename failed binary", "path", exePath, "error", err)
+	}
+
+	if err := os.Rename(backupPath, exePath); err != nil {
+		return fmt.Errorf("rollback: restoring backup: %w", err)
+	}
+
+	u.log.Info("rollback: backup binary restored, restarting service")
+	u.restartService(ctx)
+	u.log.Info("rollback complete")
+	return nil
 }

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -72,7 +75,7 @@ func (s *Server) handleAgentUpgradeDownload(w http.ResponseWriter, r *http.Reque
 }
 
 // listAvailableBinaries scans the directory for files matching the agent-{os}-{arch}
-// naming convention and returns their metadata.
+// naming convention and returns their metadata, including SHA-256 hashes.
 func listAvailableBinaries(dir string) []map[string]string {
 	result := []map[string]string{}
 
@@ -105,12 +108,31 @@ func listAvailableBinaries(dir string) []map[string]string {
 			continue
 		}
 
+		sha := computeFileSHA256(filepath.Join(dir, name))
+
 		result = append(result, map[string]string{
-			"os":   osName,
-			"arch": archName,
-			"url":  fmt.Sprintf("/api/v1/agent/upgrade/%s/%s", osName, archName),
+			"os":     osName,
+			"arch":   archName,
+			"url":    fmt.Sprintf("/api/v1/agent/upgrade/%s/%s", osName, archName),
+			"sha256": sha,
 		})
 	}
 
 	return result
+}
+
+// computeFileSHA256 reads the file at path and returns its SHA-256 hex digest.
+// Returns an empty string if the file cannot be read.
+func computeFileSHA256(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

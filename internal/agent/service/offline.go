@@ -165,6 +165,41 @@ func (o *offlineStore) markLogsSynced(ids []int64) error {
 	return err
 }
 
+// pruneOldSynced deletes synced entries older than 7 days from both tables.
+// This is the backwards-compatible wrapper that uses the default retention period.
+func (o *offlineStore) pruneOldSynced() error {
+	return o.PruneJournal(7 * 24 * time.Hour)
+}
+
+// PruneJournal deletes synced journal entries (in both offline_results and
+// offline_logs) whose created_at timestamp is older than olderThan. It is
+// safe to call concurrently with reads and writes to the journal.
+//
+// Typical usage:
+//
+//	// Called once on startup and periodically (e.g. every 24 h) from the main loop.
+//	if err := store.PruneJournal(7 * 24 * time.Hour); err != nil {
+//	    log.Warn("journal prune failed", "error", err)
+//	}
+func (o *offlineStore) PruneJournal(olderThan time.Duration) error {
+	cutoff := time.Now().Add(-olderThan)
+	_, err := o.db.Exec(
+		`DELETE FROM offline_results WHERE synced = 1 AND created_at < ?`,
+		cutoff.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return fmt.Errorf("prune offline_results: %w", err)
+	}
+	_, err = o.db.Exec(
+		`DELETE FROM offline_logs WHERE synced = 1 AND created_at < ?`,
+		cutoff.UTC().Format("2006-01-02 15:04:05"),
+	)
+	if err != nil {
+		return fmt.Errorf("prune offline_logs: %w", err)
+	}
+	return nil
+}
+
 // close releases the database connection.
 func (o *offlineStore) close() error {
 	return o.db.Close()

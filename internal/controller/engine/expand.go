@@ -119,6 +119,17 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 		ext = "mkv"
 	}
 
+	// failJob deletes any tasks already created for this job, then marks it failed.
+	// This prevents orphan tasks when expansion only partially succeeds.
+	failJob := func(cause error) error {
+		if delErr := e.store.DeleteTasksByJobID(ctx, job.ID); delErr != nil {
+			e.logger.Error("engine: cleanup orphan tasks failed",
+				"job_id", job.ID, "error", delErr)
+		}
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return cause
+	}
+
 	// Create a task for each chunk and render its scripts.
 	for i := range job.EncodeConfig.ChunkBoundaries {
 		// Build output path using string concatenation to preserve UNC prefix.
@@ -132,19 +143,16 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 			Variables:  map[string]string{},
 		})
 		if err != nil {
-			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-			return fmt.Errorf("engine: create task chunk %d: %w", i, err)
+			return failJob(fmt.Errorf("engine: create task chunk %d: %w", i, err))
 		}
 
 		scriptDir, err := e.gen.Render(ctx, job, task, source)
 		if err != nil {
-			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-			return fmt.Errorf("engine: render scripts chunk %d: %w", i, err)
+			return failJob(fmt.Errorf("engine: render scripts chunk %d: %w", i, err))
 		}
 
 		if err := e.store.SetTaskScriptDir(ctx, task.ID, scriptDir); err != nil {
-			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-			return fmt.Errorf("engine: set script dir chunk %d: %w", i, err)
+			return failJob(fmt.Errorf("engine: set script dir chunk %d: %w", i, err))
 		}
 	}
 
@@ -165,6 +173,17 @@ func (e *Engine) expandSingleTaskJob(ctx context.Context, job *db.Job) error {
 		return fmt.Errorf("engine: get source %s: %w", job.SourceID, err)
 	}
 
+	// failJob deletes any tasks already created for this job, then marks it
+	// failed, preventing orphan tasks when expansion only partially succeeds.
+	failJob := func(cause error) error {
+		if delErr := e.store.DeleteTasksByJobID(ctx, job.ID); delErr != nil {
+			e.logger.Error("engine: cleanup orphan tasks failed",
+				"job_id", job.ID, "error", delErr)
+		}
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return cause
+	}
+
 	task, err := e.store.CreateTask(ctx, db.CreateTaskParams{
 		JobID:      job.ID,
 		ChunkIndex: 0,
@@ -172,19 +191,16 @@ func (e *Engine) expandSingleTaskJob(ctx context.Context, job *db.Job) error {
 		Variables:  map[string]string{},
 	})
 	if err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: create single task: %w", err)
+		return failJob(fmt.Errorf("engine: create single task: %w", err))
 	}
 
 	scriptDir, err := e.gen.RenderSingle(ctx, job, task, source)
 	if err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: render single task scripts: %w", err)
+		return failJob(fmt.Errorf("engine: render single task scripts: %w", err))
 	}
 
 	if err := e.store.SetTaskScriptDir(ctx, task.ID, scriptDir); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: set script dir for single task: %w", err)
+		return failJob(fmt.Errorf("engine: set script dir for single task: %w", err))
 	}
 
 	if err := e.store.UpdateJobTaskCounts(ctx, job.ID); err != nil {
