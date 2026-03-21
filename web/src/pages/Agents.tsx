@@ -121,7 +121,9 @@ export default function Agents() {
         )}
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
-      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+
+      {/* Desktop table */}
+      <div className="hidden sm:block bg-th-surface rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
@@ -237,6 +239,97 @@ export default function Agents() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="sm:hidden space-y-3">
+        {agents.map(a => (
+          <div key={a.id} className="bg-th-surface rounded-lg shadow">
+            {/* Card header */}
+            <div className="px-4 py-3 flex items-center gap-3 border-b border-th-border-subtle">
+              <input
+                type="checkbox"
+                checked={selected.has(a.id)}
+                onChange={() => toggleSelect(a.id)}
+                className="rounded border-th-input-border shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-th-text truncate">{a.name}</span>
+                  <StatusBadge status={a.status} />
+                </div>
+                <p className="text-xs text-th-text-muted mt-0.5">{a.hostname} · {a.ip_address}</p>
+              </div>
+            </div>
+
+            {/* Card details */}
+            <div className="px-4 py-2 grid grid-cols-2 gap-1 text-xs">
+              <div><span className="text-th-text-muted">CPU: </span><span className="text-th-text-secondary">{a.cpu_count} cores</span></div>
+              <div><span className="text-th-text-muted">RAM: </span><span className="text-th-text-secondary">{fmtBytes(a.ram_mib)}</span></div>
+              {a.gpu_enabled && (
+                <div className="col-span-2"><span className="text-th-text-muted">GPU: </span><span className="text-th-text-secondary">{a.gpu_vendor} {a.gpu_model}</span></div>
+              )}
+              {a.tags.length > 0 && (
+                <div className="col-span-2"><span className="text-th-text-muted">Tags: </span><span className="text-th-text-secondary">{a.tags.join(', ')}</span></div>
+              )}
+              <div className="col-span-2"><span className="text-th-text-muted">Heartbeat: </span><span className="text-th-text-secondary">{fmtDate(a.last_heartbeat)}</span></div>
+            </div>
+
+            {/* Card actions */}
+            <div className="px-4 py-2 flex gap-2 flex-wrap border-t border-th-border-subtle">
+              <button
+                onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
+                className="text-xs px-2 py-1 rounded border border-th-input-border text-th-text-muted hover:bg-th-surface-muted"
+              >
+                {expandedMetrics === a.id ? 'Hide Metrics' : 'Show Metrics'}
+              </button>
+              {(a.status === 'idle' || a.status === 'running') && (
+                <button
+                  onClick={() => handleDrain(a.id)}
+                  disabled={draining === a.id}
+                  className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--th-badge-draining-bg)', color: 'var(--th-badge-draining-text)' }}
+                >
+                  {draining === a.id ? 'Draining…' : 'Drain'}
+                </button>
+              )}
+              {a.status === 'pending_approval' && (
+                <button
+                  onClick={() => handleApprove(a.id)}
+                  disabled={approving === a.id}
+                  className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--th-badge-success-bg)', color: 'var(--th-badge-success-text)' }}
+                >
+                  {approving === a.id ? 'Approving…' : 'Approve'}
+                </button>
+              )}
+              {a.vnc_port > 0 && (
+                <a
+                  href={`/novnc/${a.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ backgroundColor: 'var(--th-badge-running-bg)', color: 'var(--th-badge-running-text)', textDecoration: 'none' }}
+                >
+                  Remote Desktop
+                </a>
+              )}
+            </div>
+
+            {/* Metrics expansion */}
+            {expandedMetrics === a.id && (
+              <div className="px-4 py-3 border-t border-th-border-subtle bg-th-surface-muted">
+                <p className="text-xs font-medium text-th-text-muted mb-2 uppercase tracking-wide">
+                  Resource Utilisation — last hour
+                </p>
+                <AgentMetricsGraph agentId={a.id} />
+              </div>
+            )}
+          </div>
+        ))}
+        {agents.length === 0 && (
+          <p className="text-center text-th-text-subtle text-sm py-8">No agents registered</p>
+        )}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -260,6 +260,22 @@ export const updateSchedule = (id: string, body: { name: string; cron_expr: stri
   request<Schedule>(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(body) })
 
 export const deleteSchedule = (id: string) => request<void>(`/schedules/${id}`, { method: 'DELETE' })
+
+// Dashboard metrics
+export const getThroughput = (hours = 24) =>
+  request<ThroughputPoint[]>(`/metrics/throughput${buildQuery({ hours })}`)
+
+export const getQueueSummary = () =>
+  request<QueueSummary>('/metrics/queue')
+
+export const getRecentActivity = (limit = 10) =>
+  request<ActivityEvent[]>(`/metrics/activity${buildQuery({ limit })}`)
+
+// Plugins
+export const listPlugins = () => request<Plugin[]>('/admin/plugins')
+
+export const updatePlugin = (id: string, enabled: boolean) =>
+  request<Plugin>(`/admin/plugins/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled }) })
 
 // Audit Log
 export interface AuditEntry {
