@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/badskater/distributed-encoder/internal/db"
 	"github.com/badskater/distributed-encoder/internal/shared"
@@ -16,36 +17,65 @@ import (
 
 func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Path string `json:"path"`
-		Name string `json:"name"`
+		Path     string  `json:"path"`
+		Name     string  `json:"name"`
+		CloudURI *string `json:"cloud_uri"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
 		return
 	}
-	if !shared.IsSharePath(req.Path) {
+
+	// cloud_uri and path are mutually exclusive. At least one is required.
+	hasCloudURI := req.CloudURI != nil && *req.CloudURI != ""
+	hasPath := req.Path != ""
+
+	if !hasCloudURI && !hasPath {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "either path or cloud_uri is required")
+		return
+	}
+	if hasCloudURI && hasPath {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path and cloud_uri are mutually exclusive")
+		return
+	}
+
+	if hasPath && !shared.IsSharePath(req.Path) {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path must be a UNC path (\\\\server\\share\\...) or NFS mount path (/mnt/nas/...)")
 		return
 	}
-	filename := req.Name
-	if filename == "" {
-		filename = filepath.Base(req.Path)
+	if hasCloudURI && !isCloudURI(*req.CloudURI) {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "cloud_uri must use a supported scheme: s3://, gs://, or az://")
+		return
 	}
 
-	existing, err := s.store.GetSourceByUNCPath(r.Context(), req.Path)
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		s.logger.Error("check source by unc path", "err", err)
-		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
-		return
+	filename := req.Name
+	if filename == "" {
+		if hasPath {
+			filename = filepath.Base(req.Path)
+		} else {
+			filename = filepath.Base(*req.CloudURI)
+		}
 	}
-	if existing != nil {
-		writeJSON(w, r, http.StatusOK, existing)
-		return
+
+	// Duplicate detection: for UNC-path sources we check by path; for cloud
+	// sources the cloud_uri acts as the unique key.
+	if hasPath {
+		existing, err := s.store.GetSourceByUNCPath(r.Context(), req.Path)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			s.logger.Error("check source by unc path", "err", err)
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+			return
+		}
+		if existing != nil {
+			writeJSON(w, r, http.StatusOK, existing)
+			return
+		}
 	}
 
 	source, err := s.store.CreateSource(r.Context(), db.CreateSourceParams{
 		Filename: filename,
 		UNCPath:  req.Path,
+		CloudURI: req.CloudURI,
 	})
 	if err != nil {
 		s.logger.Error("create source", "err", err)
@@ -59,6 +89,14 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 	s.scheduleSourceAnalysis(r.Context(), source.ID)
 
 	writeJSON(w, r, http.StatusCreated, source)
+}
+
+// isCloudURI returns true when uri uses a supported cloud storage scheme.
+func isCloudURI(uri string) bool {
+	lower := strings.ToLower(uri)
+	return strings.HasPrefix(lower, "s3://") ||
+		strings.HasPrefix(lower, "gs://") ||
+		strings.HasPrefix(lower, "az://")
 }
 
 // scheduleSourceAnalysis creates an analysis job (VMAF + scene detection) and

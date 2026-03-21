@@ -137,7 +137,7 @@ export const listSources = (params?: { state?: string; cursor?: string; page_siz
 export const listSourcesPaged = (params: { state?: string; cursor?: string; page_size?: number }) =>
   requestCollection<Source>(`/sources${buildQuery(params)}`)
 
-export const createSource = (body: { path: string; name?: string }) =>
+export const createSource = (body: { path?: string; name?: string; cloud_uri?: string }) =>
   request<Source>('/sources', { method: 'POST', body: JSON.stringify(body) })
 
 export const getSource = (id: string) => request<Source>(`/sources/${id}`)

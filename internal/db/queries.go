@@ -279,23 +279,23 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 
 func (s *pgStore) CreateSource(ctx context.Context, p CreateSourceParams) (*Source, error) {
 	const q = `
-		INSERT INTO sources (filename, unc_path, size_bytes, detected_by)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO sources (filename, unc_path, size_bytes, detected_by, cloud_uri)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-		          hdr_type, dv_profile, created_at, updated_at`
-	row := s.pool.QueryRow(ctx, q, p.Filename, p.UNCPath, p.SizeBytes, p.DetectedBy)
+		          cloud_uri, hdr_type, dv_profile, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.Filename, p.UNCPath, p.SizeBytes, p.DetectedBy, p.CloudURI)
 	return scanSource(row)
 }
 
 func (s *pgStore) GetSourceByID(ctx context.Context, id string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  hdr_type, dv_profile, created_at, updated_at FROM sources WHERE id = $1`
+	                  cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources WHERE id = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, id))
 }
 
 func (s *pgStore) GetSourceByUNCPath(ctx context.Context, uncPath string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  hdr_type, dv_profile, created_at, updated_at FROM sources WHERE unc_path = $1`
+	                  cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources WHERE unc_path = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, uncPath))
 }
 
@@ -317,7 +317,7 @@ func (s *pgStore) ListSources(ctx context.Context, f ListSourcesFilter) ([]*Sour
 	}
 
 	q := `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	             hdr_type, dv_profile, created_at, updated_at FROM sources`
+	             cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources`
 	args := []any{}
 	argN := 1
 
@@ -402,6 +402,7 @@ func scanSource(row pgx.Row) (*Source, error) {
 	err := row.Scan(
 		&src.ID, &src.Filename, &src.UNCPath, &src.SizeBytes,
 		&src.DetectedBy, &src.State, &src.VMafScore,
+		&src.CloudURI,
 		&src.HDRType, &src.DVProfile,
 		&src.CreatedAt, &src.UpdatedAt,
 	)

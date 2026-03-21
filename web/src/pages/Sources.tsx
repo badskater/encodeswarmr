@@ -33,6 +33,7 @@ export default function Sources() {
   const [showForm, setShowForm] = useState(false)
   const [formPath, setFormPath] = useState('')
   const [formName, setFormName] = useState('')
+  const [formCloudURI, setFormCloudURI] = useState('')
   const [formSaving, setFormSaving] = useState(false)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const [detectingHDRId, setDetectingHDRId] = useState<string | null>(null)
@@ -72,10 +73,18 @@ export default function Sources() {
     e.preventDefault()
     setFormSaving(true)
     try {
-      await api.createSource({ path: formPath, name: formName || undefined })
+      const body: { path?: string; name?: string; cloud_uri?: string } = {}
+      if (formCloudURI.trim()) {
+        body.cloud_uri = formCloudURI.trim()
+      } else {
+        body.path = formPath
+      }
+      if (formName) body.name = formName
+      await api.createSource(body)
       setShowForm(false)
       setFormPath('')
       setFormName('')
+      setFormCloudURI('')
       load()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to register source')
@@ -138,13 +147,33 @@ export default function Sources() {
         <form onSubmit={handleRegister} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
           <h2 className="text-sm font-semibold text-th-text-secondary">Register Source</h2>
           <div>
-            <label className="block text-xs text-th-text-muted mb-1">UNC Path *</label>
+            <label className="block text-xs text-th-text-muted mb-1">
+              UNC Path {!formCloudURI.trim() && <span className="text-red-500">*</span>}
+            </label>
             <input
               value={formPath}
               onChange={e => setFormPath(e.target.value)}
               placeholder="\\server\share\videos\file.mkv"
-              required
-              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text"
+              required={!formCloudURI.trim()}
+              disabled={!!formCloudURI.trim()}
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text disabled:opacity-40"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-th-text-muted">
+            <span className="border-t border-th-border flex-1" />
+            <span>or</span>
+            <span className="border-t border-th-border flex-1" />
+          </div>
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">
+              Cloud URI {!formPath.trim() && <span className="text-blue-500">(optional)</span>}
+            </label>
+            <input
+              value={formCloudURI}
+              onChange={e => setFormCloudURI(e.target.value)}
+              placeholder="s3://bucket/path/to/video.mkv"
+              disabled={!!formPath.trim()}
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text disabled:opacity-40"
             />
           </div>
           <div>

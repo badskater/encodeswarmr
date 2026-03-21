@@ -83,6 +83,9 @@ type Source struct {
 	DetectedBy *string    `json:"detected_by,omitempty"`
 	State      string     `json:"state"`
 	VMafScore  *float64   `json:"vmaf_score,omitempty"`
+	// CloudURI is an optional cloud storage URI (s3://, gs://, az://) for
+	// sources that live in object storage rather than on a UNC share.
+	CloudURI *string `json:"cloud_uri,omitempty"`
 	// HDR metadata — populated by hdr_detect analysis jobs.
 	// HDRType: "hdr10", "hdr10+", "dolby_vision", "hlg", or "" for SDR/unknown.
 	HDRType   string `json:"hdr_type"`
@@ -304,6 +307,7 @@ type CreateSourceParams struct {
 	UNCPath    string
 	SizeBytes  int64
 	DetectedBy *string
+	CloudURI   *string
 }
 
 type UpdateSourceHDRParams struct {
