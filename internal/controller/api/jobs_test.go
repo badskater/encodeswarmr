@@ -308,7 +308,8 @@ func (s *listJobsStore) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *listJobsStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *listJobsStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *listJobsStore) DeletePathMapping(context.Context, string) error                        { return nil }
+func (s *listJobsStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error { return nil }
 
 // ---------------------------------------------------------------------------
 // TestHandleGetJob

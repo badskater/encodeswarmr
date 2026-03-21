@@ -204,7 +204,8 @@ func (s *authStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *authStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *authStubStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *authStubStore) DeletePathMapping(context.Context, string) error                        { return nil }
+func (s *authStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

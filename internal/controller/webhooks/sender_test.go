@@ -205,8 +205,12 @@ func (s *senderStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, 
 func (s *senderStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *senderStubStore) DeletePathMapping(context.Context, string) error              { return nil }
-func (s *senderStubStore) DeleteTasksByJobID(_ context.Context, _ string) error        { return nil }
+func (s *senderStubStore) DeletePathMapping(context.Context, string) error                         { return nil }
+func (s *senderStubStore) DeleteTasksByJobID(_ context.Context, _ string) error                    { return nil }
+func (s *senderStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error   { return nil }
+func (s *senderStubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
+func (s *senderStubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
+func (s *senderStubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // TestSenderSend_success — delivers on first attempt to a real HTTP server

@@ -216,8 +216,12 @@ func (s *resultStub) ListPathMappings(context.Context) ([]*db.PathMapping, error
 func (s *resultStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *resultStub) DeletePathMapping(context.Context, string) error              { return nil }
-func (s *resultStub) DeleteTasksByJobID(_ context.Context, _ string) error         { return nil }
+func (s *resultStub) DeletePathMapping(context.Context, string) error                         { return nil }
+func (s *resultStub) DeleteTasksByJobID(_ context.Context, _ string) error                    { return nil }
+func (s *resultStub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error   { return nil }
+func (s *resultStub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
+func (s *resultStub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
+func (s *resultStub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers
