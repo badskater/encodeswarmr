@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Source, Template } from '../types'
+import type { Flow } from '../types/flow'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
 export default function CreateJob() {
@@ -13,6 +14,10 @@ export default function CreateJob() {
   const [error, setError] = useState('')
   const [sceneLoading, setSceneLoading] = useState(false)
   const [sceneMessage, setSceneMessage] = useState('')
+
+  const [flows, setFlows] = useState<Flow[]>([])
+  const [useFlow, setUseFlow] = useState(false)
+  const [selectedFlowId, setSelectedFlowId] = useState('')
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
@@ -32,10 +37,11 @@ export default function CreateJob() {
   const [overlapFrames, setOverlapFrames] = useState(0)
 
   useEffect(() => {
-    Promise.all([api.listSources(), api.listTemplates()])
-      .then(([s, t]) => {
+    Promise.all([api.listSources(), api.listTemplates(), api.listFlows()])
+      .then(([s, t, fl]) => {
         setSources(s)
         setTemplates(t)
+        setFlows(fl)
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
@@ -117,14 +123,16 @@ export default function CreateJob() {
         priority,
         target_tags: tags,
         encode_config: {
-          run_script_template_id: runTemplateId || undefined,
-          frameserver_template_id: fsTemplateId || undefined,
+          run_script_template_id: (!useFlow && runTemplateId) ? runTemplateId : undefined,
+          frameserver_template_id: (!useFlow && fsTemplateId) ? fsTemplateId : undefined,
           chunk_boundaries: chunkBoundaries,
           output_root: outputRoot || undefined,
           output_extension: outputExt || undefined,
           chunking_config: jobType === 'encode' && enableChunking
             ? { enable_chunking: true, chunk_size_frames: chunkSizeFrames, overlap_frames: overlapFrames }
             : undefined,
+          // @ts-expect-error flow_id is a future field not yet in the Go type
+          flow_id: (useFlow && selectedFlowId) ? selectedFlowId : undefined,
         },
       })
 
@@ -162,6 +170,57 @@ export default function CreateJob() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       <form onSubmit={handleSubmit} className="bg-th-surface rounded-lg shadow p-4 space-y-4">
+
+        {/* Use Flow toggle */}
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-th-border bg-th-surface-muted">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={useFlow}
+            onClick={() => setUseFlow(v => !v)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+              useFlow ? 'bg-blue-600' : 'bg-th-border'
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                useFlow ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+          <div>
+            <p className="text-sm font-medium text-th-text">Use Flow Pipeline</p>
+            <p className="text-xs text-th-text-muted">Select a saved flow to drive this job instead of individual templates</p>
+          </div>
+          {flows.length > 0 && (
+            <a href="/flows" className="ml-auto text-xs text-blue-500 hover:underline flex-shrink-0">
+              Manage Flows →
+            </a>
+          )}
+        </div>
+
+        {useFlow && (
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">Flow *</label>
+            <select
+              value={selectedFlowId}
+              onChange={e => setSelectedFlowId(e.target.value)}
+              required={useFlow}
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+            >
+              <option value="">Select a flow…</option>
+              {flows.map(f => (
+                <option key={f.id} value={f.id}>{f.name}{f.description ? ` — ${f.description}` : ''}</option>
+              ))}
+            </select>
+            {flows.length === 0 && (
+              <p className="text-xs text-th-text-subtle mt-1">
+                No flows created yet.{' '}
+                <a href="/flows/editor" className="text-blue-500 hover:underline">Create one</a>
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-th-text-muted mb-1">Source *</label>

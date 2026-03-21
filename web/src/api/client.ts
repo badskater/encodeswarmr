@@ -1,4 +1,5 @@
 import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin } from '../types'
+import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
 
@@ -276,6 +277,20 @@ export const listPlugins = () => request<Plugin[]>('/plugins')
 
 export const togglePlugin = (name: string, enable: boolean) =>
   request<Plugin>(`/plugins/${name}/${enable ? 'enable' : 'disable'}`, { method: 'PUT' })
+
+// Flows
+export const listFlows = () => request<Flow[]>('/flows')
+
+export const getFlow = (id: string) => request<Flow>(`/flows/${id}`)
+
+export const createFlow = (data: Partial<Flow>) =>
+  request<Flow>('/flows', { method: 'POST', body: JSON.stringify(data) })
+
+export const updateFlow = (id: string, data: Partial<Flow>) =>
+  request<Flow>(`/flows/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+
+export const deleteFlow = (id: string) =>
+  request<void>(`/flows/${id}`, { method: 'DELETE' })
 
 // Audit Log
 export interface AuditEntry {
