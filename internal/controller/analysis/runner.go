@@ -441,6 +441,74 @@ func (r *Runner) probeStreamInfo(ctx context.Context, path string) (json.RawMess
 }
 
 // ---------------------------------------------------------------------------
+// Chunk concat
+// ---------------------------------------------------------------------------
+
+// RunConcat merges completed chunk files into a single output file using
+// ffmpeg's concat demuxer.  Chunk paths are translated from UNC to Linux paths
+// via the path_mappings table before use.
+func (r *Runner) RunConcat(ctx context.Context, job *db.Job, chunkPaths []string, outputPath string) error {
+	r.acquire()
+	defer r.release()
+
+	// Translate UNC paths to Linux paths.
+	translatedPaths := make([]string, len(chunkPaths))
+	for i, p := range chunkPaths {
+		tp, err := r.TranslatePath(ctx, p)
+		if err != nil {
+			return fmt.Errorf("analysis: concat translate path: %w", err)
+		}
+		translatedPaths[i] = tp
+	}
+	translatedOutput, err := r.TranslatePath(ctx, outputPath)
+	if err != nil {
+		return fmt.Errorf("analysis: concat translate output: %w", err)
+	}
+
+	// Create output directory.
+	if err := os.MkdirAll(filepath.Dir(translatedOutput), 0o755); err != nil {
+		return fmt.Errorf("analysis: concat mkdir: %w", err)
+	}
+
+	// Write temp concat list file.
+	listFile := filepath.Join(filepath.Dir(translatedOutput), "concat_list.txt")
+	var buf bytes.Buffer
+	for _, p := range translatedPaths {
+		escaped := strings.ReplaceAll(p, "'", "\\'")
+		buf.WriteString("file '" + escaped + "'\n")
+	}
+	if err := os.WriteFile(listFile, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("analysis: concat write list: %w", err)
+	}
+	defer os.Remove(listFile)
+
+	// Run ffmpeg concat demuxer.
+	cmd := exec.CommandContext(ctx, r.ffmpegBin, "-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", translatedOutput)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	r.logger.Info("running concat",
+		slog.String("job_id", job.ID),
+		slog.Int("chunks", len(chunkPaths)),
+		slog.String("output", translatedOutput),
+	)
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("analysis: concat ffmpeg: %w: %s", err, stderr.String())
+	}
+
+	// Log output file size.
+	if info, err := os.Stat(translatedOutput); err == nil {
+		r.logger.Info("concat complete",
+			slog.String("job_id", job.ID),
+			slog.Int64("size_bytes", info.Size()),
+		)
+	}
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Audio encoding
 // ---------------------------------------------------------------------------
 

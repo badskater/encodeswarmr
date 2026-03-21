@@ -3,7 +3,9 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 
 	"github.com/badskater/distributed-encoder/internal/controller/engine"
@@ -86,10 +88,76 @@ func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 
 // checkJobCompletion inspects the refreshed job counters and transitions the
 // job to "completed" or "failed" when no tasks remain pending or running.
+// When a controller-side ConcatRunner is configured and all encode tasks have
+// finished, it claims the pending concat task and runs it in a goroutine.
 func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 	job, err := s.store.GetJobByID(ctx, jobID)
 	if err != nil {
 		return status.Errorf(codes.Internal, "grpc reportresult: get job: %v", err)
+	}
+
+	// Controller-side concat: exactly one pending task (the concat) remains and
+	// no tasks are currently running.
+	if s.concatRunner != nil && job.TasksPending == 1 && job.TasksRunning == 0 {
+		tasks, err := s.store.ListTasksByJob(ctx, jobID)
+		if err != nil {
+			return status.Errorf(codes.Internal, "grpc reportresult: list tasks for concat: %v", err)
+		}
+
+		var concatTask *db.Task
+		for _, t := range tasks {
+			if t.TaskType == db.TaskTypeConcat && t.Status == "pending" {
+				concatTask = t
+				break
+			}
+		}
+
+		if concatTask != nil {
+			if job.TasksFailed > 0 {
+				// Encode chunks failed — skip concat and mark it failed.
+				_ = s.store.FailTask(ctx, concatTask.ID, -1, "skipped: chunk tasks failed")
+				_ = s.store.UpdateJobTaskCounts(ctx, jobID)
+				// Fall through to normal terminal logic below.
+			} else {
+				// CAS: transition concat task pending→running; only one goroutine wins.
+				if claimErr := s.store.ClaimConcatTask(ctx, concatTask.ID); claimErr != nil {
+					if errors.Is(claimErr, db.ErrNotFound) {
+						return nil // another goroutine already claimed it
+					}
+					return status.Errorf(codes.Internal, "grpc reportresult: claim concat task: %v", claimErr)
+				}
+
+				// Collect completed chunk paths sorted by chunk index.
+				sort.Slice(tasks, func(i, j int) bool {
+					return tasks[i].ChunkIndex < tasks[j].ChunkIndex
+				})
+				var chunkPaths []string
+				for _, t := range tasks {
+					if t.TaskType != db.TaskTypeConcat && t.Status == "completed" {
+						chunkPaths = append(chunkPaths, t.OutputPath)
+					}
+				}
+
+				go func() {
+					runErr := s.concatRunner.RunConcat(context.Background(), job, chunkPaths, concatTask.OutputPath)
+					if runErr != nil {
+						s.logger.Error("controller concat failed",
+							slog.String("job_id", jobID),
+							slog.String("error", runErr.Error()),
+						)
+						_ = s.store.FailTask(context.Background(), concatTask.ID, 1, runErr.Error())
+					} else {
+						_ = s.store.CompleteTask(context.Background(), db.CompleteTaskParams{
+							ID:       concatTask.ID,
+							ExitCode: 0,
+						})
+					}
+					_ = s.store.UpdateJobTaskCounts(context.Background(), jobID)
+					_ = s.checkJobCompletion(context.Background(), jobID)
+				}()
+				return nil // don't fall through to job completion yet
+			}
+		}
 	}
 
 	if job.TasksPending > 0 || job.TasksRunning > 0 {

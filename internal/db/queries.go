@@ -703,17 +703,9 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		    WHERE  t.status = 'pending'
 		      AND  j.status IN ('queued', 'running')
 		      AND  (j.target_tags = '{}' OR j.target_tags && $2::text[])
-		      -- Concat tasks may only run once every non-concat task in the same
-		      -- job has reached a terminal state (completed/failed/cancelled).
-		      AND  (
-		          t.task_type <> 'concat'
-		          OR NOT EXISTS (
-		              SELECT 1 FROM tasks t2
-		              WHERE  t2.job_id    = t.job_id
-		                AND  t2.task_type <> 'concat'
-		                AND  t2.status    NOT IN ('completed', 'failed', 'cancelled')
-		          )
-		      )
+		      -- Concat tasks are handled by the controller-side ConcatRunner and
+		      -- must never be dispatched to an agent.
+		      AND  t.task_type <> 'concat'
 		    ORDER BY j.priority DESC, j.created_at ASC, t.chunk_index ASC
 		    LIMIT  1
 		    FOR UPDATE OF t SKIP LOCKED
@@ -736,6 +728,22 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		return nil, nil // no work available
 	}
 	return t, err
+}
+
+// ClaimConcatTask atomically transitions a concat task from "pending" to
+// "running".  Returns ErrNotFound if the task does not exist or is no longer
+// in the pending state (i.e., another goroutine already claimed it).
+func (s *pgStore) ClaimConcatTask(ctx context.Context, id string) error {
+	const q = `UPDATE tasks SET status = 'running', started_at = now(), updated_at = now()
+	           WHERE id = $1 AND status = 'pending'`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: claim concat task: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *pgStore) UpdateTaskStatus(ctx context.Context, id, status string) error {

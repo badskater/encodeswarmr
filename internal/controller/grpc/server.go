@@ -13,6 +13,7 @@ import (
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 
 	"github.com/badskater/distributed-encoder/internal/controller/config"
+	"github.com/badskater/distributed-encoder/internal/controller/engine"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 	"google.golang.org/grpc"
@@ -23,11 +24,12 @@ import (
 // Server implements the AgentService gRPC server.
 type Server struct {
 	pb.UnimplementedAgentServiceServer
-	store    db.Store
-	cfg      *config.GRPCConfig
-	agentCfg *config.AgentConfig
-	logger   *slog.Logger
-	webhooks *webhooks.Service
+	store        db.Store
+	cfg          *config.GRPCConfig
+	agentCfg     *config.AgentConfig
+	logger       *slog.Logger
+	webhooks     *webhooks.Service
+	concatRunner engine.ConcatRunner // optional; triggers controller-side concat
 }
 
 // New creates a new gRPC Server.
@@ -40,6 +42,11 @@ func New(store db.Store, grpcCfg *config.GRPCConfig, agentCfg *config.AgentConfi
 		webhooks: wh,
 	}
 }
+
+// SetConcatRunner attaches a controller-side concat runner.  When set,
+// the final ffmpeg concat step runs on the controller after all chunk tasks
+// complete instead of being dispatched to an agent.
+func (s *Server) SetConcatRunner(r engine.ConcatRunner) { s.concatRunner = r }
 
 // Serve starts the gRPC server and blocks until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context) error {

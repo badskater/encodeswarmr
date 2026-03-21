@@ -177,6 +177,8 @@ func runServer(ctx context.Context, cfgPath string) error {
 		Concurrency: cfg.Analysis.Concurrency,
 	}, logger)
 	eng.SetAnalysisRunner(analysisRunner)
+	eng.SetConcatRunner(analysisRunner)
+	grpcSrv.SetConcatRunner(analysisRunner)
 	logger.Info("controller-side analysis runner attached",
 		"ffmpeg", cfg.Analysis.FFmpegBin,
 		"ffprobe", cfg.Analysis.FFprobeBin,

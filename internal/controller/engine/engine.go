@@ -23,6 +23,12 @@ type AnalysisRunner interface {
 	RunAudio(ctx context.Context, job *db.Job, source *db.Source) error
 }
 
+// ConcatRunner executes the final ffmpeg concat on the controller after
+// all chunk encode tasks complete.
+type ConcatRunner interface {
+	RunConcat(ctx context.Context, job *db.Job, chunkPaths []string, outputPath string) error
+}
+
 // Engine orchestrates job expansion and stale-agent detection on a timer.
 type Engine struct {
 	store    db.Store
@@ -30,6 +36,7 @@ type Engine struct {
 	cfg      Config
 	logger   *slog.Logger
 	analysis AnalysisRunner // optional; nil falls back to agent dispatch
+	concat   ConcatRunner   // optional; nil falls back to agent dispatch
 }
 
 // New creates an Engine. Does not start the background loop.
@@ -47,6 +54,13 @@ func New(store db.Store, cfg Config, logger *slog.Logger) *Engine {
 // dispatched to an agent.
 func (e *Engine) SetAnalysisRunner(r AnalysisRunner) {
 	e.analysis = r
+}
+
+// SetConcatRunner attaches a controller-side concat runner.  When set,
+// the final ffmpeg concat step runs on the controller instead of being
+// dispatched to an agent.
+func (e *Engine) SetConcatRunner(r ConcatRunner) {
+	e.concat = r
 }
 
 // Start launches the background dispatch loop in a goroutine.
