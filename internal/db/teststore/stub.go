@@ -162,5 +162,8 @@ func (Stub) DeleteSchedule(_ context.Context, _ string) error                   
 func (Stub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
 func (Stub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
+// --- Estimation ---
+func (Stub) GetAvgFPSStats(_ context.Context, _ string) (float64, int64, error) { return 0, 0, nil }
+
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }

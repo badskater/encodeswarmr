@@ -210,6 +210,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
 
+	// --- Encoding Presets ---
+	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))
+	mux.Handle("GET /api/v1/presets/{name}", viewer(s.handleGetPreset))
+
+	// --- Cost Estimation ---
+	mux.Handle("POST /api/v1/estimate", viewer(s.handleEstimate))
+
 	// --- Schedules ---
 	mux.Handle("GET /api/v1/schedules", viewer(s.handleListSchedules))
 	mux.Handle("POST /api/v1/schedules", admin(s.handleCreateSchedule))

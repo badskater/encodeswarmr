@@ -1719,6 +1719,33 @@ func (s *pgStore) MarkScheduleRun(ctx context.Context, p MarkScheduleRunParams) 
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Estimation
+// ---------------------------------------------------------------------------
+
+// GetAvgFPSStats returns the aggregate average avg_fps and number of completed
+// encode tasks for the given source.  Tasks with a NULL avg_fps are excluded.
+// Returns (0, 0, nil) when there are no matching rows.
+func (s *pgStore) GetAvgFPSStats(ctx context.Context, sourceID string) (float64, int64, error) {
+	const q = `
+		SELECT COALESCE(AVG(t.avg_fps), 0), COUNT(*)
+		FROM tasks t
+		JOIN jobs j ON t.job_id = j.id
+		WHERE j.source_id = $1
+		  AND j.job_type = 'encode'
+		  AND t.task_type = ''
+		  AND t.status = 'completed'
+		  AND t.avg_fps IS NOT NULL
+		  AND t.avg_fps > 0`
+	var avgFPS float64
+	var count int64
+	err := s.pool.QueryRow(ctx, q, sourceID).Scan(&avgFPS, &count)
+	if err != nil {
+		return 0, 0, fmt.Errorf("db: get avg fps stats: %w", err)
+	}
+	return avgFPS, count, nil
+}
+
 func scanSchedule(row pgx.Row) (*Schedule, error) {
 	var sc Schedule
 	var rawTmpl []byte
