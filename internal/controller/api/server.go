@@ -12,6 +12,7 @@ import (
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
 	"github.com/badskater/distributed-encoder/internal/controller/ha"
+	"github.com/badskater/distributed-encoder/internal/controller/plugins"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 )
@@ -26,10 +27,17 @@ type Server struct {
 	webhooks *webhooks.Service
 	hub      *Hub
 	leader   *ha.Leader
+	plugins  *plugins.Registry
 }
 
 // New creates and configures a new HTTP API server.
 func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service, ldr *ha.Leader) (*Server, error) {
+	// Initialise the plugin registry and register built-in plugins.
+	pluginReg := plugins.NewRegistry()
+	if err := plugins.RegisterBuiltins(pluginReg); err != nil {
+		return nil, fmt.Errorf("api: register builtin plugins: %w", err)
+	}
+
 	s := &Server{
 		store:    store,
 		auth:     authSvc,
@@ -38,6 +46,7 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		webhooks: wh,
 		hub:      NewHub(logger),
 		leader:   ldr,
+		plugins:  pluginReg,
 	}
 
 	mux := http.NewServeMux()
@@ -46,12 +55,14 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	// Middleware chain (outermost → innermost):
-	//   requestID → security-headers → CORS → rate-limit → ETag → mux
+	//   requestID → security-headers → CORS → rate-limit → metrics → ETag → mux
 	handler := s.requestIDMiddleware(
 		securityHeadersMiddleware(
 			corsMiddleware(cfg.Server.AllowedOrigins,
 				rateLimitMiddleware(
-					etagMiddleware(mux),
+					metricsMiddleware(
+						etagMiddleware(mux),
+					),
 				),
 			),
 		),
@@ -223,6 +234,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/schedules/{id}", viewer(s.handleGetSchedule))
 	mux.Handle("PUT /api/v1/schedules/{id}", admin(s.handleUpdateSchedule))
 	mux.Handle("DELETE /api/v1/schedules/{id}", admin(s.handleDeleteSchedule))
+
+	// --- Plugins ---
+	mux.Handle("GET /api/v1/plugins", viewer(s.handleListPlugins))
+	mux.Handle("PUT /api/v1/plugins/{name}/enable", admin(s.handleEnablePlugin))
+	mux.Handle("PUT /api/v1/plugins/{name}/disable", admin(s.handleDisablePlugin))
 
 	// Static UI — must be last so API routes take precedence.
 	staticH, err := s.staticHandler()
