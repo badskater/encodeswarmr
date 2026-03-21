@@ -43,9 +43,11 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "path must be a UNC path (\\\\server\\share\\...) or NFS mount path (/mnt/nas/...)")
 		return
 	}
-	if hasCloudURI && !isCloudURI(*req.CloudURI) {
-		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "cloud_uri must use a supported scheme: s3://, gs://, or az://")
-		return
+	if hasCloudURI {
+		if err := validateCloudURI(*req.CloudURI); err != nil {
+			writeProblem(w, r, http.StatusBadRequest, "Bad Request", err.Error())
+			return
+		}
 	}
 
 	filename := req.Name
@@ -91,12 +93,55 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusCreated, source)
 }
 
+// validTransitions maps each source state to the states it may transition into.
+var validTransitions = map[string][]string{
+	"detected": {"scanning", "ready"},
+	"scanning": {"ready", "detected"},
+	"ready":    {"encoding", "scanning"},
+	"encoding": {"done", "ready"},
+	"done":     {"scanning", "encoding"},
+}
+
+// isValidTransition reports whether transitioning a source from state from to
+// state to is permitted by the workflow rules.
+func isValidTransition(from, to string) bool {
+	for _, valid := range validTransitions[from] {
+		if valid == to {
+			return true
+		}
+	}
+	return false
+}
+
 // isCloudURI returns true when uri uses a supported cloud storage scheme.
 func isCloudURI(uri string) bool {
 	lower := strings.ToLower(uri)
 	return strings.HasPrefix(lower, "s3://") ||
 		strings.HasPrefix(lower, "gs://") ||
 		strings.HasPrefix(lower, "az://")
+}
+
+// validateCloudURI checks that a cloud URI uses a supported scheme and
+// contains a non-empty bucket/container and path after the scheme prefix.
+func validateCloudURI(uri string) error {
+	lower := strings.ToLower(uri)
+	switch {
+	case strings.HasPrefix(lower, "s3://"):
+		if len(uri) <= len("s3://") {
+			return fmt.Errorf("s3:// URI must include bucket and path")
+		}
+	case strings.HasPrefix(lower, "gs://"):
+		if len(uri) <= len("gs://") {
+			return fmt.Errorf("gs:// URI must include bucket and path")
+		}
+	case strings.HasPrefix(lower, "az://"):
+		if len(uri) <= len("az://") {
+			return fmt.Errorf("az:// URI must include container and path")
+		}
+	default:
+		return fmt.Errorf("unsupported cloud URI scheme: must be s3://, gs://, or az://")
+	}
+	return nil
 }
 
 // scheduleSourceAnalysis creates an analysis job (VMAF + scene detection) and

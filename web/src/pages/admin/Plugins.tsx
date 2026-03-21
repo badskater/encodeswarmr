@@ -55,10 +55,10 @@ function PluginCard({
   toggling,
 }: {
   plugin: Plugin
-  onToggle: (id: string, enabled: boolean) => void
+  onToggle: (name: string, enable: boolean) => void
   toggling: string | null
 }) {
-  const isToggling = toggling === plugin.id
+  const isToggling = toggling === plugin.name
 
   return (
     <div className="bg-th-surface rounded-lg shadow p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
@@ -87,7 +87,7 @@ function PluginCard({
 
           {/* Enable/disable toggle */}
           <button
-            onClick={() => onToggle(plugin.id, !plugin.enabled)}
+            onClick={() => onToggle(plugin.name, !plugin.enabled)}
             disabled={isToggling}
             className={`shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
               plugin.enabled ? 'bg-blue-600' : 'bg-th-border'
@@ -149,15 +149,15 @@ export default function Plugins() {
   useEffect(() => { load() }, [load])
   useAutoRefresh(load)
 
-  const handleToggle = async (id: string, enabled: boolean) => {
-    setToggling(id)
+  const handleToggle = async (name: string, enable: boolean) => {
+    setToggling(name)
     try {
       if (useMock) {
         // Optimistic update on mock data
-        setPlugins(prev => prev.map(p => p.id === id ? { ...p, enabled } : p))
+        setPlugins(prev => prev.map(p => p.name === name ? { ...p, enabled: enable } : p))
       } else {
-        const updated = await api.updatePlugin(id, enabled)
-        setPlugins(prev => prev.map(p => p.id === updated.id ? updated : p))
+        const updated = await api.togglePlugin(name, enable)
+        setPlugins(prev => prev.map(p => p.name === updated.name ? updated : p))
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to update plugin')

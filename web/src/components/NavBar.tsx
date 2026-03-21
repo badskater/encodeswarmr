@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
 import ThemePicker from './ThemePicker'
+import { useBranding } from '../contexts/BrandingContext'
 
 interface Props {
   role: string
@@ -22,6 +23,7 @@ const mobileLinkCls = ({ isActive }: { isActive: boolean }) =>
 export default function NavBar({ role, onLogout }: Props) {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { branding } = useBranding()
 
   const handleLogout = async () => {
     await api.logout()
@@ -38,7 +40,13 @@ export default function NavBar({ role, onLogout }: Props) {
 
           {/* Logo + desktop links */}
           <div className="flex items-center gap-1">
-            <span className="text-white font-semibold mr-4">Encoder</span>
+            {branding.logoUrl
+              ? <img src={branding.logoUrl} alt="Logo" className="h-6 w-6 object-contain mr-3" />
+              : null
+            }
+            <span className="text-white font-semibold mr-4">
+              {branding.appTitle || 'Encoder'}
+            </span>
 
             {/* Desktop nav links — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1">
@@ -57,6 +65,7 @@ export default function NavBar({ role, onLogout }: Props) {
                   <NavLink to="/admin/enrollment-tokens" className={linkCls}>Tokens</NavLink>
                   <NavLink to="/admin/schedules" className={linkCls}>Schedules</NavLink>
                   <NavLink to="/admin/plugins" className={linkCls}>Plugins</NavLink>
+                  <NavLink to="/admin/theme" className={linkCls}>Theme</NavLink>
                 </>
               )}
             </div>
@@ -116,6 +125,7 @@ export default function NavBar({ role, onLogout }: Props) {
                 <NavLink to="/admin/enrollment-tokens" className={mobileLinkCls} onClick={closeMenu}>Tokens</NavLink>
                 <NavLink to="/admin/schedules" className={mobileLinkCls} onClick={closeMenu}>Schedules</NavLink>
                 <NavLink to="/admin/plugins" className={mobileLinkCls} onClick={closeMenu}>Plugins</NavLink>
+                <NavLink to="/admin/theme" className={mobileLinkCls} onClick={closeMenu}>Theme</NavLink>
               </>
             )}
             <div className="border-t border-th-nav-hover mt-1 pt-1">

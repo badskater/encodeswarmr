@@ -252,6 +252,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("PUT /api/v1/plugins/{name}/enable", admin(s.handleEnablePlugin))
 	mux.Handle("PUT /api/v1/plugins/{name}/disable", admin(s.handleDisablePlugin))
 
+	// --- Dashboard metrics ---
+	mux.Handle("GET /api/v1/metrics/throughput", viewer(s.handleThroughput))
+	mux.Handle("GET /api/v1/metrics/queue", viewer(s.handleQueueSummary))
+	mux.Handle("GET /api/v1/metrics/activity", viewer(s.handleRecentActivity))
+
 	// Static UI — must be last so API routes take precedence.
 	staticH, err := s.staticHandler()
 	if err != nil {

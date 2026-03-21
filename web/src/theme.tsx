@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 export type Theme = 'light' | 'dark' | 'dim'
 
 const STORAGE_KEY = 'de-theme'
+const OVERRIDES_KEY = 'distencoder-theme-overrides'
 const VALID: Theme[] = ['light', 'dark', 'dim']
 
 function getInitialTheme(): Theme {
@@ -19,6 +20,19 @@ function applyTheme(theme: Theme) {
   }
 }
 
+// Re-apply any persisted CSS variable overrides so they survive theme switches.
+function reapplyOverrides() {
+  try {
+    const raw = localStorage.getItem(OVERRIDES_KEY)
+    if (!raw) return
+    const overrides = JSON.parse(raw) as Record<string, string>
+    const el = document.documentElement
+    Object.entries(overrides).forEach(([key, value]) => {
+      el.style.setProperty(key, value)
+    })
+  } catch {}
+}
+
 interface ThemeCtx { theme: Theme; setTheme: (t: Theme) => void }
 const ThemeContext = createContext<ThemeCtx>({ theme: 'light', setTheme: () => {} })
 
@@ -28,10 +42,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyTheme(theme)
     localStorage.setItem(STORAGE_KEY, theme)
+    // Re-apply overrides after theme switch so custom vars stay on top
+    reapplyOverrides()
   }, [theme])
 
-  // Apply on mount to avoid flash before React hydrates
-  useEffect(() => { applyTheme(getInitialTheme()) }, [])
+  // Apply on mount to avoid flash before React hydrates, then restore overrides
+  useEffect(() => {
+    applyTheme(getInitialTheme())
+    reapplyOverrides()
+  }, [])
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme: setThemeState }}>

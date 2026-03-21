@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 )
 
@@ -33,7 +34,9 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, data any) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(env)
+	if err := json.NewEncoder(w).Encode(env); err != nil {
+		slog.Warn("response write failed", "error", err)
+	}
 }
 
 // writeProblem writes an RFC 9457 problem details response.
@@ -49,7 +52,9 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(p)
+	if err := json.NewEncoder(w).Encode(p); err != nil {
+		slog.Warn("response write failed", "error", err)
+	}
 }
 
 // writeCollection serialises a paginated collection response.
@@ -66,7 +71,9 @@ func writeCollection(w http.ResponseWriter, r *http.Request, data any, totalCoun
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Total-Count", fmt.Sprintf("%d", totalCount))
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(envelope{Data: data, Meta: meta})
+	if err := json.NewEncoder(w).Encode(envelope{Data: data, Meta: meta}); err != nil {
+		slog.Warn("response write failed", "error", err)
+	}
 }
 
 func problemSlug(status int) string {
