@@ -154,7 +154,7 @@ type Store interface {
 
 // pgStore implements Store using a pgx connection pool.
 type pgStore struct {
-	pool *pgxpool.Pool
+	pool poolIface
 }
 
 // New opens a pgx connection pool and returns a Store.
