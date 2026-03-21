@@ -247,6 +247,10 @@ logging:
   compress: true
   stream_buffer_size: 1000
   stream_flush_interval: 1s
+
+vnc:
+  enabled: false
+  port: 5900
 "@
 
 Set-Content -Path $ConfigPath -Value $configYaml -Encoding UTF8

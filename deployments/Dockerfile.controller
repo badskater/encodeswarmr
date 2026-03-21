@@ -51,12 +51,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ── Stage 5: Runtime ─────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
+LABEL org.opencontainers.image.title="Distributed Encoder Controller" \
+      org.opencontainers.image.description="Orchestrates distributed video encoding with HA, cloud storage, scheduling, and plugins" \
+      org.opencontainers.image.source="https://github.com/badskater/distributed-encoder" \
+      org.opencontainers.image.licenses="AGPL-3.0"
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=go-builder   /controller                  /app/controller
+COPY --from=go-builder   /src/internal/db/migrations  /app/migrations
 COPY --from=ffmpeg-source /ffmpeg                      /usr/local/bin/ffmpeg
 COPY --from=ffmpeg-source /ffprobe                     /usr/local/bin/ffprobe
 COPY --from=tools-fetcher /usr/local/bin/dovi_tool     /usr/local/bin/dovi_tool

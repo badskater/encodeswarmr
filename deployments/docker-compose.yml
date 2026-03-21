@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   controller:
     build:
@@ -13,6 +11,10 @@ services:
     environment:
       # Set if dovi_tool is installed at a non-default path (default: /usr/local/bin/dovi_tool)
       # DOVI_TOOL_BIN: /usr/local/bin/dovi_tool
+      # Cloud storage credentials (optional)
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-sa.json
     volumes:
       # Mount NAS NFS shares so the analysis runner can access source files.
       # Paths must match the linux_prefix values in path_mappings config.

@@ -119,8 +119,8 @@ end;
   encoding tool at its default path. }
 procedure RunToolVerification;
 var
-  Names : array[0..5] of String;
-  Paths : array[0..5] of String;
+  Names : array[0..6] of String;
+  Paths : array[0..6] of String;
   I, Missing : Integer;
   Status, Line : String;
 begin
@@ -130,6 +130,7 @@ begin
   Names[3] := 'x264';
   Names[4] := 'AviSynth+';
   Names[5] := 'VapourSynth';
+  Names[6] := 'dovi_tool';
 
   Paths[0] := 'C:\Tools\ffmpeg\ffmpeg.exe';
   Paths[1] := 'C:\Tools\ffmpeg\ffprobe.exe';
@@ -137,13 +138,14 @@ begin
   Paths[3] := 'C:\Tools\x264\x264.exe';
   Paths[4] := 'C:\Program Files\AviSynth+\avs2pipemod.exe';
   Paths[5] := 'C:\Program Files\VapourSynth\vspipe.exe';
+  Paths[6] := 'C:\Tools\dovi_tool\dovi_tool.exe';
 
   GToolsMemo.Lines.Clear;
   GToolsMemo.Lines.Add('Tool           Path                                       Status');
   GToolsMemo.Lines.Add(StringOfChar('-', 72));
 
   Missing := 0;
-  for I := 0 to 5 do
+  for I := 0 to 6 do
   begin
     if FileExists(Paths[I]) then
       Status := 'FOUND  '
@@ -230,6 +232,10 @@ begin
     Lines.Add('  compress: true');
     Lines.Add('  stream_buffer_size: 1000');
     Lines.Add('  stream_flush_interval: 1s');
+    Lines.Add('');
+    Lines.Add('vnc:');
+    Lines.Add('  enabled: false');
+    Lines.Add('  port: 5900');
 
     Lines.SaveToFile(GConfigPath);
   finally

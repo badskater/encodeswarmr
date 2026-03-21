@@ -115,6 +115,14 @@ if ! docker compose version &>/dev/null; then
   error "Docker Compose V2 not found. Ensure docker-compose-plugin is installed."
 fi
 
+# ffmpeg is required on the controller host for analysis and chunk concat.
+# Inside Docker it is bundled; for bare-metal installs warn if not present.
+if ! command -v ffmpeg &>/dev/null; then
+  warn "ffmpeg not found in PATH. Controller-side analysis (HDR detect, VMAF, scene scan) requires ffmpeg."
+  warn "Install with: apt-get install -y ffmpeg"
+  warn "Continuing — ffmpeg is bundled inside the Docker image if using docker compose."
+fi
+
 # ── Step 2: Create directory structure ────────────────────────────────────────
 step "2/7" "Creating directory structure at ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"/{certs,data,logs,scripts}

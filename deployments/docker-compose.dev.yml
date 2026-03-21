@@ -12,8 +12,6 @@
 #
 # Requires: POSTGRES_PASSWORD set in ../.env (or inline below)
 
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
