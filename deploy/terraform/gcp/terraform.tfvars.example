@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------------------
+# terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in the required values.
+# Do NOT commit terraform.tfvars to source control — it contains secrets.
+# ---------------------------------------------------------------------------
+
+# Required: your GCP project ID.
+project_id = "my-gcp-project-id"
+
+# Region and zone. Defaults shown.
+region = "us-central1"
+zone   = "us-central1-a"
+
+# Deployment environment label applied to all resources.
+environment = "prod"
+
+# ---------------------------------------------------------------------------
+# Compute
+# ---------------------------------------------------------------------------
+
+# e2-standard-2 (2 vCPU, 8 GB) is sufficient for the controller.
+controller_machine_type = "e2-standard-2"
+
+# c2-standard-8 (8 vCPU, 32 GB) provides good encoding throughput.
+# For GPU-accelerated encoding, use n1-standard-8 + an accelerator.
+agent_machine_type = "c2-standard-8"
+
+# Number of concurrent agent VMs.
+agent_count = 2
+
+# ---------------------------------------------------------------------------
+# High availability
+# ---------------------------------------------------------------------------
+
+# Set to true to deploy:
+#   - 2-instance controller MIG + HTTP/TCP load balancers
+#   - REGIONAL Cloud SQL with point-in-time recovery
+# Set to false (default) for a simpler, lower-cost single-VM deployment.
+enable_ha = false
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+
+db_tier     = "db-custom-2-8192"
+db_name     = "distencoder"
+db_user     = "distencoder"
+db_password = "CHANGE_ME_use_a_strong_random_password"
+
+# ---------------------------------------------------------------------------
+# Access
+# ---------------------------------------------------------------------------
+
+ssh_user       = "distencoder"
+ssh_public_key = "ssh-ed25519 AAAA... user@host"
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+
+distencoder_version = "1.0.4"
+
+# ---------------------------------------------------------------------------
+# Networking
+# ---------------------------------------------------------------------------
+
+network_cidr           = "10.100.0.0/16"
+controller_subnet_cidr = "10.100.1.0/24"
+agent_subnet_cidr      = "10.100.2.0/24"
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
+
+# BASIC_HDD: lower cost (~$0.20/GiB/month), suitable for most workloads.
+# BASIC_SSD: lower latency (~$0.35/GiB/month), recommended for heavy workloads.
+filestore_tier        = "BASIC_HDD"
+filestore_capacity_gb = 1024

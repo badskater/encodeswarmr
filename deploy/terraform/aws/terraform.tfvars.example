@@ -1,0 +1,74 @@
+# ── terraform.tfvars.example ───────────────────────────────────────────────────
+# Copy to terraform.tfvars and fill in the required values.
+# Never commit terraform.tfvars — it contains secrets.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   # Edit terraform.tfvars
+#   terraform init
+#   terraform plan
+#   terraform apply
+
+# ── General ────────────────────────────────────────────────────────────────────
+
+region      = "us-east-1"
+environment = "dev"        # dev | staging | prod
+
+# ── Networking ─────────────────────────────────────────────────────────────────
+
+vpc_cidr = "10.10.0.0/16"
+
+# Restrict SSH access to your office/VPN IP range.
+# Set to [] to disable port 22 entirely (recommended; use SSM Session Manager).
+allowed_ssh_cidrs = ["203.0.113.0/24"]
+
+# ── Compute ────────────────────────────────────────────────────────────────────
+
+controller_instance_type = "t3.medium"    # adequate for most workloads
+agent_instance_type      = "c5.2xlarge"   # 8 vCPU / 16 GiB — good for x264/x265
+agent_count              = 2
+
+# Name of an existing EC2 key pair (leave empty to rely on SSM only)
+ssh_key_name = ""
+
+# ── High Availability ──────────────────────────────────────────────────────────
+# Set to true for production deployments.
+# When true: 2 controller instances, RDS Multi-AZ, ALB + NLB, 2 NAT gateways.
+
+enable_ha = false
+
+# ── Database ───────────────────────────────────────────────────────────────────
+
+db_instance_class        = "db.t3.medium"
+db_multi_az              = false   # overridden to true when enable_ha = true
+db_name                  = "distencoder"
+db_username              = "distencoder"
+db_password              = "CHANGE_ME_use_a_long_random_password_here"   # min 16 chars
+db_allocated_storage     = 20     # GiB
+db_max_allocated_storage = 100    # GiB autoscaling ceiling
+db_backup_retention_days = 7
+
+# ── Storage ────────────────────────────────────────────────────────────────────
+
+efs_performance_mode = "generalPurpose"   # generalPurpose | maxIO
+efs_throughput_mode  = "bursting"         # bursting | provisioned | elastic
+
+# ── Application ────────────────────────────────────────────────────────────────
+
+distencoder_version = "1.0.4"
+
+# Long random string — generate with: openssl rand -hex 32
+controller_session_secret = "CHANGE_ME_generate_with_openssl_rand_hex_32"
+
+enable_oidc = false
+
+# ── Example HA production overrides ───────────────────────────────────────────
+# Uncomment the block below and set enable_ha = true for a production deployment.
+#
+# environment              = "prod"
+# enable_ha                = true
+# controller_instance_type = "t3.large"
+# agent_instance_type      = "c5.4xlarge"
+# agent_count              = 4
+# db_instance_class        = "db.r6g.large"
+# db_backup_retention_days = 14
+# efs_throughput_mode      = "elastic"
