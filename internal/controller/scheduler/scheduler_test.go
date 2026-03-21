@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -172,6 +173,7 @@ func TestNew_Construction(t *testing.T) {
 // scheduleStoreStub overrides schedule-related Store methods for tick/fire tests.
 type scheduleStoreStub struct {
 	teststore.Stub
+	mu sync.Mutex
 
 	due        []*db.Schedule
 	listErr    error
@@ -184,10 +186,14 @@ type scheduleStoreStub struct {
 }
 
 func (s *scheduleStoreStub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.due, s.listErr
 }
 
 func (s *scheduleStoreStub) CreateJob(_ context.Context, p db.CreateJobParams) (*db.Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.createJobErr != nil {
 		return nil, s.createJobErr
 	}
@@ -202,6 +208,8 @@ func (s *scheduleStoreStub) CreateJob(_ context.Context, p db.CreateJobParams) (
 }
 
 func (s *scheduleStoreStub) MarkScheduleRun(_ context.Context, p db.MarkScheduleRunParams) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.markedRuns = append(s.markedRuns, p)
 	return s.markRunErr
 }

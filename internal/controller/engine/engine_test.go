@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,17 +21,17 @@ import (
 // tests can verify the loop ticks correctly.
 type engineLoopStub struct {
 	teststore.Stub
-	expandCalls int
-	staleCalls  int
+	expandCalls atomic.Int64
+	staleCalls  atomic.Int64
 }
 
 func (s *engineLoopStub) GetJobsNeedingExpansion(_ context.Context) ([]*db.Job, error) {
-	s.expandCalls++
+	s.expandCalls.Add(1)
 	return nil, nil
 }
 
 func (s *engineLoopStub) MarkStaleAgents(_ context.Context, _ time.Duration) (int64, error) {
-	s.staleCalls++
+	s.staleCalls.Add(1)
 	return 0, nil
 }
 
@@ -92,10 +93,10 @@ func TestStart_LoopExitsOnContextCancel(t *testing.T) {
 
 	// The loop must have called expandPendingJobs at least once during the
 	// 50 ms window with a 1 ms tick interval.
-	if stub.expandCalls == 0 {
+	if stub.expandCalls.Load() == 0 {
 		t.Error("expected expandPendingJobs to be called at least once")
 	}
-	if stub.staleCalls == 0 {
+	if stub.staleCalls.Load() == 0 {
 		t.Error("expected MarkStaleAgents to be called at least once")
 	}
 }

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/badskater/distributed-encoder/internal/db"
 	"github.com/badskater/distributed-encoder/internal/db/teststore"
@@ -19,6 +21,7 @@ import (
 // expand code paths.
 type expandStub struct {
 	teststore.Stub
+	mu sync.Mutex
 
 	// GetJobsNeedingExpansion
 	jobs    []*db.Job
@@ -71,7 +74,9 @@ func (s *expandStub) SetTaskScriptDir(_ context.Context, _, _ string) error {
 }
 
 func (s *expandStub) UpdateJobStatus(_ context.Context, _ string, status string) error {
+	s.mu.Lock()
 	s.statusUpdates = append(s.statusUpdates, status)
+	s.mu.Unlock()
 	return s.statusErr
 }
 
@@ -536,7 +541,7 @@ func TestExpandControllerAnalysisJob_RoutesHDRDetect(t *testing.T) {
 	stub := &expandStub{
 		source: &db.Source{ID: "s1", UNCPath: `\\nas\a.mkv`},
 	}
-	runner := &recordingAnalysisRunner{}
+	runner := newRecordingAnalysisRunner()
 	e := newTestEngine(t, stub)
 	e.SetAnalysisRunner(runner)
 
@@ -547,8 +552,8 @@ func TestExpandControllerAnalysisJob_RoutesHDRDetect(t *testing.T) {
 	}
 	// Allow the goroutine to complete.
 	runner.waitForCall(t)
-	if runner.calledMethod != "RunHDRDetect" {
-		t.Errorf("expected RunHDRDetect to be called, got %q", runner.calledMethod)
+	if runner.getCalledMethod() != "RunHDRDetect" {
+		t.Errorf("expected RunHDRDetect to be called, got %q", runner.getCalledMethod())
 	}
 }
 
@@ -556,7 +561,7 @@ func TestExpandControllerAnalysisJob_RoutesAnalysis(t *testing.T) {
 	stub := &expandStub{
 		source: &db.Source{ID: "s1", UNCPath: `\\nas\a.mkv`},
 	}
-	runner := &recordingAnalysisRunner{}
+	runner := newRecordingAnalysisRunner()
 	e := newTestEngine(t, stub)
 	e.SetAnalysisRunner(runner)
 
@@ -565,8 +570,8 @@ func TestExpandControllerAnalysisJob_RoutesAnalysis(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	runner.waitForCall(t)
-	if runner.calledMethod != "RunAnalysis" {
-		t.Errorf("expected RunAnalysis, got %q", runner.calledMethod)
+	if runner.getCalledMethod() != "RunAnalysis" {
+		t.Errorf("expected RunAnalysis, got %q", runner.getCalledMethod())
 	}
 }
 
@@ -574,7 +579,7 @@ func TestExpandControllerAnalysisJob_RoutesAudio(t *testing.T) {
 	stub := &expandStub{
 		source: &db.Source{ID: "s1", UNCPath: `\\nas\a.mkv`},
 	}
-	runner := &recordingAnalysisRunner{}
+	runner := newRecordingAnalysisRunner()
 	e := newTestEngine(t, stub)
 	e.SetAnalysisRunner(runner)
 
@@ -583,8 +588,8 @@ func TestExpandControllerAnalysisJob_RoutesAudio(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	runner.waitForCall(t)
-	if runner.calledMethod != "RunAudio" {
-		t.Errorf("expected RunAudio, got %q", runner.calledMethod)
+	if runner.getCalledMethod() != "RunAudio" {
+		t.Errorf("expected RunAudio, got %q", runner.getCalledMethod())
 	}
 }
 
@@ -592,43 +597,50 @@ func TestExpandControllerAnalysisJob_RoutesAudio(t *testing.T) {
 // channel so tests can synchronise with the goroutine spawned by
 // expandControllerAnalysisJob.
 type recordingAnalysisRunner struct {
+	mu           sync.Mutex
 	calledMethod string
 	done         chan struct{}
 }
 
-func (r *recordingAnalysisRunner) init() {
-	if r.done == nil {
-		r.done = make(chan struct{}, 1)
-	}
+func newRecordingAnalysisRunner() *recordingAnalysisRunner {
+	return &recordingAnalysisRunner{done: make(chan struct{}, 1)}
 }
 
 func (r *recordingAnalysisRunner) waitForCall(t *testing.T) {
 	t.Helper()
-	r.init()
 	select {
 	case <-r.done:
-	case <-context.Background().Done():
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for analysis runner call")
 	}
 }
 
+func (r *recordingAnalysisRunner) getCalledMethod() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calledMethod
+}
+
 func (r *recordingAnalysisRunner) RunHDRDetect(_ context.Context, _ *db.Job, _ *db.Source) error {
-	r.init()
+	r.mu.Lock()
 	r.calledMethod = "RunHDRDetect"
+	r.mu.Unlock()
 	r.done <- struct{}{}
 	return nil
 }
 
 func (r *recordingAnalysisRunner) RunAnalysis(_ context.Context, _ *db.Job, _ *db.Source) error {
-	r.init()
+	r.mu.Lock()
 	r.calledMethod = "RunAnalysis"
+	r.mu.Unlock()
 	r.done <- struct{}{}
 	return nil
 }
 
 func (r *recordingAnalysisRunner) RunAudio(_ context.Context, _ *db.Job, _ *db.Source) error {
-	r.init()
+	r.mu.Lock()
 	r.calledMethod = "RunAudio"
+	r.mu.Unlock()
 	r.done <- struct{}{}
 	return nil
 }
