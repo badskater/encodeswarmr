@@ -78,6 +78,7 @@ func (Stub) CreateTask(_ context.Context, _ db.CreateTaskParams) (*db.Task, erro
 func (Stub) GetTaskByID(_ context.Context, _ string) (*db.Task, error)                   { return nil, nil }
 func (Stub) ListTasksByJob(_ context.Context, _ string) ([]*db.Task, error)              { return nil, nil }
 func (Stub) ClaimNextTask(_ context.Context, _ string, _ []string) (*db.Task, error)     { return nil, nil }
+func (Stub) ClaimConcatTask(_ context.Context, _ string) error                           { return nil }
 func (Stub) UpdateTaskStatus(_ context.Context, _, _ string) error                       { return nil }
 func (Stub) SetTaskScriptDir(_ context.Context, _, _ string) error                       { return nil }
 func (Stub) CompleteTask(_ context.Context, _ db.CompleteTaskParams) error               { return nil }

@@ -180,15 +180,18 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 		return fmt.Errorf("engine: create concat task: %w", err)
 	}
 
-	concatScriptDir, err := e.gen.RenderConcat(ctx, job, concatTask, chunkPaths, finalOutput)
-	if err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: render concat scripts: %w", err)
-	}
+	// Only generate agent-side concat scripts if no controller-side runner.
+	if e.concat == nil {
+		concatScriptDir, err := e.gen.RenderConcat(ctx, job, concatTask, chunkPaths, finalOutput)
+		if err != nil {
+			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+			return fmt.Errorf("engine: render concat scripts: %w", err)
+		}
 
-	if err := e.store.SetTaskScriptDir(ctx, concatTask.ID, concatScriptDir); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: set script dir for concat task: %w", err)
+		if err := e.store.SetTaskScriptDir(ctx, concatTask.ID, concatScriptDir); err != nil {
+			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+			return fmt.Errorf("engine: set script dir for concat task: %w", err)
+		}
 	}
 
 	// All tasks created successfully — update counters and keep status as queued.

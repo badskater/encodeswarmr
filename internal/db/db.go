@@ -65,6 +65,7 @@ type Store interface {
 	GetTaskByID(ctx context.Context, id string) (*Task, error)
 	ListTasksByJob(ctx context.Context, jobID string) ([]*Task, error)
 	ClaimNextTask(ctx context.Context, agentID string, tags []string) (*Task, error)
+	ClaimConcatTask(ctx context.Context, id string) error
 	UpdateTaskStatus(ctx context.Context, id, status string) error
 	SetTaskScriptDir(ctx context.Context, id, scriptDir string) error
 	CompleteTask(ctx context.Context, p CompleteTaskParams) error
