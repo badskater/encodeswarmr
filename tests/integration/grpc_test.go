@@ -168,14 +168,18 @@ func TestGRPCPollTask(t *testing.T) {
 		t.Fatalf("CreateSource: %v", err)
 	}
 
+	// Create a template required by the engine's script generator.
+	tmpl := testharness.CreateTestTemplate(t, tc.Store)
+
 	job, err := tc.Store.CreateJob(context.Background(), db.CreateJobParams{
 		SourceID:   src.ID,
 		JobType:    "encode",
 		Priority:   0,
 		TargetTags: []string{},
 		EncodeConfig: db.EncodeConfig{
-			OutputRoot:      `\\nas01\output`,
-			OutputExtension: "mkv",
+			RunScriptTemplateID: tmpl.ID,
+			OutputRoot:          `\\nas01\output`,
+			OutputExtension:     "mkv",
 			ChunkBoundaries: []db.ChunkBoundary{
 				{StartFrame: 0, EndFrame: 999},
 			},
@@ -239,14 +243,18 @@ func TestGRPCReportResult(t *testing.T) {
 		t.Fatalf("CreateSource: %v", err)
 	}
 
+	// Create a template required by the engine's script generator.
+	tmpl := testharness.CreateTestTemplate(t, tc.Store)
+
 	job, err := tc.Store.CreateJob(context.Background(), db.CreateJobParams{
 		SourceID:   src.ID,
 		JobType:    "encode",
 		Priority:   0,
 		TargetTags: []string{},
 		EncodeConfig: db.EncodeConfig{
-			OutputRoot:      `\\nas01\output`,
-			OutputExtension: "mkv",
+			RunScriptTemplateID: tmpl.ID,
+			OutputRoot:          `\\nas01\output`,
+			OutputExtension:     "mkv",
 			ChunkBoundaries: []db.ChunkBoundary{
 				{StartFrame: 0, EndFrame: 499},
 			},
@@ -338,14 +346,18 @@ func TestGRPCStreamLogs(t *testing.T) {
 		t.Fatalf("CreateSource: %v", err)
 	}
 
+	// Create a template required by the engine's script generator.
+	tmpl := testharness.CreateTestTemplate(t, tc.Store)
+
 	job, err := tc.Store.CreateJob(context.Background(), db.CreateJobParams{
 		SourceID:   src.ID,
 		JobType:    "encode",
 		Priority:   0,
 		TargetTags: []string{},
 		EncodeConfig: db.EncodeConfig{
-			OutputRoot:      `\\nas01\output`,
-			OutputExtension: "mkv",
+			RunScriptTemplateID: tmpl.ID,
+			OutputRoot:          `\\nas01\output`,
+			OutputExtension:     "mkv",
 			ChunkBoundaries: []db.ChunkBoundary{
 				{StartFrame: 0, EndFrame: 99},
 			},
@@ -457,14 +469,18 @@ func TestGRPCSyncOffline(t *testing.T) {
 		t.Fatalf("CreateSource: %v", err)
 	}
 
+	// Create a template required by the engine's script generator.
+	tmpl := testharness.CreateTestTemplate(t, tc.Store)
+
 	job, err := tc.Store.CreateJob(context.Background(), db.CreateJobParams{
 		SourceID:   src.ID,
 		JobType:    "encode",
 		Priority:   0,
 		TargetTags: []string{},
 		EncodeConfig: db.EncodeConfig{
-			OutputRoot:      `\\nas01\output`,
-			OutputExtension: "mkv",
+			RunScriptTemplateID: tmpl.ID,
+			OutputRoot:          `\\nas01\output`,
+			OutputExtension:     "mkv",
 			ChunkBoundaries: []db.ChunkBoundary{
 				{StartFrame: 0, EndFrame: 299},
 			},

@@ -38,9 +38,10 @@ func TestE2E_HappyPath(t *testing.T) {
 	}
 
 	job, err := tc.Store.CreateJob(ctx, db.CreateJobParams{
-		SourceID: source.ID,
-		JobType:  "encode",
-		Priority: 5,
+		SourceID:   source.ID,
+		JobType:    "encode",
+		Priority:   5,
+		TargetTags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)
@@ -116,9 +117,10 @@ func TestE2E_TaskFailure(t *testing.T) {
 	}
 
 	job, err := tc.Store.CreateJob(ctx, db.CreateJobParams{
-		SourceID: source.ID,
-		JobType:  "encode",
-		Priority: 5,
+		SourceID:   source.ID,
+		JobType:    "encode",
+		Priority:   5,
+		TargetTags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)
@@ -185,9 +187,10 @@ func TestE2E_MultipleAgents(t *testing.T) {
 	}
 
 	job, err := tc.Store.CreateJob(ctx, db.CreateJobParams{
-		SourceID: source.ID,
-		JobType:  "encode",
-		Priority: 5,
+		SourceID:   source.ID,
+		JobType:    "encode",
+		Priority:   5,
+		TargetTags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)
@@ -338,9 +341,10 @@ func TestE2E_OfflineSync(t *testing.T) {
 	}
 
 	job, err := tc.Store.CreateJob(ctx, db.CreateJobParams{
-		SourceID: source.ID,
-		JobType:  "encode",
-		Priority: 5,
+		SourceID:   source.ID,
+		JobType:    "encode",
+		Priority:   5,
+		TargetTags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)

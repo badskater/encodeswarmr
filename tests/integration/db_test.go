@@ -531,7 +531,7 @@ func TestJobs(t *testing.T) {
 
 	t.Run("GetJobByID", func(t *testing.T) {
 		job, err := store.CreateJob(ctx, db.CreateJobParams{
-			SourceID: src.ID, JobType: "encode",
+			SourceID: src.ID, JobType: "encode", TargetTags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("CreateJob: %v", err)
@@ -558,8 +558,9 @@ func TestJobs(t *testing.T) {
 	t.Run("GetJobsNeedingExpansion", func(t *testing.T) {
 		// Create a queued job with non-empty EncodeConfig so it would be picked up.
 		_, err := store.CreateJob(ctx, db.CreateJobParams{
-			SourceID: src.ID,
-			JobType:  "encode",
+			SourceID:   src.ID,
+			JobType:    "encode",
+			TargetTags: []string{},
 			EncodeConfig: db.EncodeConfig{
 				OutputRoot:      `\\nas01\out`,
 				OutputExtension: "mkv",
@@ -580,7 +581,7 @@ func TestJobs(t *testing.T) {
 
 	t.Run("UpdateJobStatus", func(t *testing.T) {
 		job, err := store.CreateJob(ctx, db.CreateJobParams{
-			SourceID: src.ID, JobType: "encode",
+			SourceID: src.ID, JobType: "encode", TargetTags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("CreateJob: %v", err)
@@ -599,7 +600,7 @@ func TestJobs(t *testing.T) {
 
 	t.Run("UpdateJobTaskCounts", func(t *testing.T) {
 		job, err := store.CreateJob(ctx, db.CreateJobParams{
-			SourceID: src.ID, JobType: "encode",
+			SourceID: src.ID, JobType: "encode", TargetTags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("CreateJob: %v", err)
