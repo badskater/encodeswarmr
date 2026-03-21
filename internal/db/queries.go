@@ -639,21 +639,21 @@ func (s *pgStore) CreateTask(ctx context.Context, p CreateTaskParams) (*Task, er
 		return nil, fmt.Errorf("db: marshal task variables: %w", err)
 	}
 	const q = `
-		INSERT INTO tasks (job_id, chunk_index, source_path, output_path, variables)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, job_id, chunk_index, status, agent_id,
+		INSERT INTO tasks (job_id, chunk_index, task_type, source_path, output_path, variables)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, job_id, chunk_index, task_type, status, agent_id,
 		          script_dir, source_path, output_path, variables,
 		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 		          vmaf_score, psnr, ssim, error_msg,
 		          started_at, completed_at, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
-		p.JobID, p.ChunkIndex, p.SourcePath, p.OutputPath, varsJSON,
+		p.JobID, p.ChunkIndex, p.TaskType, p.SourcePath, p.OutputPath, varsJSON,
 	)
 	return scanTask(row)
 }
 
 func (s *pgStore) GetTaskByID(ctx context.Context, id string) (*Task, error) {
-	const q = `SELECT id, job_id, chunk_index, status, agent_id,
+	const q = `SELECT id, job_id, chunk_index, task_type, status, agent_id,
 	                  script_dir, source_path, output_path, variables,
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
@@ -663,7 +663,7 @@ func (s *pgStore) GetTaskByID(ctx context.Context, id string) (*Task, error) {
 }
 
 func (s *pgStore) ListTasksByJob(ctx context.Context, jobID string) ([]*Task, error) {
-	const q = `SELECT id, job_id, chunk_index, status, agent_id,
+	const q = `SELECT id, job_id, chunk_index, task_type, status, agent_id,
 	                  script_dir, source_path, output_path, variables,
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
@@ -687,6 +687,10 @@ func (s *pgStore) ListTasksByJob(ctx context.Context, jobID string) ([]*Task, er
 
 // ClaimNextTask atomically selects and assigns the next pending task to the
 // given agent, respecting job priority and tag matching.
+//
+// Concat tasks (task_type = 'concat') are only eligible once all non-concat
+// sibling tasks within the same job have reached a terminal status
+// (completed, failed, or cancelled).
 func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []string) (*Task, error) {
 	// Use a CTE with FOR UPDATE SKIP LOCKED to prevent double-assignment
 	// under concurrent agent polls.
@@ -698,6 +702,17 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		    WHERE  t.status = 'pending'
 		      AND  j.status IN ('queued', 'running')
 		      AND  (j.target_tags = '{}' OR j.target_tags && $2::text[])
+		      -- Concat tasks may only run once every non-concat task in the same
+		      -- job has reached a terminal state (completed/failed/cancelled).
+		      AND  (
+		          t.task_type <> 'concat'
+		          OR NOT EXISTS (
+		              SELECT 1 FROM tasks t2
+		              WHERE  t2.job_id    = t.job_id
+		                AND  t2.task_type <> 'concat'
+		                AND  t2.status    NOT IN ('completed', 'failed', 'cancelled')
+		          )
+		      )
 		    ORDER BY j.priority DESC, j.created_at ASC, t.chunk_index ASC
 		    LIMIT  1
 		    FOR UPDATE OF t SKIP LOCKED
@@ -709,7 +724,7 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		    updated_at = now()
 		FROM next_task
 		WHERE tasks.id = next_task.id
-		RETURNING tasks.id, tasks.job_id, tasks.chunk_index, tasks.status, tasks.agent_id,
+		RETURNING tasks.id, tasks.job_id, tasks.chunk_index, tasks.task_type, tasks.status, tasks.agent_id,
 		          tasks.script_dir, tasks.source_path, tasks.output_path, tasks.variables,
 		          tasks.exit_code, tasks.frames_encoded, tasks.avg_fps, tasks.output_size,
 		          tasks.duration_sec, tasks.vmaf_score, tasks.psnr, tasks.ssim, tasks.error_msg,
@@ -797,7 +812,7 @@ func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
 	var rawVars []byte
 	err := row.Scan(
-		&t.ID, &t.JobID, &t.ChunkIndex, &t.Status, &t.AgentID,
+		&t.ID, &t.JobID, &t.ChunkIndex, &t.TaskType, &t.Status, &t.AgentID,
 		&t.ScriptDir, &t.SourcePath, &t.OutputPath, &rawVars,
 		&t.ExitCode, &t.FramesEncoded, &t.AvgFPS, &t.OutputSize, &t.DurationSec,
 		&t.VMafScore, &t.PSNR, &t.SSIM, &t.ErrorMsg,

@@ -172,3 +172,27 @@ export interface EnrollmentToken {
   expires_at: string | null
   created_at: string
 }
+
+// SceneBoundary is a single scene cut as returned by GET /api/v1/sources/{id}/scenes.
+export interface SceneBoundary {
+  frame: number
+  pts: number
+  timecode: string
+}
+
+// SceneData is the response envelope from GET /api/v1/sources/{id}/scenes.
+export interface SceneData {
+  source_id: string
+  fps: number
+  total_frames: number
+  duration_sec: number
+  scenes: SceneBoundary[]
+}
+
+// ChunkingConfig holds the optional scene-based auto-chunking parameters
+// sent to the job creation API when the operator enables chunked encoding.
+export interface ChunkingConfig {
+  enable_chunking: boolean
+  chunk_size_frames: number
+  overlap_frames: number
+}

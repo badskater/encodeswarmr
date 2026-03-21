@@ -304,6 +304,62 @@ func (g *ScriptGenerator) RenderSingle(ctx context.Context, job *db.Job, task *d
 	return dir, nil
 }
 
+// RenderConcat generates the script directory for a concat task.
+// It writes a run.bat that uses ffmpeg's concat demuxer to merge all chunk
+// output files (chunkPaths) into finalOutputPath.
+func (g *ScriptGenerator) RenderConcat(ctx context.Context, job *db.Job, task *db.Task, chunkPaths []string, finalOutputPath string) (string, error) {
+	dir := filepath.Join(g.baseDir, job.ID, "concat")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("scriptgen: create concat dir: %w", err)
+	}
+
+	cleanup := true
+	defer func() {
+		if cleanup {
+			os.RemoveAll(dir)
+		}
+	}()
+
+	// Write the ffmpeg concat list file.
+	var listBuf bytes.Buffer
+	for _, p := range chunkPaths {
+		// Escape single-quotes inside the path for the concat list format.
+		escaped := strings.ReplaceAll(p, "'", "\\'")
+		listBuf.WriteString("file '" + escaped + "'\n")
+	}
+	listFile := filepath.Join(dir, "concat_list.txt")
+	if err := os.WriteFile(listFile, listBuf.Bytes(), 0o644); err != nil {
+		return "", fmt.Errorf("scriptgen: write concat list: %w", err)
+	}
+
+	// Build run.bat — uses %FFMPEG_BIN% env var injected by the agent runner,
+	// falling back to bare "ffmpeg" if not set.
+	var batBuf bytes.Buffer
+	batBuf.WriteString("@echo off\r\n")
+	batBuf.WriteString("setlocal\r\n")
+	batBuf.WriteString("if not defined FFMPEG_BIN set FFMPEG_BIN=ffmpeg\r\n")
+	batBuf.WriteString(fmt.Sprintf(`"%FFMPEG_BIN%" -y -f concat -safe 0 -i "%s" -c copy "%s"`,
+		listFile, finalOutputPath))
+	batBuf.WriteString("\r\n")
+	batBuf.WriteString("if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%\r\n")
+
+	batFile := filepath.Join(dir, "run.bat")
+	if err := os.WriteFile(batFile, batBuf.Bytes(), 0o644); err != nil {
+		return "", fmt.Errorf("scriptgen: write concat bat: %w", err)
+	}
+
+	g.logger.Info("concat scripts rendered",
+		slog.String("job_id", job.ID),
+		slog.String("task_id", task.ID),
+		slog.Int("chunk_count", len(chunkPaths)),
+		slog.String("output", finalOutputPath),
+		slog.String("dir", dir),
+	)
+
+	cleanup = false
+	return dir, nil
+}
+
 // renderToFile parses the template content, executes it with data, and writes
 // the result to the given path.
 func renderToFile(name, content string, data map[string]string, path string) error {

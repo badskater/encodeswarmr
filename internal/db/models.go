@@ -11,12 +11,24 @@ type EncodeConfig struct {
 	OutputRoot            string            `json:"output_root"`
 	OutputExtension       string            `json:"output_extension,omitempty"` // default "mkv"
 	ExtraVars             map[string]string `json:"extra_vars,omitempty"`
+	// ChunkingConfig carries optional scene-based auto-chunking parameters sent
+	// from the job-creation UI.  When present, the engine may use it for future
+	// automatic boundary generation; currently it is stored for reference.
+	ChunkingConfig *ChunkingConfig `json:"chunking_config,omitempty"`
 }
 
 // ChunkBoundary defines the inclusive frame range for one encoding task.
 type ChunkBoundary struct {
 	StartFrame int `json:"start_frame"`
 	EndFrame   int `json:"end_frame"`
+}
+
+// ChunkingConfig carries the scene-based chunking parameters set in the job
+// creation UI.
+type ChunkingConfig struct {
+	EnableChunking  bool `json:"enable_chunking"`
+	ChunkSizeFrames int  `json:"chunk_size_frames"`
+	OverlapFrames   int  `json:"overlap_frames"`
 }
 
 // The model types here mirror the database rows returned by queries.
@@ -101,11 +113,19 @@ type Job struct {
 	UpdatedAt      time.Time    `json:"updated_at"`
 }
 
+// TaskType constants identify the role of a task within a job.
+// The empty string (TaskTypeEncode) is the default for backward compatibility.
+const (
+	TaskTypeEncode = ""       // standard per-chunk encode task
+	TaskTypeConcat = "concat" // post-encode ffmpeg segment merge task
+)
+
 // Task is a row from the tasks table.
 type Task struct {
 	ID            string            `json:"id"`
 	JobID         string            `json:"job_id"`
 	ChunkIndex    int               `json:"chunk_index"`
+	TaskType      string            `json:"task_type,omitempty"`
 	Status        string            `json:"status"`
 	AgentID       *string           `json:"agent_id,omitempty"`
 	ScriptDir     string            `json:"-"`
@@ -303,6 +323,7 @@ type ListJobsFilter struct {
 type CreateTaskParams struct {
 	JobID      string
 	ChunkIndex int
+	TaskType   string // empty string = TaskTypeEncode (default)
 	SourcePath string
 	OutputPath string
 	Variables  map[string]string

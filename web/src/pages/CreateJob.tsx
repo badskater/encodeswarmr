@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Source, Template } from '../types'
+import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
 export default function CreateJob() {
   const navigate = useNavigate()
@@ -10,6 +11,8 @@ export default function CreateJob() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [sceneLoading, setSceneLoading] = useState(false)
+  const [sceneMessage, setSceneMessage] = useState('')
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
@@ -23,6 +26,11 @@ export default function CreateJob() {
   const [outputExt, setOutputExt] = useState('mkv')
   const [chunksText, setChunksText] = useState('')
 
+  // Chunked encoding config
+  const [enableChunking, setEnableChunking] = useState(false)
+  const [chunkSizeFrames, setChunkSizeFrames] = useState(1000)
+  const [overlapFrames, setOverlapFrames] = useState(0)
+
   useEffect(() => {
     Promise.all([api.listSources(), api.listTemplates()])
       .then(([s, t]) => {
@@ -32,6 +40,57 @@ export default function CreateJob() {
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
   }, [])
+
+  const handleLoadScenes = async () => {
+    if (!selectedSource) return
+    setSceneLoading(true)
+    setSceneMessage('')
+    try {
+      const results = await api.listAnalysisResults(selectedSource.id)
+      const sceneResult = results.find(r => r.type === 'scene')
+      if (!sceneResult || !sceneResult.frame_data || sceneResult.frame_data.length === 0) {
+        setSceneMessage('No scene analysis available — run an analysis job first')
+        return
+      }
+
+      const summary = sceneResult.summary
+      const fps =
+        summary?.frame_count != null && summary?.duration_sec != null && summary.duration_sec > 0
+          ? summary.frame_count / summary.duration_sec
+          : 24
+      const totalFrames = summary?.frame_count != null ? summary.frame_count : null
+
+      const sceneFrames = sceneResult.frame_data
+        .map(p => {
+          if (p.frame != null) return p.frame
+          if (p.pts != null) return Math.round(p.pts * fps)
+          return null
+        })
+        .filter((f): f is number => f != null)
+        .sort((a, b) => a - b)
+
+      const lastFrame = totalFrames != null ? totalFrames - 1 : 999999
+      const lines: string[] = []
+
+      if (sceneFrames.length === 0) {
+        setSceneMessage('No scene analysis available — run an analysis job first')
+        return
+      }
+
+      lines.push(`0,${sceneFrames[0] - 1}`)
+      for (let i = 0; i < sceneFrames.length - 1; i++) {
+        lines.push(`${sceneFrames[i]},${sceneFrames[i + 1] - 1}`)
+      }
+      lines.push(`${sceneFrames[sceneFrames.length - 1]},${lastFrame}`)
+
+      setChunksText(lines.join('\n'))
+      setSceneMessage(`Loaded ${lines.length} scene boundaries from analysis`)
+    } catch (e: unknown) {
+      setSceneMessage(e instanceof Error ? e.message : 'Failed to load scene data')
+    } finally {
+      setSceneLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,6 +122,9 @@ export default function CreateJob() {
           chunk_boundaries: chunkBoundaries,
           output_root: outputRoot || undefined,
           output_extension: outputExt || undefined,
+          chunking_config: jobType === 'encode' && enableChunking
+            ? { enable_chunking: true, chunk_size_frames: chunkSizeFrames, overlap_frames: overlapFrames }
+            : undefined,
         },
       })
 
@@ -187,11 +249,82 @@ export default function CreateJob() {
               </div>
             </div>
 
+            {/* Chunked Encoding section */}
+            <div className="rounded border border-th-border-subtle bg-th-surface-muted px-3 py-2 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  id="enable-chunking"
+                  type="checkbox"
+                  checked={enableChunking}
+                  onChange={e => setEnableChunking(e.target.checked)}
+                  className="accent-blue-600"
+                />
+                <label htmlFor="enable-chunking" className="text-sm font-medium text-th-text select-none cursor-pointer">
+                  Chunked Encoding
+                </label>
+              </div>
+
+              {enableChunking && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-th-text-muted mb-1">Chunk Size (frames)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={chunkSizeFrames}
+                        onChange={e => setChunkSizeFrames(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-th-text-muted mb-1">Overlap (frames)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={overlapFrames}
+                        onChange={e => setOverlapFrames(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Scene boundary preview — fetches from API when a source is selected */}
+                  {sourceId && (
+                    <div>
+                      <p className="text-xs text-th-text-muted mb-1">Scene boundary preview</p>
+                      <ChunkBoundaryPreview sourceId={sourceId} />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs text-th-text-muted mb-1">Chunk Boundaries (one per line: start_frame,end_frame)</label>
               <textarea value={chunksText} onChange={e => setChunksText(e.target.value)}
                 rows={5} placeholder={'0,1000\n1001,2000\n2001,3000'}
                 className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text" />
+              {selectedSource && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLoadScenes}
+                    disabled={sceneLoading}
+                    className="text-xs px-2 py-1 rounded border border-th-input-border bg-th-surface-muted text-th-text-secondary hover:bg-th-surface disabled:opacity-50"
+                  >
+                    {sceneLoading ? 'Loading scenes…' : 'Load Scene Boundaries'}
+                  </button>
+                  {sceneMessage && (
+                    <span className="text-xs text-th-text-muted">{sceneMessage}</span>
+                  )}
+                </div>
+              )}
+              {chunksText.trim() && (
+                <div className="mt-2">
+                  <ChunkBoundaryPreview chunksText={chunksText} />
+                </div>
+              )}
             </div>
           </>
         )}
