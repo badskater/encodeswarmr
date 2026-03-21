@@ -97,7 +97,9 @@ jobs:
         with:
           context: .
           file: deployments/Dockerfile.controller
+          platforms: linux/amd64
           push: true
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ github.ref_name }}
