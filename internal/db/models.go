@@ -495,6 +495,26 @@ type Schedule struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
+// APIKey is a row from the api_keys table.
+// KeyHash stores the SHA-256 hash of the plaintext key; the plaintext is never
+// persisted and is returned to the caller only at creation time.
+type APIKey struct {
+	ID          string     `json:"id"`
+	UserID      string     `json:"user_id"`
+	Name        string     `json:"name"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// CreateAPIKeyParams holds values for inserting a new api_keys row.
+type CreateAPIKeyParams struct {
+	UserID    string
+	Name      string
+	KeyHash   string
+	ExpiresAt *time.Time
+}
+
 // CreateScheduleParams holds values for inserting a new schedule row.
 type CreateScheduleParams struct {
 	Name        string

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -80,6 +81,34 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 // OIDCEnabled reports whether OIDC is configured and active.
 func (s *Service) OIDCEnabled() bool { return s.oidc != nil }
+
+// AuthenticateAPIKey validates a plaintext API key and returns the owning user.
+// It updates last_used_at on success.
+func (s *Service) AuthenticateAPIKey(ctx context.Context, plaintext string) (*db.User, error) {
+	hash := HashAPIKey(plaintext)
+	key, err := s.store.GetAPIKeyByHash(ctx, hash)
+	if errors.Is(err, db.ErrNotFound) || key == nil {
+		return nil, ErrInvalidCredentials
+	}
+	if err != nil {
+		return nil, fmt.Errorf("auth: api key lookup: %w", err)
+	}
+	user, err := s.store.GetUserByID(ctx, key.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("auth: api key user lookup: %w", err)
+	}
+	// Best-effort last_used_at update; do not fail the request on error.
+	if err := s.store.UpdateAPIKeyLastUsed(ctx, key.ID); err != nil && s.logger != nil {
+		s.logger.Warn("failed to update api key last_used_at", "key_id", key.ID, "err", err)
+	}
+	return user, nil
+}
+
+// HashAPIKey returns the hex-encoded SHA-256 hash of a plaintext API key.
+func HashAPIKey(plaintext string) string {
+	sum := sha256.Sum256([]byte(plaintext))
+	return hex.EncodeToString(sum[:])
+}
 
 // HashPassword bcrypt-hashes a plaintext password.
 func HashPassword(password string) (string, error) {

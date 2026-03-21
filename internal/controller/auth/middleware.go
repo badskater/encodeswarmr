@@ -11,8 +11,13 @@ import (
 // SessionCookieName is the name of the HTTP session cookie.
 const SessionCookieName = "session"
 
-// Middleware validates the session cookie (or Authorization: Bearer header)
-// and injects the authenticated claims into the request context.
+// Middleware validates the session cookie or Authorization: Bearer header and
+// injects the authenticated claims into the request context.
+//
+// Authentication order:
+//  1. Session cookie (or Bearer token that matches an active session).
+//  2. Bearer token treated as an API key (SHA-256 hash lookup).
+//
 // Unauthenticated requests receive a 401 response.
 func (s *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -21,16 +26,29 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		// Try session first.
 		_, user, err := s.GetSession(r.Context(), token)
-		if errors.Is(err, db.ErrNotFound) {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if err != nil {
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			s.logger.Error("session lookup failed", "err", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
+
+		// Fall back to API key when no matching session was found.
+		if errors.Is(err, db.ErrNotFound) {
+			user, err = s.AuthenticateAPIKey(r.Context(), token)
+			if errors.Is(err, ErrInvalidCredentials) {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if err != nil {
+				s.logger.Error("api key lookup failed", "err", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+
 		claims := &Claims{
 			UserID:   user.ID,
 			Username: user.Username,

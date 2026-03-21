@@ -153,6 +153,13 @@ func (Stub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, er
 func (Stub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error                    { return nil }
 func (Stub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error)       { return nil, nil }
 
+// --- API Keys ---
+func (Stub) CreateAPIKey(_ context.Context, _ db.CreateAPIKeyParams) (*db.APIKey, error)  { return nil, nil }
+func (Stub) GetAPIKeyByHash(_ context.Context, _ string) (*db.APIKey, error)              { return nil, nil }
+func (Stub) ListAPIKeysByUser(_ context.Context, _ string) ([]*db.APIKey, error)          { return nil, nil }
+func (Stub) DeleteAPIKey(_ context.Context, _ string) error                               { return nil }
+func (Stub) UpdateAPIKeyLastUsed(_ context.Context, _ string) error                       { return nil }
+
 // --- Schedules ---
 func (Stub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
 func (Stub) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }

@@ -51,12 +51,22 @@ type AuthConfig struct {
 }
 
 type OIDCConfig struct {
-	Enabled       bool   `mapstructure:"enabled"`
-	ProviderURL   string `mapstructure:"provider_url"`
-	ClientID      string `mapstructure:"client_id"`
-	ClientSecret  string `mapstructure:"client_secret"`
-	RedirectURL   string `mapstructure:"redirect_url"`
-	AutoProvision bool   `mapstructure:"auto_provision"`
+	Enabled       bool              `mapstructure:"enabled"`
+	ProviderURL   string            `mapstructure:"provider_url"`
+	ClientID      string            `mapstructure:"client_id"`
+	ClientSecret  string            `mapstructure:"client_secret"`
+	RedirectURL   string            `mapstructure:"redirect_url"`
+	AutoProvision bool              `mapstructure:"auto_provision"`
+	// GroupsClaim is the JWT claim that contains the user's group memberships.
+	// Defaults to "groups".
+	GroupsClaim   string            `mapstructure:"groups_claim"`
+	// RoleMappings maps OIDC group names to internal roles
+	// (e.g. {"encoding-admins": "admin", "encoding-viewers": "viewer"}).
+	// The highest-privilege matching role is used.
+	RoleMappings  map[string]string `mapstructure:"role_mappings"`
+	// DefaultRole is the role assigned when no group mapping matches.
+	// Defaults to "viewer".
+	DefaultRole   string            `mapstructure:"default_role"`
 }
 
 type LoggingConfig struct {
@@ -148,6 +158,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("grpc.host", "0.0.0.0")
 	v.SetDefault("grpc.port", 9443)
 	v.SetDefault("auth.session_ttl", "24h")
+	v.SetDefault("auth.oidc.groups_claim", "groups")
+	v.SetDefault("auth.oidc.default_role", "viewer")
 	v.SetDefault("agent.dispatch_interval", "10s")
 	v.SetDefault("agent.heartbeat_timeout", "90s")
 	v.SetDefault("agent.script_base_dir", "/tmp/encoder-scripts")

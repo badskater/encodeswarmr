@@ -140,6 +140,13 @@ type Store interface {
 	InsertAgentMetric(ctx context.Context, p InsertAgentMetricParams) error
 	ListAgentMetrics(ctx context.Context, agentID string, since time.Time) ([]*AgentMetric, error)
 
+	// --- API Keys ---
+	CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIKey, error)
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey, error)
+	ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error)
+	DeleteAPIKey(ctx context.Context, id string) error
+	UpdateAPIKeyLastUsed(ctx context.Context, id string) error
+
 	// --- Schedules ---
 	CreateSchedule(ctx context.Context, p CreateScheduleParams) (*Schedule, error)
 	GetScheduleByID(ctx context.Context, id string) (*Schedule, error)

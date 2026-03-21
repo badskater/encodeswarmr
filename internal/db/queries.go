@@ -1735,3 +1735,82 @@ func scanSchedule(row pgx.Row) (*Schedule, error) {
 	sc.JobTemplate = rawTmpl
 	return &sc, nil
 }
+
+// ---------------------------------------------------------------------------
+// API Keys
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIKey, error) {
+	const q = `
+		INSERT INTO api_keys (user_id, name, key_hash, expires_at)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, name, created_at, last_used_at, expires_at`
+	row := s.pool.QueryRow(ctx, q, p.UserID, p.Name, p.KeyHash, p.ExpiresAt)
+	return scanAPIKey(row)
+}
+
+// GetAPIKeyByHash looks up an API key by its SHA-256 hash.  It also verifies
+// the key has not expired (when expires_at is set).
+func (s *pgStore) GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey, error) {
+	const q = `
+		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		FROM api_keys
+		WHERE key_hash = $1
+		  AND (expires_at IS NULL OR expires_at > now())`
+	return scanAPIKey(s.pool.QueryRow(ctx, q, keyHash))
+}
+
+func (s *pgStore) ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error) {
+	const q = `
+		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		FROM api_keys
+		WHERE user_id = $1
+		ORDER BY created_at`
+	rows, err := s.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("db: list api keys: %w", err)
+	}
+	defer rows.Close()
+	var out []*APIKey
+	for rows.Next() {
+		k, err := scanAPIKey(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) DeleteAPIKey(ctx context.Context, id string) error {
+	const q = `DELETE FROM api_keys WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete api key: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgStore) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {
+	const q = `UPDATE api_keys SET last_used_at = now() WHERE id = $1`
+	_, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: update api key last used: %w", err)
+	}
+	return nil
+}
+
+func scanAPIKey(row pgx.Row) (*APIKey, error) {
+	var k APIKey
+	err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan api key: %w", err)
+	}
+	return &k, nil
+}
