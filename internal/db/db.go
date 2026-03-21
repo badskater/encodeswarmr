@@ -41,6 +41,8 @@ type Store interface {
 	UpdateAgentVNCPort(ctx context.Context, id string, port int) error
 	SetAgentAPIKey(ctx context.Context, id, hash string) error
 	MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error)
+	SetAgentUpgradeRequested(ctx context.Context, agentID string, requested bool) error
+	ClearAgentUpgradeRequested(ctx context.Context, agentID string) error
 
 	// --- Sources ---
 	CreateSource(ctx context.Context, p CreateSourceParams) (*Source, error)
@@ -72,6 +74,7 @@ type Store interface {
 	FailTask(ctx context.Context, id string, exitCode int, errMsg string) error
 	CancelPendingTasksForJob(ctx context.Context, jobID string) error
 	DeleteTasksByJobID(ctx context.Context, jobID string) error
+	RetryTaskWithBackoff(ctx context.Context, taskID string, retryCount int) (*Task, error)
 
 	// --- Task Logs ---
 	InsertTaskLog(ctx context.Context, p InsertTaskLogParams) error
@@ -146,6 +149,10 @@ type Store interface {
 	ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error)
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateAPIKeyLastUsed(ctx context.Context, id string) error
+
+	// --- Notification Preferences ---
+	GetNotificationPrefs(ctx context.Context, userID string) (*NotificationPrefs, error)
+	UpsertNotificationPrefs(ctx context.Context, p UpsertNotificationPrefsParams) error
 
 	// --- Schedules ---
 	CreateSchedule(ctx context.Context, p CreateScheduleParams) (*Schedule, error)

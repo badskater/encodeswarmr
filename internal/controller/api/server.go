@@ -156,6 +156,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/agents/{id}/metrics", viewer(s.handleGetAgentMetrics))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
+	mux.Handle("POST /api/v1/agents/{id}/upgrade", admin(s.handleRequestAgentUpgrade))
 
 	// --- VNC remote desktop ---
 	// WebSocket proxy to the agent's VNC TCP port (noVNC binary framing).
@@ -224,6 +225,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/api-keys", viewer(s.handleCreateAPIKey))
 	mux.Handle("GET /api/v1/api-keys", viewer(s.handleListAPIKeys))
 	mux.Handle("DELETE /api/v1/api-keys/{id}", viewer(s.handleDeleteAPIKey))
+
+	// --- Notification Preferences (per-user) ---
+	mux.Handle("GET /api/v1/me/notifications", viewer(s.handleGetNotificationPrefs))
+	mux.Handle("PUT /api/v1/me/notifications", viewer(s.handleUpdateNotificationPrefs))
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))

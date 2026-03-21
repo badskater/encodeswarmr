@@ -45,15 +45,17 @@ func (Stub) DeleteUser(_ context.Context, _ string) error                       
 func (Stub) CountAdminUsers(_ context.Context) (int64, error)                            { return 0, nil }
 
 // --- Agents ---
-func (Stub) UpsertAgent(_ context.Context, _ db.UpsertAgentParams) (*db.Agent, error)          { return nil, nil }
-func (Stub) GetAgentByID(_ context.Context, _ string) (*db.Agent, error)                       { return nil, nil }
-func (Stub) GetAgentByName(_ context.Context, _ string) (*db.Agent, error)                     { return nil, nil }
-func (Stub) ListAgents(_ context.Context) ([]*db.Agent, error)                                 { return nil, nil }
-func (Stub) UpdateAgentStatus(_ context.Context, _, _ string) error                            { return nil }
-func (Stub) UpdateAgentHeartbeat(_ context.Context, _ db.UpdateAgentHeartbeatParams) error     { return nil }
-func (Stub) UpdateAgentVNCPort(_ context.Context, _ string, _ int) error                       { return nil }
-func (Stub) SetAgentAPIKey(_ context.Context, _, _ string) error                               { return nil }
-func (Stub) MarkStaleAgents(_ context.Context, _ time.Duration) (int64, error)                 { return 0, nil }
+func (Stub) UpsertAgent(_ context.Context, _ db.UpsertAgentParams) (*db.Agent, error)              { return nil, nil }
+func (Stub) GetAgentByID(_ context.Context, _ string) (*db.Agent, error)                           { return nil, nil }
+func (Stub) GetAgentByName(_ context.Context, _ string) (*db.Agent, error)                         { return nil, nil }
+func (Stub) ListAgents(_ context.Context) ([]*db.Agent, error)                                     { return nil, nil }
+func (Stub) UpdateAgentStatus(_ context.Context, _, _ string) error                                { return nil }
+func (Stub) UpdateAgentHeartbeat(_ context.Context, _ db.UpdateAgentHeartbeatParams) error         { return nil }
+func (Stub) UpdateAgentVNCPort(_ context.Context, _ string, _ int) error                           { return nil }
+func (Stub) SetAgentAPIKey(_ context.Context, _, _ string) error                                   { return nil }
+func (Stub) MarkStaleAgents(_ context.Context, _ time.Duration) (int64, error)                     { return 0, nil }
+func (Stub) SetAgentUpgradeRequested(_ context.Context, _ string, _ bool) error                    { return nil }
+func (Stub) ClearAgentUpgradeRequested(_ context.Context, _ string) error                          { return nil }
 
 // --- Sources ---
 func (Stub) CreateSource(_ context.Context, _ db.CreateSourceParams) (*db.Source, error)            { return nil, nil }
@@ -85,6 +87,7 @@ func (Stub) CompleteTask(_ context.Context, _ db.CompleteTaskParams) error      
 func (Stub) FailTask(_ context.Context, _ string, _ int, _ string) error                 { return nil }
 func (Stub) CancelPendingTasksForJob(_ context.Context, _ string) error                  { return nil }
 func (Stub) DeleteTasksByJobID(_ context.Context, _ string) error                        { return nil }
+func (Stub) RetryTaskWithBackoff(_ context.Context, _ string, _ int) (*db.Task, error)   { return nil, nil }
 
 // --- Task Logs ---
 func (Stub) InsertTaskLog(_ context.Context, _ db.InsertTaskLogParams) error                     { return nil }
@@ -159,6 +162,10 @@ func (Stub) GetAPIKeyByHash(_ context.Context, _ string) (*db.APIKey, error)    
 func (Stub) ListAPIKeysByUser(_ context.Context, _ string) ([]*db.APIKey, error)          { return nil, nil }
 func (Stub) DeleteAPIKey(_ context.Context, _ string) error                               { return nil }
 func (Stub) UpdateAPIKeyLastUsed(_ context.Context, _ string) error                       { return nil }
+
+// --- Notification Preferences ---
+func (Stub) GetNotificationPrefs(_ context.Context, _ string) (*db.NotificationPrefs, error)        { return nil, nil }
+func (Stub) UpsertNotificationPrefs(_ context.Context, _ db.UpsertNotificationPrefsParams) error    { return nil }
 
 // --- Schedules ---
 func (Stub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }

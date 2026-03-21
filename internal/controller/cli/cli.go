@@ -162,11 +162,13 @@ func runServer(ctx context.Context, cfgPath string) error {
 	// Bootstrap path mappings from config (idempotent — only inserts missing ones).
 	bootstrapPathMappings(ctx, store, cfg, logger)
 
-	// Start core engine (job expansion + stale agent detection).
+	// Start core engine (job expansion + stale agent detection + log retention).
 	eng := engine.New(store, engine.Config{
-		DispatchInterval: cfg.Agent.DispatchInterval,
-		StaleThreshold:   cfg.Agent.HeartbeatTimeout,
-		ScriptBaseDir:    cfg.Agent.ScriptBaseDir,
+		DispatchInterval:   cfg.Agent.DispatchInterval,
+		StaleThreshold:     cfg.Agent.HeartbeatTimeout,
+		ScriptBaseDir:      cfg.Agent.ScriptBaseDir,
+		LogRetention:       cfg.Logging.TaskLogRetention,
+		LogCleanupInterval: cfg.Logging.TaskLogCleanupInterval,
 	}, logger)
 
 	// Attach controller-side analysis runner when configured.

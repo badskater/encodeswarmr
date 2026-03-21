@@ -10,9 +10,14 @@ import (
 
 // Config holds the settings for the background engine loop.
 type Config struct {
-	DispatchInterval time.Duration
-	StaleThreshold   time.Duration
-	ScriptBaseDir    string
+	DispatchInterval   time.Duration
+	StaleThreshold     time.Duration
+	ScriptBaseDir      string
+	// LogRetention is how long to keep task log rows. 0 disables log pruning.
+	LogRetention       time.Duration
+	// LogCleanupInterval controls how often the log retention loop runs.
+	// Defaults to 1 hour when 0.
+	LogCleanupInterval time.Duration
 }
 
 // AnalysisRunner is the interface used by the engine to execute analysis,
@@ -67,6 +72,9 @@ func (e *Engine) SetConcatRunner(r ConcatRunner) {
 // Returns immediately. The loop runs until ctx is cancelled.
 func (e *Engine) Start(ctx context.Context) {
 	go e.loop(ctx)
+	if e.cfg.LogRetention > 0 {
+		go e.logRetentionLoop(ctx)
+	}
 }
 
 func (e *Engine) loop(ctx context.Context) {
@@ -83,6 +91,33 @@ func (e *Engine) loop(ctx context.Context) {
 			}
 			if err := e.checkStaleAgents(ctx); err != nil {
 				e.logger.Warn("engine: check stale agents", "error", err)
+			}
+		}
+	}
+}
+
+// logRetentionLoop periodically prunes task log rows older than LogRetention.
+func (e *Engine) logRetentionLoop(ctx context.Context) {
+	interval := e.cfg.LogCleanupInterval
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-e.cfg.LogRetention)
+			if err := e.store.PruneOldTaskLogs(ctx, cutoff); err != nil {
+				e.logger.Warn("engine: prune old task logs", "error", err)
+			} else {
+				e.logger.Debug("engine: pruned task logs older than retention period",
+					"cutoff", cutoff,
+					"retention", e.cfg.LogRetention,
+				)
 			}
 		}
 	}
