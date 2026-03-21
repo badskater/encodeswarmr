@@ -15,9 +15,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, http.StatusServiceUnavailable, map[string]any{
 			"status": "degraded",
 			"db":     "unreachable",
+			"leader": s.leader.IsLeader(),
 		})
 		return
 	}
 
-	writeJSON(w, r, http.StatusOK, map[string]any{"status": "ok", "db": "ok"})
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"status": "ok",
+		"db":     "ok",
+		"leader": s.leader.IsLeader(),
+	})
+}
+
+func (s *Server) handleHAStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"leader":  s.leader.IsLeader(),
+		"node_id": s.leader.NodeID(),
+	})
 }
