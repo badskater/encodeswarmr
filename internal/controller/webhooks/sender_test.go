@@ -205,7 +205,8 @@ func (s *senderStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, 
 func (s *senderStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *senderStubStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *senderStubStore) DeletePathMapping(context.Context, string) error              { return nil }
+func (s *senderStubStore) DeleteTasksByJobID(_ context.Context, _ string) error        { return nil }
 
 // ---------------------------------------------------------------------------
 // TestSenderSend_success — delivers on first attempt to a real HTTP server

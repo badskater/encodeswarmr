@@ -117,7 +117,8 @@ func (s *scriptGenStub) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *scriptGenStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *scriptGenStub) DeletePathMapping(context.Context, string) error { return nil }
+func (s *scriptGenStub) DeletePathMapping(context.Context, string) error              { return nil }
+func (s *scriptGenStub) DeleteTasksByJobID(_ context.Context, _ string) error         { return nil }
 
 // ---------------------------------------------------------------------------
 // RenderSingle tests

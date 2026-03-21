@@ -216,7 +216,8 @@ func (s *resultStub) ListPathMappings(context.Context) ([]*db.PathMapping, error
 func (s *resultStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *resultStub) DeletePathMapping(context.Context, string) error { return nil }
+func (s *resultStub) DeletePathMapping(context.Context, string) error              { return nil }
+func (s *resultStub) DeleteTasksByJobID(_ context.Context, _ string) error         { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers
