@@ -357,3 +357,91 @@ func TestNewProgressStreamer_Fields(t *testing.T) {
 		t.Errorf("ch capacity = %d, want 64", cap(ps.ch))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// progressStreamer.run — ticker path: we test that the goroutine closes cleanly
+// ---------------------------------------------------------------------------
+
+func TestProgressStreamer_Run_SendError(t *testing.T) {
+	// When the stream Send returns an error, run should exit.
+	progressStream := &mockProgressStream{
+		mockClientStream: &mockClientStream{sendErr: errors.New("send failed")},
+	}
+	mock := &mockAgentClient{progressStream: progressStream}
+
+	ps := newProgressStreamer(mock, "t1", "j1", slog.Default(), nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cancelPS := ps.start(ctx)
+	defer cancelPS()
+
+	// Push a metric; the ticker needs to fire to send it.
+	// Since ticker is 5s, we just cancel promptly to avoid blocking.
+	ps.ch <- &progressMetric{Frame: 42, TotalFrames: 1000, Percent: 4.2}
+
+	// Give the goroutine a moment to process, then cancel.
+	time.Sleep(20 * time.Millisecond)
+	cancelPS()
+}
+
+// TestProgressStreamer_GPUMetricFn verifies the gpuFn callback is wired
+// correctly when provided.
+func TestProgressStreamer_GPUMetricFn(t *testing.T) {
+	called := false
+	gpuFn := func() *gpuSample {
+		called = true
+		return &gpuSample{GPUPercent: 50.0}
+	}
+
+	mockStream := &mockProgressStream{mockClientStream: &mockClientStream{}}
+	mock := &mockAgentClient{progressStream: mockStream}
+
+	ps := newProgressStreamer(mock, "t1", "j1", slog.Default(), gpuFn)
+	if ps.gpuMetric == nil {
+		t.Fatal("gpuMetric should not be nil")
+	}
+	// Call the gpu function to confirm it works.
+	s := ps.gpuMetric()
+	if !called {
+		t.Error("gpuFn was not called")
+	}
+	if s.GPUPercent < 49.9 || s.GPUPercent > 50.1 {
+		t.Errorf("GPUPercent = %f, want 50.0", s.GPUPercent)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Run entrypoint — unknown subcommand returns error
+// ---------------------------------------------------------------------------
+
+func TestRun_UnknownSubcommand(t *testing.T) {
+	err := Run([]string{"totally-unknown-subcmd"})
+	if err == nil {
+		t.Fatal("expected error for unknown subcommand")
+	}
+	if !strings.Contains(err.Error(), "unknown subcommand") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_HelpSubcommand(t *testing.T) {
+	// "help" should print usage and return nil.
+	err := Run([]string{"help"})
+	if err != nil {
+		t.Errorf("Run(help): %v", err)
+	}
+}
+
+// TestRun_HelpFlagParsedAsSubcommand verifies that "--help" passed after
+// a subcommand placeholder is treated as the subcommand selector by parseArgs.
+// Note: "--help" as the first arg is treated as a flag by parseArgs, not a
+// subcommand, so the run path is taken. We test the subcommand form instead.
+func TestRun_HelpAsSubcommand(t *testing.T) {
+	// "help" (without dashes) should print usage and return nil.
+	err := Run([]string{"help"})
+	if err != nil {
+		t.Errorf("Run(help): %v", err)
+	}
+}

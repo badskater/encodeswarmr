@@ -1070,3 +1070,127 @@ func TestPollLoop_CancelsOnContext(t *testing.T) {
 		t.Error("pollLoop did not stop within 1s after context cancellation")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// validateTask with share path checks
+// ---------------------------------------------------------------------------
+
+func TestValidateTask_SourcePathNotInAllowedShares(t *testing.T) {
+	r := newRunnerForValidation([]string{`\\nas01\media`})
+	task := &pb.TaskAssignment{
+		TaskId:     "task-8",
+		Scripts:    entrypointScript(),
+		SourcePath: `\\other\share\file.mkv`,
+	}
+	err := r.validateTask(task)
+	if err == nil {
+		t.Fatal("expected error for source_path not in allowed shares")
+	}
+	if !strings.Contains(err.Error(), "source_path") {
+		t.Errorf("error should mention source_path, got: %v", err)
+	}
+}
+
+func TestValidateTask_OutputPathNotInAllowedShares(t *testing.T) {
+	r := newRunnerForValidation([]string{`\\nas01\media`})
+	task := &pb.TaskAssignment{
+		TaskId:     "task-9",
+		Scripts:    entrypointScript(),
+		OutputPath: `/disallowed/output/dir`,
+	}
+	err := r.validateTask(task)
+	if err == nil {
+		t.Fatal("expected error for output_path not in allowed shares")
+	}
+	if !strings.Contains(err.Error(), "output_path") {
+		t.Errorf("error should mention output_path, got: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// executeTask — basic smoke test on non-Windows
+// ---------------------------------------------------------------------------
+
+func TestExecuteTask_ValidationFailure(t *testing.T) {
+	// A task with no scripts should fail validation before any process is started.
+	logStream := &mockStreamLogs{mockClientStream: &mockClientStream{}}
+	mock := &mockAgentClient{streamLogsStream: logStream}
+	r := newRunnerWithMock(t, mock)
+
+	task := &pb.TaskAssignment{
+		TaskId:  "exec-bad",
+		JobId:   "job-1",
+		Scripts: map[string]string{},
+	}
+	code, err := r.executeTask(context.Background(), task)
+	if err == nil {
+		t.Fatal("expected error from executeTask with no scripts")
+	}
+	if code != -1 {
+		t.Errorf("exit code = %d, want -1 for validation failure", code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// syncOfflineResults — thin wrapper that calls syncResults + syncLogs
+// ---------------------------------------------------------------------------
+
+func TestSyncOfflineResults_Empty(t *testing.T) {
+	mock := &mockAgentClient{}
+	r := newRunnerWithMock(t, mock)
+	// Must not panic with no pending data.
+	r.syncOfflineResults(context.Background())
+}
+
+func TestSyncOfflineResults_WithResultsAndLogs(t *testing.T) {
+	syncStream := &mockSyncResultsStream{
+		mockClientStream: &mockClientStream{},
+		syncResp:         &pb.SyncResponse{Accepted: 1},
+	}
+	logStream := &mockStreamLogs{mockClientStream: &mockClientStream{}}
+	mock := &mockAgentClient{
+		syncStream:       syncStream,
+		streamLogsStream: logStream,
+	}
+	r := newRunnerWithMock(t, mock)
+
+	_ = r.offline.saveResult("task-1", "job-1", true, 0, "")
+	_ = r.offline.saveLog("task-1", "job-1", "stdout", "info", "done")
+
+	r.syncOfflineResults(context.Background())
+
+	if len(syncStream.sent) != 1 {
+		t.Errorf("sent %d results, want 1", len(syncStream.sent))
+	}
+	if len(logStream.entries) != 1 {
+		t.Errorf("sent %d log entries, want 1", len(logStream.entries))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// checkLoop — context cancellation stops the loop
+// ---------------------------------------------------------------------------
+
+func TestCheckLoop_CancelsOnContext(t *testing.T) {
+	u := &upgradeChecker{
+		controllerHTTPBase: "http://localhost:19999",
+		currentVersion:     "0.1.0",
+		log:                slog.Default(),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		u.checkLoop(ctx, func() bool { return false })
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good — loop stopped when ctx was cancelled.
+	case <-time.After(time.Second):
+		t.Error("checkLoop did not stop within 1s after context cancellation")
+	}
+}
