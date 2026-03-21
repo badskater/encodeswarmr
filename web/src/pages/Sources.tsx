@@ -131,11 +131,11 @@ export default function Sources() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-th-text">Sources</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
+          className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 shrink-0"
         >
           {showForm ? 'Cancel' : 'Register Source'}
         </button>
@@ -192,7 +192,8 @@ export default function Sources() {
         </form>
       )}
 
-      <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+      {/* Desktop table */}
+      <div className="hidden sm:block bg-th-surface rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
@@ -253,6 +254,53 @@ export default function Sources() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="sm:hidden space-y-3">
+        {sources.map(s => (
+          <div
+            key={s.id}
+            className="bg-th-surface rounded-lg shadow cursor-pointer hover:bg-th-surface-muted"
+            onClick={() => navigate(`/sources/${s.id}`)}
+          >
+            <div className="px-4 py-3 border-b border-th-border-subtle">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-th-text truncate">{s.filename}</span>
+                <StatusBadge status={s.state} />
+              </div>
+              <p className="text-xs text-th-text-muted mt-0.5 truncate">{s.path}</p>
+            </div>
+            <div className="px-4 py-2 grid grid-cols-2 gap-1 text-xs">
+              <div><span className="text-th-text-muted">Size: </span><span className="text-th-text-secondary">{fmtBytes(s.size_bytes)}</span></div>
+              <div><span className="text-th-text-muted">Duration: </span><span className="text-th-text-secondary">{fmtDuration(s.duration_sec)}</span></div>
+              <div><span className="text-th-text-muted">VMAF: </span><span className="text-th-text-secondary">{s.vmaf_score != null ? s.vmaf_score.toFixed(1) : '—'}</span></div>
+              <div><span className="text-th-text-muted">HDR: </span><span className="text-th-text-secondary">{hdrLabel(s.hdr_type, s.dv_profile)}</span></div>
+              <div className="col-span-2"><span className="text-th-text-muted">Created: </span><span className="text-th-text-secondary">{fmtDate(s.created_at)}</span></div>
+            </div>
+            <div className="px-4 py-2 flex gap-2 border-t border-th-border-subtle" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={e => handleAnalyze(s.id, e)}
+                disabled={analyzingId === s.id}
+                className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                style={{ backgroundColor: 'var(--th-badge-running-bg)', color: 'var(--th-badge-running-text)' }}
+              >
+                {analyzingId === s.id ? 'Queuing…' : 'Analyze'}
+              </button>
+              <button
+                onClick={e => handleHDRDetect(s.id, e)}
+                disabled={detectingHDRId === s.id}
+                className="text-xs px-2 py-1 rounded disabled:opacity-50"
+                style={{ backgroundColor: 'var(--th-badge-assigned-bg)', color: 'var(--th-badge-assigned-text)' }}
+              >
+                {detectingHDRId === s.id ? 'Queuing…' : 'HDR Detect'}
+              </button>
+            </div>
+          </div>
+        ))}
+        {sources.length === 0 && (
+          <p className="text-center text-th-text-subtle text-sm py-8">No sources found</p>
+        )}
       </div>
 
       {nextCursor && (

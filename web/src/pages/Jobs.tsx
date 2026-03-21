@@ -101,9 +101,10 @@ export default function Jobs() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      {/* Header: title + search/filter + action buttons */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-th-text">Jobs</h1>
-        <div className="flex items-center gap-2 flex-1 max-w-lg">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-1 sm:max-w-lg">
           <input
             type="text"
             placeholder="Search by ID or source path…"
@@ -148,7 +149,8 @@ export default function Jobs() {
 
       {loading ? <p className="text-th-text-muted">Loading…</p> : (
         <>
-          <div className="bg-th-surface rounded-lg shadow overflow-hidden">
+          {/* Desktop table */}
+          <div className="hidden sm:block bg-th-surface rounded-lg shadow overflow-hidden">
             <table className="min-w-full divide-y divide-th-border text-sm">
               <thead className="bg-th-surface-muted">
                 <tr>
@@ -168,10 +170,7 @@ export default function Jobs() {
               </thead>
               <tbody className="divide-y divide-th-border-subtle">
                 {jobs.map(j => (
-                  <tr
-                    key={j.id}
-                    className="hover:bg-th-surface-muted"
-                  >
+                  <tr key={j.id} className="hover:bg-th-surface-muted">
                     <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
                       <input
                         type="checkbox"
@@ -197,6 +196,38 @@ export default function Jobs() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile card list */}
+          <div className="sm:hidden bg-th-surface rounded-lg shadow divide-y divide-th-border-subtle">
+            {jobs.map(j => (
+              <div key={j.id} className="flex items-start gap-3 px-4 py-3 hover:bg-th-surface-muted">
+                <input
+                  type="checkbox"
+                  checked={selected.has(j.id)}
+                  onChange={() => toggleSelect(j.id)}
+                  className="mt-0.5 rounded border-th-input-border shrink-0"
+                />
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-mono text-xs text-blue-600">{j.id.slice(0, 8)}</span>
+                    <StatusBadge status={j.status} />
+                  </div>
+                  <p className="text-sm text-th-text-secondary truncate">{basename(j.source_path)}</p>
+                  <div className="mt-1.5">
+                    <ProgressBar value={j.tasks_completed} max={j.tasks_total} />
+                    <div className="flex justify-between mt-0.5 text-xs text-th-text-subtle">
+                      <span>{j.tasks_completed}/{j.tasks_total} tasks · p{j.priority}</span>
+                      <span>{fmtDate(j.created_at)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {jobs.length === 0 && (
+              <p className="px-4 py-4 text-center text-th-text-subtle text-sm">No jobs found</p>
+            )}
+          </div>
+
           {nextCursor && (
             <div className="text-center">
               <button

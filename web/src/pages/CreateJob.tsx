@@ -4,6 +4,65 @@ import * as api from '../api/client'
 import type { Source, Template } from '../types'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
+// A JobPreset bundles commonly-used field combinations under a display name.
+// These live in the frontend only; the backend deals with individual template IDs.
+interface JobPreset {
+  id: string
+  name: string
+  jobType: string
+  runTemplateId: string
+  fsTemplateId: string
+  outputExt: string
+  targetTags: string
+  enableChunking: boolean
+  chunkSizeFrames: number
+  overlapFrames: number
+}
+
+function buildPresets(templates: Template[]): JobPreset[] {
+  // Derive suggested presets from the available templates so the user
+  // can quickly apply a commonly-used combination of run + frameserver templates.
+  const batTemplates = templates.filter(t => t.type === 'bat')
+  const fsTemplates = templates.filter(t => t.type === 'avs' || t.type === 'vpy')
+
+  const presets: JobPreset[] = []
+
+  // Pair each bat template with each frameserver template to create presets.
+  batTemplates.forEach(bat => {
+    fsTemplates.forEach(fs => {
+      presets.push({
+        id: `${bat.id}-${fs.id}`,
+        name: `${bat.name} + ${fs.name} (.${fs.type})`,
+        jobType: 'encode',
+        runTemplateId: bat.id,
+        fsTemplateId: fs.id,
+        outputExt: 'mkv',
+        targetTags: '',
+        enableChunking: false,
+        chunkSizeFrames: 1000,
+        overlapFrames: 0,
+      })
+    })
+    // Also offer a bat-only preset (no frameserver)
+    if (fsTemplates.length === 0) {
+      presets.push({
+        id: bat.id,
+        name: bat.name,
+        jobType: 'encode',
+        runTemplateId: bat.id,
+        fsTemplateId: '',
+        outputExt: 'mkv',
+        targetTags: '',
+        enableChunking: false,
+        chunkSizeFrames: 1000,
+        overlapFrames: 0,
+      })
+    }
+  })
+
+  return presets
+}
+
 export default function CreateJob() {
   const navigate = useNavigate()
   const [sources, setSources] = useState<Source[]>([])
@@ -13,6 +72,9 @@ export default function CreateJob() {
   const [error, setError] = useState('')
   const [sceneLoading, setSceneLoading] = useState(false)
   const [sceneMessage, setSceneMessage] = useState('')
+
+  // Template preset selection
+  const [selectedPresetId, setSelectedPresetId] = useState('')
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
@@ -40,6 +102,23 @@ export default function CreateJob() {
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
   }, [])
+
+  const presets = buildPresets(templates)
+
+  const handleLoadPreset = (presetId: string) => {
+    setSelectedPresetId(presetId)
+    if (!presetId) return
+    const preset = presets.find(p => p.id === presetId)
+    if (!preset) return
+    setJobType(preset.jobType)
+    setRunTemplateId(preset.runTemplateId)
+    setFsTemplateId(preset.fsTemplateId)
+    setOutputExt(preset.outputExt)
+    setTargetTags(preset.targetTags)
+    setEnableChunking(preset.enableChunking)
+    setChunkSizeFrames(preset.chunkSizeFrames)
+    setOverlapFrames(preset.overlapFrames)
+  }
 
   const handleLoadScenes = async () => {
     if (!selectedSource) return
@@ -159,6 +238,44 @@ export default function CreateJob() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       <form onSubmit={handleSubmit} className="bg-th-surface rounded-lg shadow p-4 space-y-4">
+        {/* Load from template preset */}
+        {presets.length > 0 && (
+          <div className="rounded border border-th-border-subtle bg-th-surface-muted px-3 py-2 space-y-1">
+            <label className="block text-xs font-medium text-th-text-secondary">Load from Template</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedPresetId}
+                onChange={e => handleLoadPreset(e.target.value)}
+                className="flex-1 bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              >
+                <option value="">Select a preset…</option>
+                {presets.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {selectedPresetId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPresetId('')
+                    setRunTemplateId('')
+                    setFsTemplateId('')
+                    setOutputExt('mkv')
+                    setTargetTags('')
+                    setEnableChunking(false)
+                  }}
+                  className="text-xs px-2 py-1.5 rounded border border-th-input-border text-th-text-muted hover:bg-th-surface"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {selectedPresetId && (
+              <p className="text-xs text-th-text-subtle">Form fields pre-filled from template — adjust as needed.</p>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="block text-xs text-th-text-muted mb-1">Source *</label>
           <select value={sourceId} onChange={e => setSourceId(e.target.value)} required

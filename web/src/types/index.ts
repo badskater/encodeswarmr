@@ -212,3 +212,34 @@ export interface Schedule {
   next_run_at: string | null
   created_at: string
 }
+
+// ThroughputPoint is a single hour bucket returned by the metrics/throughput endpoint.
+export interface ThroughputPoint {
+  hour: string  // ISO timestamp of the start of the hour bucket
+  completed: number
+}
+
+// QueueSummary summarises the current task queue depth.
+export interface QueueSummary {
+  pending: number
+  running: number
+  estimated_completion_sec: number | null
+}
+
+// ActivityEvent is a single entry in the recent job activity feed.
+export interface ActivityEvent {
+  job_id: string
+  source_path: string
+  status: string
+  changed_at: string
+}
+
+// Plugin represents an installed encoding plugin.
+export interface Plugin {
+  id: string
+  name: string
+  version: string
+  description: string
+  enabled: boolean
+  author: string | null
+}
