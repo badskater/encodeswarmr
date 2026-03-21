@@ -206,6 +206,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
 
+	// --- Schedules ---
+	mux.Handle("GET /api/v1/schedules", viewer(s.handleListSchedules))
+	mux.Handle("POST /api/v1/schedules", admin(s.handleCreateSchedule))
+	mux.Handle("GET /api/v1/schedules/{id}", viewer(s.handleGetSchedule))
+	mux.Handle("PUT /api/v1/schedules/{id}", admin(s.handleUpdateSchedule))
+	mux.Handle("DELETE /api/v1/schedules/{id}", admin(s.handleDeleteSchedule))
+
 	// Static UI — must be last so API routes take precedence.
 	staticH, err := s.staticHandler()
 	if err != nil {

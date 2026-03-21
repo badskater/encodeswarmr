@@ -20,6 +20,7 @@ import Variables from './pages/admin/Variables'
 import AudioConvert from './pages/AudioConvert'
 import PathMappings from './pages/admin/PathMappings'
 import EnrollmentTokens from './pages/admin/EnrollmentTokens'
+import Schedules from './pages/admin/Schedules'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -96,6 +97,7 @@ function App() {
             <Route path="/admin/variables" element={<Variables />} />
             <Route path="/admin/path-mappings" element={<PathMappings />} />
             <Route path="/admin/enrollment-tokens" element={<EnrollmentTokens />} />
+            <Route path="/admin/schedules" element={<Schedules />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

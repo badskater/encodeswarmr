@@ -40,6 +40,7 @@ export default function NavBar({ role, onLogout }: Props) {
                 <NavLink to="/admin/users" className={linkCls}>Users</NavLink>
                 <NavLink to="/admin/path-mappings" className={linkCls}>Path Mappings</NavLink>
                 <NavLink to="/admin/enrollment-tokens" className={linkCls}>Tokens</NavLink>
+                <NavLink to="/admin/schedules" className={linkCls}>Schedules</NavLink>
               </>
             )}
           </div>

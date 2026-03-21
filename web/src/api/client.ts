@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -247,6 +247,19 @@ export interface AgentMetric {
 
 export const listAgentMetrics = (agentId: string, window = '1h') =>
   request<AgentMetric[]>(`/agents/${agentId}/metrics${buildQuery({ window })}`)
+
+// Schedules
+export const listSchedules = () => request<Schedule[]>('/schedules')
+
+export const getSchedule = (id: string) => request<Schedule>(`/schedules/${id}`)
+
+export const createSchedule = (body: { name: string; cron_expr: string; job_template: unknown; enabled?: boolean }) =>
+  request<Schedule>('/schedules', { method: 'POST', body: JSON.stringify(body) })
+
+export const updateSchedule = (id: string, body: { name: string; cron_expr: string; job_template: unknown; enabled?: boolean }) =>
+  request<Schedule>(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const deleteSchedule = (id: string) => request<void>(`/schedules/${id}`, { method: 'DELETE' })
 
 // Audit Log
 export interface AuditEntry {
