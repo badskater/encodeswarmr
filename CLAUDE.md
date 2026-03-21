@@ -12,14 +12,22 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - Use coding agents using Sonnet
 - Only the architecture agent should use Opus
 
+## Documentation
+- Full project documentation: https://github.com/badskater/distributed-encoder/wiki
+- Architecture: ARCHITECTURE.md
+- Agent details: AGENTS.md
+- Deployment guide: DEPLOYMENT.md
+- Architecture Decision Records: docs/adr/
+
 ## Session workflow
 - Begin each work session by reviewing:
   - ARCHITECTURE.md
+  - The [Wiki](https://github.com/badskater/distributed-encoder/wiki) for current roadmap and feature status
 - Create a deployment document
   - DEPLOYMENT.md
 - If issues are discovered, add concise troubleshooting notes and prevention tips to:
   - DEPLOYMENT.md
-- Keep relevant README files up to date when behavior, configuration, or workflows change.
+- Keep relevant README files and Wiki pages up to date when behavior, configuration, or workflows change.
 
 ## Instruction precedence
 - Resolve conflicts in this order:
@@ -81,6 +89,5 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - After each commit, confirm the working tree is clean unless explicitly leaving staged follow-up work.
 
 ## Suggested future additions
-- Add ADRs for significant architectural decisions.
 - Add a lightweight runbook for incident triage.
  
