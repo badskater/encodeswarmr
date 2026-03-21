@@ -167,6 +167,17 @@ func (e *Engine) expandHDRDetectJob(ctx context.Context, job *db.Job) error {
 	// SOURCE_PATH is always the authoritative source location.
 	variables["SOURCE_PATH"] = source.UNCPath
 
+	// failJob deletes any tasks already created for this job, then marks it
+	// failed, preventing orphan tasks when expansion only partially succeeds.
+	failJob := func(cause error) error {
+		if delErr := e.store.DeleteTasksByJobID(ctx, job.ID); delErr != nil {
+			e.logger.Error("engine: cleanup orphan tasks failed",
+				"job_id", job.ID, "error", delErr)
+		}
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return cause
+	}
+
 	task, err := e.store.CreateTask(ctx, db.CreateTaskParams{
 		JobID:      job.ID,
 		ChunkIndex: 0,
@@ -174,29 +185,24 @@ func (e *Engine) expandHDRDetectJob(ctx context.Context, job *db.Job) error {
 		Variables:  variables,
 	})
 	if err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: hdr_detect create task: %w", err)
+		return failJob(fmt.Errorf("engine: hdr_detect create task: %w", err))
 	}
 
 	// Write built-in scripts to the task's script directory.
 	dir := filepath.Join(e.gen.baseDir, job.ID, "0000")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: hdr_detect mkdir: %w", err)
+		return failJob(fmt.Errorf("engine: hdr_detect mkdir: %w", err))
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "run.bat"), []byte(hdrDetectScriptBat), 0o644); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: hdr_detect write bat: %w", err)
+		return failJob(fmt.Errorf("engine: hdr_detect write bat: %w", err))
 	}
 	if err := os.WriteFile(filepath.Join(dir, "run.sh"), []byte(hdrDetectScriptSh), 0o755); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: hdr_detect write sh: %w", err)
+		return failJob(fmt.Errorf("engine: hdr_detect write sh: %w", err))
 	}
 
 	if err := e.store.SetTaskScriptDir(ctx, task.ID, dir); err != nil {
-		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
-		return fmt.Errorf("engine: hdr_detect set script dir: %w", err)
+		return failJob(fmt.Errorf("engine: hdr_detect set script dir: %w", err))
 	}
 
 	if err := e.store.UpdateJobTaskCounts(ctx, job.ID); err != nil {

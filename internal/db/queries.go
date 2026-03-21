@@ -784,6 +784,15 @@ func (s *pgStore) CancelPendingTasksForJob(ctx context.Context, jobID string) er
 	return err
 }
 
+func (s *pgStore) DeleteTasksByJobID(ctx context.Context, jobID string) error {
+	const q = `DELETE FROM tasks WHERE job_id = $1`
+	_, err := s.pool.Exec(ctx, q, jobID)
+	if err != nil {
+		return fmt.Errorf("db: delete tasks for job %s: %w", jobID, err)
+	}
+	return nil
+}
+
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
 	var rawVars []byte

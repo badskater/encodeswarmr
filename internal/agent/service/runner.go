@@ -64,6 +64,14 @@ func (r *runner) run(ctx context.Context) error {
 	r.offline = offDB
 	defer offDB.close()
 
+	// Prune stale synced entries on startup (default: 7 days).
+	const defaultJournalRetention = 7 * 24 * time.Hour
+	if pruneErr := offDB.PruneJournal(defaultJournalRetention); pruneErr != nil {
+		r.log.Warn("offline journal prune failed", "error", pruneErr)
+	} else {
+		r.log.Info("offline journal pruned")
+	}
+
 	// Establish gRPC connection with reconnect loop.
 	if err := r.connect(ctx); err != nil {
 		return fmt.Errorf("initial connect: %w", err)
@@ -92,6 +100,26 @@ func (r *runner) run(ctx context.Context) error {
 			r.mu.Unlock()
 			return busy
 		})
+	}()
+
+	// Periodically prune old synced journal entries (daily).
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if pruneErr := offDB.PruneJournal(defaultJournalRetention); pruneErr != nil {
+					r.log.Warn("offline journal daily prune failed", "error", pruneErr)
+				} else {
+					r.log.Info("offline journal daily prune complete")
+				}
+			}
+		}
 	}()
 
 	// Start heartbeat goroutine.

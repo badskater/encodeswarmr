@@ -97,6 +97,7 @@ func (s *stubStore) CompleteTask(context.Context, db.CompleteTaskParams) error {
 }
 func (s *stubStore) FailTask(context.Context, string, int, string) error    { return nil }
 func (s *stubStore) CancelPendingTasksForJob(context.Context, string) error { return nil }
+func (s *stubStore) DeleteTasksByJobID(context.Context, string) error       { return nil }
 
 func (s *stubStore) InsertTaskLog(context.Context, db.InsertTaskLogParams) error { return nil }
 func (s *stubStore) ListTaskLogs(context.Context, db.ListTaskLogsParams) ([]*db.TaskLog, error) {

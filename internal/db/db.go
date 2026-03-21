@@ -70,6 +70,7 @@ type Store interface {
 	CompleteTask(ctx context.Context, p CompleteTaskParams) error
 	FailTask(ctx context.Context, id string, exitCode int, errMsg string) error
 	CancelPendingTasksForJob(ctx context.Context, jobID string) error
+	DeleteTasksByJobID(ctx context.Context, jobID string) error
 
 	// --- Task Logs ---
 	InsertTaskLog(ctx context.Context, p InsertTaskLogParams) error

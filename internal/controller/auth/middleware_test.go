@@ -103,6 +103,7 @@ func (s *authStubStore) CompleteTask(context.Context, db.CompleteTaskParams) err
 }
 func (s *authStubStore) FailTask(context.Context, string, int, string) error    { return nil }
 func (s *authStubStore) CancelPendingTasksForJob(context.Context, string) error { return nil }
+func (s *authStubStore) DeleteTasksByJobID(context.Context, string) error       { return nil }
 
 func (s *authStubStore) InsertTaskLog(context.Context, db.InsertTaskLogParams) error { return nil }
 func (s *authStubStore) ListTaskLogs(context.Context, db.ListTaskLogsParams) ([]*db.TaskLog, error) {
