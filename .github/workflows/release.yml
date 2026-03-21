@@ -17,6 +17,9 @@ permissions:
   contents: write   # create/update GitHub Release and upload assets
   packages: write   # push container image to ghcr.io
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
 
   # ── Controller: .deb package ──────────────────────────────────────────────────
