@@ -16,15 +16,21 @@ version:     ${VERSION}
 maintainer:  "badskater"
 description: |
   Distributed Encoder Controller.
-  Orchestrates distributed video encoding across Windows Server agents.
-  Includes an embedded React web UI, REST API (port 8080), gRPC endpoint
-  with mTLS (port 9443), PostgreSQL-backed job queue, and webhook delivery.
+  Orchestrates distributed video encoding across agents (Windows/Linux).
+  Includes embedded React web UI, REST API (port 8080), gRPC with mTLS
+  (port 9443), PostgreSQL job queue, webhooks, HA failover, job scheduling,
+  cloud storage (S3/GCS/Azure), controller-side analysis and chunk concat
+  via ffmpeg, plugin system, encoding presets, and OpenAPI 3.1 spec.
 homepage:    https://github.com/badskater/distributed-encoder
-license:     MIT
+license:     AGPL-3.0
 
 depends:
   - shadow-utils
   - ca-certificates
+
+recommends:
+  - ffmpeg
+  - postgresql
 
 contents:
   # ── Controller binary ───────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ description: |
   executes video encoding tasks using shell scripts. Supports NVIDIA
   (NVENC), Intel (QSV), and AMD (AMF) hardware encoders via ffmpeg.
 homepage:    https://github.com/badskater/distributed-encoder
-license:     MIT
+license:     AGPL-3.0
 section:     misc
 priority:    optional
 
@@ -29,6 +29,7 @@ recommends:
   - ffmpeg
   - x265
   - x264
+  - svt-av1
 
 contents:
   # ── Agent binary ─────────────────────────────────────────────────────────────
