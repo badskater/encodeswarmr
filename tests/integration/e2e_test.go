@@ -22,7 +22,7 @@ import (
 // a task with a trivial success script is claimed by an agent, executed, and
 // the job reaches "completed" status.
 func TestE2E_HappyPath(t *testing.T) {
-	t.Parallel()
+	// Not parallel — E2E tests share a single Postgres and TruncateAll at start.
 	ctx := context.Background()
 
 	tc := testharness.StartController(t)
@@ -101,7 +101,7 @@ func TestE2E_HappyPath(t *testing.T) {
 // TestE2E_TaskFailure verifies that a task with a failing script causes the
 // job to reach "failed" status and the task records an error message.
 func TestE2E_TaskFailure(t *testing.T) {
-	t.Parallel()
+	// Not parallel — E2E tests share a single Postgres and TruncateAll at start.
 	ctx := context.Background()
 
 	tc := testharness.StartController(t)
@@ -171,7 +171,7 @@ func TestE2E_TaskFailure(t *testing.T) {
 // TestE2E_MultipleAgents verifies that multiple agents share work correctly:
 // four tasks are claimed across two agents, with no task claimed by both.
 func TestE2E_MultipleAgents(t *testing.T) {
-	t.Parallel()
+	// Not parallel — E2E tests share a single Postgres and TruncateAll at start.
 	ctx := context.Background()
 
 	tc := testharness.StartController(t)
@@ -278,7 +278,7 @@ func TestE2E_MultipleAgents(t *testing.T) {
 // TestE2E_HeartbeatUpdatesDB verifies that an agent's heartbeat_at field in
 // the DB is updated within a short window after the agent starts.
 func TestE2E_HeartbeatUpdatesDB(t *testing.T) {
-	t.Parallel()
+	// Not parallel — E2E tests share a single Postgres and TruncateAll at start.
 	ctx := context.Background()
 
 	tc := testharness.StartController(t)
@@ -313,7 +313,7 @@ func TestE2E_HeartbeatUpdatesDB(t *testing.T) {
 // TestE2E_OfflineSync verifies that results buffered in the agent's SQLite
 // offline journal are synced to the controller on startup.
 func TestE2E_OfflineSync(t *testing.T) {
-	t.Parallel()
+	// Not parallel — E2E tests share a single Postgres and TruncateAll at start.
 	ctx := context.Background()
 
 	tc := testharness.StartController(t)
