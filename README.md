@@ -63,17 +63,20 @@ Web UI at `http://localhost:8080`. First visit prompts admin account creation.
 
 ## Documentation
 
+All documentation lives in the **[Wiki](https://github.com/badskater/distributed-encoder/wiki)**.
+
 | Resource | Description |
 |---|---|
-| **[Wiki](https://github.com/badskater/distributed-encoder/wiki)** | Full documentation: getting started, configuration, API reference, roadmap, presets |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System design, data flows, component deep-dives |
-| [AGENTS.md](AGENTS.md) | Agent specification, state machine, configuration reference |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step deployment, TLS setup, HA configuration |
-| [docs/adr/](docs/adr/) | Architecture Decision Records |
-| [docs/grafana/](docs/grafana/) | Grafana dashboard templates |
-| [docs/capacity-planning.md](docs/capacity-planning.md) | Sizing guidelines |
-| [docs/ha-setup.md](docs/ha-setup.md) | HA failover guide |
-| [docs/cloud-storage.md](docs/cloud-storage.md) | Cloud storage integration |
+| **[Wiki Home](https://github.com/badskater/distributed-encoder/wiki)** | Navigation hub for all documentation |
+| [Getting Started](https://github.com/badskater/distributed-encoder/wiki/Getting-Started) | Prerequisites, build, install, first run |
+| [Deployment](https://github.com/badskater/distributed-encoder/wiki/Deployment) | Step-by-step deployment, TLS, HA, troubleshooting |
+| [Agents](https://github.com/badskater/distributed-encoder/wiki/Agents) | Agent specification, state machine, configuration |
+| [Configuration](https://github.com/badskater/distributed-encoder/wiki/Configuration) | Agent and Controller YAML reference |
+| [API Reference](https://github.com/badskater/distributed-encoder/wiki/API-Reference) | REST endpoints and example workflow |
+| [Architecture](https://github.com/badskater/distributed-encoder/wiki/Architecture) | System design and component deep-dives |
+| [Roadmap](https://github.com/badskater/distributed-encoder/wiki/Roadmap) | All 6 completed phases |
+
+Also in repo: [ARCHITECTURE.md](ARCHITECTURE.md) (detailed system design), [CLAUDE.md](CLAUDE.md) (contributor instructions)
 
 ## License
 

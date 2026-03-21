@@ -14,10 +14,10 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 
 ## Documentation
 - Full project documentation: https://github.com/badskater/distributed-encoder/wiki
-- Architecture: ARCHITECTURE.md
-- Agent details: AGENTS.md
-- Deployment guide: DEPLOYMENT.md
-- Architecture Decision Records: docs/adr/
+- Architecture: ARCHITECTURE.md (in repo)
+- Agent details: https://github.com/badskater/distributed-encoder/wiki/Agents
+- Deployment guide: https://github.com/badskater/distributed-encoder/wiki/Deployment
+- Architecture Decision Records: https://github.com/badskater/distributed-encoder/wiki/ADR-Index
 
 ## Session workflow
 - Begin each work session by reviewing:
