@@ -156,6 +156,12 @@ type Store interface {
 	ListDueSchedules(ctx context.Context) ([]*Schedule, error)
 	MarkScheduleRun(ctx context.Context, p MarkScheduleRunParams) error
 
+	// --- Estimation ---
+	// GetAvgFPSStats returns the average encoding FPS and sample count from
+	// completed encode tasks for the given source.  Returns (0, 0, nil) when
+	// there is no historical data.
+	GetAvgFPSStats(ctx context.Context, sourceID string) (avgFPS float64, sampleCount int64, err error)
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }
