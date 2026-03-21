@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/badskater/distributed-encoder/internal/db"
 	"github.com/badskater/distributed-encoder/tests/integration/testharness"
 )
 
@@ -794,4 +795,385 @@ func setupAndLogin(t *testing.T, tc *testharness.TestController) {
 	resp := mustDo(t, client, req)
 	drainClose(resp)
 	// 200 = newly set up, 4xx = already done — both are fine here.
+}
+
+// --------------------------------------------------------------------------
+// TestAPIKeys
+// --------------------------------------------------------------------------
+
+// TestAPIKeys exercises the full API key lifecycle: create, list, use for auth,
+// delete, and verify the deleted key is rejected.
+func TestAPIKeys(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// POST /api/v1/api-keys → 201, response contains plaintext key.
+	body := jsonBody(t, map[string]any{"name": "test-key"})
+	req, _ := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/api-keys", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("create api key: expected 201, got %d: %s", resp.StatusCode, bodyBytes)
+	}
+	var created map[string]any
+	decodeJSON(t, resp, &created)
+	createdData, _ := created["data"].(map[string]any)
+	keyID, _ := createdData["id"].(string)
+	plaintext, _ := createdData["key"].(string)
+	if keyID == "" {
+		t.Fatal("create api key: no id returned")
+	}
+	if plaintext == "" {
+		t.Fatal("create api key: no plaintext key returned")
+	}
+
+	// GET /api/v1/api-keys → 200, list contains the key (no plaintext).
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/api-keys", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list api keys: expected 200, got %d", resp.StatusCode)
+	}
+	var listResp map[string]any
+	decodeJSON(t, resp, &listResp)
+	items, _ := listResp["data"].([]any)
+	if len(items) == 0 {
+		t.Error("list api keys: expected at least 1 key")
+	}
+	for _, item := range items {
+		m, _ := item.(map[string]any)
+		if _, hasKey := m["key"]; hasKey {
+			t.Error("list api keys: plaintext key should not be present in listing")
+		}
+	}
+
+	// Use the plaintext key as Bearer token to call GET /api/v1/agents → 200.
+	bearerClient := &http.Client{}
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/agents", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	resp = mustDo(t, bearerClient, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("bearer auth: expected 200, got %d", resp.StatusCode)
+	}
+
+	// DELETE /api/v1/api-keys/{id} → 200.
+	req, _ = http.NewRequest(http.MethodDelete, tc.HTTPBaseURL+"/api/v1/api-keys/"+keyID, nil)
+	resp = mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("delete api key: expected 200, got %d", resp.StatusCode)
+	}
+
+	// Try Bearer auth again with deleted key → 401.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/agents", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	resp = mustDo(t, bearerClient, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("deleted key bearer auth: expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestNotificationPrefs
+// --------------------------------------------------------------------------
+
+// TestNotificationPrefs exercises GET and PUT for notification preferences.
+func TestNotificationPrefs(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// GET /api/v1/me/notifications → 200, returns defaults.
+	req, _ := http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/me/notifications", nil)
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get notification prefs: expected 200, got %d", resp.StatusCode)
+	}
+	var prefsResp map[string]any
+	decodeJSON(t, resp, &prefsResp)
+	prefsData, _ := prefsResp["data"].(map[string]any)
+	if prefsData["notify_on_job_complete"] != true {
+		t.Errorf("default notify_on_job_complete: want true, got %v", prefsData["notify_on_job_complete"])
+	}
+	if prefsData["notify_on_job_failed"] != true {
+		t.Errorf("default notify_on_job_failed: want true, got %v", prefsData["notify_on_job_failed"])
+	}
+	if prefsData["notify_on_agent_stale"] != false {
+		t.Errorf("default notify_on_agent_stale: want false, got %v", prefsData["notify_on_agent_stale"])
+	}
+
+	// PUT /api/v1/me/notifications with notify_on_agent_stale=true → 200.
+	updateBody := jsonBody(t, map[string]any{
+		"notify_on_job_complete": true,
+		"notify_on_job_failed":   true,
+		"notify_on_agent_stale":  true,
+	})
+	req, _ = http.NewRequest(http.MethodPut, tc.HTTPBaseURL+"/api/v1/me/notifications", updateBody)
+	req.Header.Set("Content-Type", "application/json")
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("update notification prefs: expected 200, got %d: %s", resp.StatusCode, bodyBytes)
+	}
+	drainClose(resp)
+
+	// GET /api/v1/me/notifications → 200, agent_stale=true.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/me/notifications", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get notification prefs after update: expected 200, got %d", resp.StatusCode)
+	}
+	var updatedResp map[string]any
+	decodeJSON(t, resp, &updatedResp)
+	updatedData, _ := updatedResp["data"].(map[string]any)
+	if updatedData["notify_on_agent_stale"] != true {
+		t.Errorf("notify_on_agent_stale after update: want true, got %v", updatedData["notify_on_agent_stale"])
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestPresets
+// --------------------------------------------------------------------------
+
+// TestPresets exercises listing all presets, getting one by name, and getting
+// a nonexistent preset.
+func TestPresets(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// GET /api/v1/presets → 200, returns array with at least 10 presets.
+	req, _ := http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/presets", nil)
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list presets: expected 200, got %d", resp.StatusCode)
+	}
+	var listResp map[string]any
+	decodeJSON(t, resp, &listResp)
+	items, _ := listResp["data"].([]any)
+	if len(items) < 10 {
+		t.Errorf("list presets: expected at least 10 presets, got %d", len(items))
+	}
+
+	// Pick the first preset name.
+	firstPreset, _ := items[0].(map[string]any)
+	presetName, _ := firstPreset["name"].(string)
+	if presetName == "" {
+		t.Fatal("list presets: first preset has no name")
+	}
+
+	// GET /api/v1/presets/{name} → 200.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/presets/"+presetName, nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get preset %q: expected 200, got %d", presetName, resp.StatusCode)
+	}
+	drainClose(resp)
+
+	// GET /api/v1/presets/nonexistent → 404.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/presets/nonexistent", nil)
+	resp = mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("get nonexistent preset: expected 404, got %d", resp.StatusCode)
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestPlugins
+// --------------------------------------------------------------------------
+
+// TestPlugins exercises listing plugins and toggling enabled/disabled state.
+func TestPlugins(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// GET /api/v1/plugins → 200, returns array with at least 4 built-in plugins.
+	req, _ := http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/plugins", nil)
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list plugins: expected 200, got %d", resp.StatusCode)
+	}
+	var listResp map[string]any
+	decodeJSON(t, resp, &listResp)
+	items, _ := listResp["data"].([]any)
+	if len(items) < 4 {
+		t.Errorf("list plugins: expected at least 4 plugins, got %d", len(items))
+	}
+
+	// Pick the first plugin name.
+	firstPlugin, _ := items[0].(map[string]any)
+	pluginName, _ := firstPlugin["name"].(string)
+	if pluginName == "" {
+		t.Fatal("list plugins: first plugin has no name")
+	}
+
+	// PUT /api/v1/plugins/{name}/disable → 200.
+	req, _ = http.NewRequest(http.MethodPut, tc.HTTPBaseURL+"/api/v1/plugins/"+pluginName+"/disable", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("disable plugin %q: expected 200, got %d: %s", pluginName, resp.StatusCode, bodyBytes)
+	}
+	drainClose(resp)
+
+	// GET /api/v1/plugins → first plugin now disabled.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/plugins", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list plugins after disable: expected 200, got %d", resp.StatusCode)
+	}
+	var listResp2 map[string]any
+	decodeJSON(t, resp, &listResp2)
+	items2, _ := listResp2["data"].([]any)
+	found := false
+	for _, item := range items2 {
+		m, _ := item.(map[string]any)
+		if m["name"] == pluginName {
+			found = true
+			if m["enabled"] != false {
+				t.Errorf("plugin %q: expected enabled=false after disable, got %v", pluginName, m["enabled"])
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("plugin %q not found in list after disable", pluginName)
+	}
+
+	// PUT /api/v1/plugins/{name}/enable → 200.
+	req, _ = http.NewRequest(http.MethodPut, tc.HTTPBaseURL+"/api/v1/plugins/"+pluginName+"/enable", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("enable plugin %q: expected 200, got %d", pluginName, resp.StatusCode)
+	}
+	drainClose(resp)
+}
+
+// --------------------------------------------------------------------------
+// TestEstimation
+// --------------------------------------------------------------------------
+
+// TestEstimation exercises the cost estimation endpoint.
+func TestEstimation(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// Create a source.
+	src := testharness.CreateTestSource(t, tc.Store)
+
+	// POST /api/v1/estimate with source_id and codec → 200, confidence=none (no historical data).
+	body := jsonBody(t, map[string]any{
+		"source_id": src.ID,
+		"codec":     "x265",
+	})
+	req, _ := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/estimate", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("estimate: expected 200, got %d: %s", resp.StatusCode, bodyBytes)
+	}
+	var estResp map[string]any
+	decodeJSON(t, resp, &estResp)
+	estData, _ := estResp["data"].(map[string]any)
+	if estData["confidence"] != "none" {
+		t.Errorf("estimate confidence: want %q, got %v", "none", estData["confidence"])
+	}
+
+	// POST /api/v1/estimate without source_id → 400.
+	body2 := jsonBody(t, map[string]any{"codec": "x265"})
+	req, _ = http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/estimate", body2)
+	req.Header.Set("Content-Type", "application/json")
+	resp = mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("estimate without source_id: expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestSecurityHeaders
+// --------------------------------------------------------------------------
+
+// TestSecurityHeaders verifies that the expected security headers are present
+// on any response from the controller.
+func TestSecurityHeaders(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	resp, err := http.Get(tc.HTTPBaseURL + "/health") //nolint:gosec,noctx
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	drainClose(resp)
+
+	if v := resp.Header.Get("X-Content-Type-Options"); v != "nosniff" {
+		t.Errorf("X-Content-Type-Options: want %q, got %q", "nosniff", v)
+	}
+	if v := resp.Header.Get("X-Frame-Options"); v != "DENY" {
+		t.Errorf("X-Frame-Options: want %q, got %q", "DENY", v)
+	}
+	if v := resp.Header.Get("Referrer-Policy"); v == "" {
+		t.Error("Referrer-Policy header is missing")
+	}
+}
+
+// --------------------------------------------------------------------------
+// TestPushUpgrade
+// --------------------------------------------------------------------------
+
+// TestPushUpgrade verifies that an admin can request a push upgrade for a
+// registered agent, and that the upgrade_requested flag is set in the DB.
+func TestPushUpgrade(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	// Register an agent directly via the store.
+	agent, err := tc.Store.UpsertAgent(context.Background(), db.UpsertAgentParams{
+		Name:      "upgrade-test-agent",
+		Hostname:  "WIN-UPGRADE",
+		IPAddress: "10.99.0.1",
+		Tags:      []string{},
+	})
+	if err != nil {
+		t.Fatalf("upsert agent: %v", err)
+	}
+
+	// Approve the agent (move from pending_approval → idle).
+	if err := tc.Store.UpdateAgentStatus(context.Background(), agent.ID, "idle"); err != nil {
+		t.Fatalf("approve agent: %v", err)
+	}
+
+	// POST /api/v1/agents/{id}/upgrade → 200.
+	req, _ := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/agents/"+agent.ID+"/upgrade", nil)
+	resp := mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("push upgrade: expected 200, got %d", resp.StatusCode)
+	}
+
+	// Verify upgrade_requested flag is set in the DB.
+	updated, err := tc.Store.GetAgentByID(context.Background(), agent.ID)
+	if err != nil {
+		t.Fatalf("get agent after upgrade request: %v", err)
+	}
+	if !updated.UpgradeRequested {
+		t.Error("upgrade_requested: want true, got false")
+	}
 }
