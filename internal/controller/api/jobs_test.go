@@ -208,6 +208,13 @@ func (s *stubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) (
 	return nil, nil
 }
 func (s *stubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
+func (s *stubStore) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *stubStore) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *stubStore) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *stubStore) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *stubStore) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *stubStore) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *stubStore) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -319,6 +326,13 @@ func (s *listJobsStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntr
 func (s *listJobsStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error        { return nil }
 func (s *listJobsStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
 func (s *listJobsStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)              { return nil, 0, nil }
+func (s *listJobsStore) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *listJobsStore) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *listJobsStore) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *listJobsStore) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *listJobsStore) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *listJobsStore) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *listJobsStore) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // TestHandleGetJob

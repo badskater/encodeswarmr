@@ -209,6 +209,13 @@ func (s *authStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntr
 func (s *authStubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error        { return nil }
 func (s *authStubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
 func (s *authStubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)              { return nil, 0, nil }
+func (s *authStubStore) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *authStubStore) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *authStubStore) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *authStubStore) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *authStubStore) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *authStubStore) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *authStubStore) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

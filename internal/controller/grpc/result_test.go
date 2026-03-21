@@ -222,6 +222,13 @@ func (s *resultStub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryPa
 func (s *resultStub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
 func (s *resultStub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
 func (s *resultStub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
+func (s *resultStub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *resultStub) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *resultStub) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *resultStub) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *resultStub) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *resultStub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *resultStub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

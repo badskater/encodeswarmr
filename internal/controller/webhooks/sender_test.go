@@ -211,6 +211,13 @@ func (s *senderStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEn
 func (s *senderStubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
 func (s *senderStubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
 func (s *senderStubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
+func (s *senderStubStore) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *senderStubStore) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *senderStubStore) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *senderStubStore) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *senderStubStore) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *senderStubStore) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *senderStubStore) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // TestSenderSend_success — delivers on first attempt to a real HTTP server

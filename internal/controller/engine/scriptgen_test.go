@@ -123,6 +123,13 @@ func (s *scriptGenStub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntr
 func (s *scriptGenStub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
 func (s *scriptGenStub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
 func (s *scriptGenStub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
+func (s *scriptGenStub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *scriptGenStub) GetScheduleByID(_ context.Context, _ string) (*db.Schedule, error)                    { return nil, nil }
+func (s *scriptGenStub) ListSchedules(_ context.Context) ([]*db.Schedule, error)                              { return nil, nil }
+func (s *scriptGenStub) UpdateSchedule(_ context.Context, _ db.UpdateScheduleParams) (*db.Schedule, error)    { return nil, nil }
+func (s *scriptGenStub) DeleteSchedule(_ context.Context, _ string) error                                     { return nil }
+func (s *scriptGenStub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
+func (s *scriptGenStub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
 // ---------------------------------------------------------------------------
 // RenderSingle tests
