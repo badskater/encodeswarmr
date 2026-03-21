@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -202,3 +202,24 @@ export const deleteUser = (id: string) => request<void>(`/users/${id}`, { method
 
 export const updateUserRole = (id: string, role: string) =>
   request<void>(`/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) })
+
+// Path Mappings
+export const listPathMappings = () => request<PathMapping[]>('/path-mappings')
+
+export const createPathMapping = (body: { name: string; windows_prefix: string; linux_prefix: string; enabled?: boolean }) =>
+  request<PathMapping>('/path-mappings', { method: 'POST', body: JSON.stringify(body) })
+
+export const updatePathMapping = (id: string, body: Partial<PathMapping>) =>
+  request<PathMapping>(`/path-mappings/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const deletePathMapping = (id: string) =>
+  request<void>(`/path-mappings/${id}`, { method: 'DELETE' })
+
+// Enrollment Tokens
+export const listEnrollmentTokens = () => request<EnrollmentToken[]>('/agent-tokens')
+
+export const createEnrollmentToken = (body?: { expires_at?: string }) =>
+  request<EnrollmentToken>('/agent-tokens', { method: 'POST', body: JSON.stringify(body ?? {}) })
+
+export const deleteEnrollmentToken = (id: string) =>
+  request<void>(`/agent-tokens/${id}`, { method: 'DELETE' })

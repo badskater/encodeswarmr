@@ -31,12 +31,15 @@ export default function NavBar({ role, onLogout }: Props) {
             <NavLink to="/sources" className={linkCls}>Sources</NavLink>
             <NavLink to="/jobs" className={linkCls}>Jobs</NavLink>
             <NavLink to="/agents" className={linkCls}>Agents</NavLink>
+            <NavLink to="/audio-convert" className={linkCls}>Audio</NavLink>
             {role === 'admin' && (
               <>
                 <NavLink to="/admin/templates" className={linkCls}>Templates</NavLink>
                 <NavLink to="/admin/variables" className={linkCls}>Variables</NavLink>
                 <NavLink to="/admin/webhooks" className={linkCls}>Webhooks</NavLink>
                 <NavLink to="/admin/users" className={linkCls}>Users</NavLink>
+                <NavLink to="/admin/path-mappings" className={linkCls}>Path Mappings</NavLink>
+                <NavLink to="/admin/enrollment-tokens" className={linkCls}>Tokens</NavLink>
               </>
             )}
           </div>

@@ -17,6 +17,9 @@ import Templates from './pages/admin/Templates'
 import Users from './pages/admin/Users'
 import Webhooks from './pages/admin/Webhooks'
 import Variables from './pages/admin/Variables'
+import AudioConvert from './pages/AudioConvert'
+import PathMappings from './pages/admin/PathMappings'
+import EnrollmentTokens from './pages/admin/EnrollmentTokens'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -84,12 +87,15 @@ function App() {
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />
+        <Route path="/audio-convert" element={<AudioConvert />} />
         {user.role === 'admin' && (
           <>
             <Route path="/admin/templates" element={<Templates />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/webhooks" element={<Webhooks />} />
             <Route path="/admin/variables" element={<Variables />} />
+            <Route path="/admin/path-mappings" element={<PathMappings />} />
+            <Route path="/admin/enrollment-tokens" element={<EnrollmentTokens />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />
