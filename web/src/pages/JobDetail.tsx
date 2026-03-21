@@ -137,6 +137,21 @@ export default function JobDetail() {
         )}
       </div>
 
+      {job.tasks_total > 1 && job.job_type === 'encode' && (
+        <div className="bg-th-surface-muted border border-th-border rounded p-3 text-xs space-y-2">
+          <p className="font-medium text-th-text-secondary">Multi-chunk encode — merge required after completion</p>
+          <p className="text-th-text-muted">After all chunks complete, concatenate with ffmpeg:</p>
+          <pre className="bg-th-bg rounded p-2 font-mono text-th-text overflow-x-auto">
+            {`# Create file list\n` +
+             Array.from({ length: job.tasks_total }, (_, i) =>
+               `echo "file 'chunk_${String(i).padStart(4, '0')}.mkv'" >> filelist.txt`
+             ).join('\n') +
+             `\n\n# Concatenate\nffmpeg -f concat -safe 0 -i filelist.txt -c copy output.mkv`}
+          </pre>
+          <p className="text-th-text-subtle">Adjust filenames to match your output extension and paths.</p>
+        </div>
+      )}
+
       <div className="bg-th-surface rounded-lg shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-th-border">
           <h2 className="text-sm font-semibold text-th-text-secondary">

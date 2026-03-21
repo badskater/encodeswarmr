@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -327,4 +328,112 @@ func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleGetSourceScenes returns the scene boundaries derived from the most
+// recent scene-analysis result for the source.  Each boundary includes the
+// frame number, PTS value, and a formatted HH:MM:SS.ff timecode.
+//
+// GET /api/v1/sources/{id}/scenes
+func (s *Server) handleGetSourceScenes(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	_, err := s.store.GetSourceByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "source not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get source for scenes", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	result, err := s.store.GetAnalysisResult(r.Context(), id, "scene")
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "no scene analysis available for this source — run an analysis job first")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get scene analysis result", "err", err, "source_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	// Decode the stored JSONB frame_data array.
+	type framePoint struct {
+		Frame *int     `json:"frame"`
+		PTS   *float64 `json:"pts"`
+	}
+	var frameData []framePoint
+	if len(result.FrameData) > 0 {
+		if err := json.Unmarshal(result.FrameData, &frameData); err != nil {
+			s.logger.Error("unmarshal scene frame_data", "err", err, "source_id", id)
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+			return
+		}
+	}
+
+	// Decode the stored JSONB summary to derive FPS and total frame count.
+	type summary struct {
+		FrameCount  *int     `json:"frame_count"`
+		DurationSec *float64 `json:"duration_sec"`
+	}
+	var sum summary
+	if len(result.Summary) > 0 {
+		_ = json.Unmarshal(result.Summary, &sum) // best-effort
+	}
+
+	fps := 24.0
+	totalFrames := 0
+	durationSec := 0.0
+	if sum.FrameCount != nil && sum.DurationSec != nil && *sum.DurationSec > 0 {
+		fps = float64(*sum.FrameCount) / *sum.DurationSec
+		totalFrames = *sum.FrameCount
+		durationSec = *sum.DurationSec
+	}
+
+	type sceneBoundary struct {
+		Frame    int     `json:"frame"`
+		PTS      float64 `json:"pts"`
+		Timecode string  `json:"timecode"`
+	}
+
+	scenes := make([]sceneBoundary, 0, len(frameData))
+	for _, fp := range frameData {
+		frame := 0
+		pts := 0.0
+		if fp.Frame != nil {
+			frame = *fp.Frame
+			pts = float64(frame) / fps
+		} else if fp.PTS != nil {
+			pts = *fp.PTS
+			frame = int(pts * fps)
+		} else {
+			continue
+		}
+		scenes = append(scenes, sceneBoundary{
+			Frame:    frame,
+			PTS:      pts,
+			Timecode: ptsToTimecode(pts, fps),
+		})
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"source_id":    id,
+		"fps":          fps,
+		"total_frames": totalFrames,
+		"duration_sec": durationSec,
+		"scenes":       scenes,
+	})
+}
+
+// ptsToTimecode formats a PTS (seconds) value as HH:MM:SS.ff using the given
+// frame rate to compute the sub-second frame component.
+func ptsToTimecode(pts, fps float64) string {
+	h := int(pts) / 3600
+	m := (int(pts) % 3600) / 60
+	sec := int(pts) % 60
+	frame := int((pts-float64(int(pts)))*fps + 0.5)
+	return fmt.Sprintf("%02d:%02d:%02d.%02d", h, m, sec, frame)
 }

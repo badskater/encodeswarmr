@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData } from '../types'
 
 const API_BASE = '/api/v1'
 
@@ -99,6 +99,11 @@ export interface CreateJobRequest {
     output_root?: string
     output_extension?: string
     extra_vars?: Record<string, string>
+    chunking_config?: {
+      enable_chunking: boolean
+      chunk_size_frames: number
+      overlap_frames: number
+    }
   }
 }
 
@@ -151,6 +156,12 @@ export const updateSourceHDR = (id: string, hdr_type: string, dv_profile: number
 export const deleteSource = (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' })
 
 export const getAnalysis = (sourceId: string) => request<AnalysisResult>(`/analysis/${sourceId}`)
+
+export const listAnalysisResults = (sourceId: string) =>
+  request<AnalysisResult[]>(`/analysis/${sourceId}/all`)
+
+export const getSourceScenes = (sourceId: string) =>
+  request<SceneData>(`/sources/${sourceId}/scenes`)
 
 // Templates
 export const listTemplates = () => request<Template[]>('/templates')

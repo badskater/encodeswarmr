@@ -100,7 +100,8 @@ func isControllerAnalysisJob(jobType string) bool {
 	return false
 }
 
-// expandEncodeJob creates tasks for a multi-chunk encode job.
+// expandEncodeJob creates tasks for a multi-chunk encode job and appends a
+// final concat task that merges the chunk outputs once all chunks complete.
 func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 	if len(job.EncodeConfig.ChunkBoundaries) == 0 {
 		e.logger.Error("engine: encode job has no chunk boundaries, skipping",
@@ -130,14 +131,18 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 		return cause
 	}
 
+	chunkPaths := make([]string, len(job.EncodeConfig.ChunkBoundaries))
+
 	// Create a task for each chunk and render its scripts.
 	for i := range job.EncodeConfig.ChunkBoundaries {
 		// Build output path using string concatenation to preserve UNC prefix.
 		outputPath := job.EncodeConfig.OutputRoot + `\` + job.ID + fmt.Sprintf(`\chunk_%04d.%s`, i, ext)
+		chunkPaths[i] = outputPath
 
 		task, err := e.store.CreateTask(ctx, db.CreateTaskParams{
 			JobID:      job.ID,
 			ChunkIndex: i,
+			TaskType:   db.TaskTypeEncode,
 			SourcePath: source.UNCPath,
 			OutputPath: outputPath,
 			Variables:  map[string]string{},
@@ -154,6 +159,36 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 		if err := e.store.SetTaskScriptDir(ctx, task.ID, scriptDir); err != nil {
 			return failJob(fmt.Errorf("engine: set script dir chunk %d: %w", i, err))
 		}
+	}
+
+	// Append a concat task that merges all chunk outputs into the final output
+	// path.  The scheduler will not dispatch it until every non-concat sibling
+	// task in the same job has reached a terminal state.
+	finalOutput := job.EncodeConfig.OutputRoot + `\` + job.ID + fmt.Sprintf(`\output.%s`, ext)
+	concatChunkIndex := len(job.EncodeConfig.ChunkBoundaries) // place after all chunk tasks
+
+	concatTask, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+		JobID:      job.ID,
+		ChunkIndex: concatChunkIndex,
+		TaskType:   db.TaskTypeConcat,
+		SourcePath: source.UNCPath,
+		OutputPath: finalOutput,
+		Variables:  map[string]string{},
+	})
+	if err != nil {
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return fmt.Errorf("engine: create concat task: %w", err)
+	}
+
+	concatScriptDir, err := e.gen.RenderConcat(ctx, job, concatTask, chunkPaths, finalOutput)
+	if err != nil {
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return fmt.Errorf("engine: render concat scripts: %w", err)
+	}
+
+	if err := e.store.SetTaskScriptDir(ctx, concatTask.ID, concatScriptDir); err != nil {
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return fmt.Errorf("engine: set script dir for concat task: %w", err)
 	}
 
 	// All tasks created successfully — update counters and keep status as queued.
