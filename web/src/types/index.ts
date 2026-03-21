@@ -152,3 +152,23 @@ export interface AnalysisResult {
   summary?: AnalysisSummary | null
   created_at: string
 }
+
+export interface PathMapping {
+  id: string
+  name: string
+  windows_prefix: string
+  linux_prefix: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface EnrollmentToken {
+  id: string
+  token: string
+  created_by: string
+  used_by: string | null
+  used_at: string | null
+  expires_at: string | null
+  created_at: string
+}
