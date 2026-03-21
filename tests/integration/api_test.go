@@ -1177,3 +1177,137 @@ func TestPushUpgrade(t *testing.T) {
 		t.Error("upgrade_requested: want true, got false")
 	}
 }
+
+// --------------------------------------------------------------------------
+// TestFlowsCRUD
+// --------------------------------------------------------------------------
+
+// TestFlowsCRUD exercises the full flow pipeline CRUD lifecycle over the HTTP API.
+func TestFlowsCRUD(t *testing.T) {
+	tc := testharness.StartController(t)
+
+	_, sessionToken := testharness.CreateAdminUser(t, tc.Store, tc.AuthSvc)
+	authed := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, sessionToken)
+
+	graph := map[string]any{
+		"nodes": []any{
+			map[string]any{
+				"id":   "n1",
+				"type": "input_source",
+				"data": map[string]any{"label": "Source"},
+			},
+			map[string]any{
+				"id":   "n2",
+				"type": "encode_x265",
+				"data": map[string]any{"preset": "slow", "crf": "18"},
+			},
+		},
+		"edges": []any{
+			map[string]any{
+				"id":           "e1",
+				"source":       "n1",
+				"target":       "n2",
+				"sourceHandle": "",
+			},
+		},
+	}
+
+	// 1. POST /api/v1/flows → 201.
+	body := jsonBody(t, map[string]any{
+		"name":        fmt.Sprintf("test-flow-%d", time.Now().UnixNano()),
+		"description": "integration test flow",
+		"graph":       graph,
+	})
+	req, _ := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/flows", body)
+	req.Header.Set("Content-Type", "application/json")
+	resp := mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("create flow: expected 201, got %d: %s", resp.StatusCode, bodyBytes)
+	}
+	var created map[string]any
+	decodeJSON(t, resp, &created)
+	createdData, _ := created["data"].(map[string]any)
+	flowID, _ := createdData["id"].(string)
+	if flowID == "" {
+		t.Fatal("create flow: no id returned")
+	}
+
+	// 2. GET /api/v1/flows → list contains the flow.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/flows", nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list flows: expected 200, got %d", resp.StatusCode)
+	}
+	var list map[string]any
+	decodeJSON(t, resp, &list)
+	listData, _ := list["data"].([]any)
+	found := false
+	for _, item := range listData {
+		m, _ := item.(map[string]any)
+		if m["id"] == flowID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("list flows: created flow %q not found in list", flowID)
+	}
+
+	// 3. GET /api/v1/flows/{id} → matches created flow.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/flows/"+flowID, nil)
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get flow: expected 200, got %d", resp.StatusCode)
+	}
+	var got map[string]any
+	decodeJSON(t, resp, &got)
+	gotData, _ := got["data"].(map[string]any)
+	if gotData["id"] != flowID {
+		t.Errorf("get flow: id = %v, want %s", gotData["id"], flowID)
+	}
+
+	// 4. PUT /api/v1/flows/{id} → 200 with updated name.
+	updatedGraph := map[string]any{
+		"nodes": []any{
+			map[string]any{"id": "n1", "type": "input_source", "data": map[string]any{}},
+		},
+		"edges": []any{},
+	}
+	updateBody := jsonBody(t, map[string]any{
+		"name":        "updated-flow-name",
+		"description": "updated description",
+		"graph":       updatedGraph,
+	})
+	req, _ = http.NewRequest(http.MethodPut, tc.HTTPBaseURL+"/api/v1/flows/"+flowID, updateBody)
+	req.Header.Set("Content-Type", "application/json")
+	resp = mustDo(t, authed, req)
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("update flow: expected 200, got %d: %s", resp.StatusCode, bodyBytes)
+	}
+	var updated map[string]any
+	decodeJSON(t, resp, &updated)
+	updatedData, _ := updated["data"].(map[string]any)
+	if updatedData["name"] != "updated-flow-name" {
+		t.Errorf("update flow: name = %v, want updated-flow-name", updatedData["name"])
+	}
+
+	// 5. DELETE /api/v1/flows/{id} → 204.
+	req, _ = http.NewRequest(http.MethodDelete, tc.HTTPBaseURL+"/api/v1/flows/"+flowID, nil)
+	resp = mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete flow: expected 204, got %d", resp.StatusCode)
+	}
+
+	// 6. GET /api/v1/flows/{id} after delete → 404.
+	req, _ = http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/flows/"+flowID, nil)
+	resp = mustDo(t, authed, req)
+	drainClose(resp)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("get deleted flow: expected 404, got %d", resp.StatusCode)
+	}
+}

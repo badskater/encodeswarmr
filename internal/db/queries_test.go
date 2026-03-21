@@ -2457,3 +2457,155 @@ func TestMarkScheduleRun_Error(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Flows
+// ---------------------------------------------------------------------------
+
+func flowCols() []string {
+	return []string{"id", "name", "description", "graph", "created_at", "updated_at"}
+}
+
+func flowRow(id, name string) *pgxmock.Rows {
+	graph, _ := json.Marshal(map[string]any{"nodes": []any{}, "edges": []any{}})
+	return pgxmock.NewRows(flowCols()).
+		AddRow(id, name, "test description", graph, now, now)
+}
+
+func TestCreateFlow_Success(t *testing.T) {
+	s, mock := newMock(t)
+	graph := json.RawMessage(`{"nodes":[],"edges":[]}`)
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO flows`)).
+		WithArgs(anyArg, anyArg, anyArg).
+		WillReturnRows(flowRow("fid1", "my-pipeline"))
+	f, err := s.CreateFlow(context.Background(), CreateFlowParams{
+		Name:        "my-pipeline",
+		Description: "test description",
+		Graph:       graph,
+	})
+	if err != nil || f.ID != "fid1" {
+		t.Fatalf("err=%v f=%v", err, f)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCreateFlow_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO flows`)).
+		WillReturnError(errors.New("db error"))
+	_, err := s.CreateFlow(context.Background(), CreateFlowParams{Name: "my-pipeline"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestGetFlowByID_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM flows WHERE id`)).
+		WithArgs("fid1").
+		WillReturnRows(flowRow("fid1", "my-pipeline"))
+	f, err := s.GetFlowByID(context.Background(), "fid1")
+	if err != nil || f.ID != "fid1" {
+		t.Fatalf("err=%v f=%v", err, f)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestGetFlowByID_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM flows WHERE id`)).
+		WithArgs("nope").
+		WillReturnRows(pgxmock.NewRows(flowCols()))
+	_, err := s.GetFlowByID(context.Background(), "nope")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestListFlows_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM flows ORDER BY updated_at`).
+		WillReturnRows(flowRow("fid1", "my-pipeline"))
+	flows, err := s.ListFlows(context.Background())
+	if err != nil || len(flows) != 1 {
+		t.Fatalf("err=%v len=%d", err, len(flows))
+	}
+}
+
+func TestListFlows_Empty(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM flows ORDER BY updated_at`).
+		WillReturnRows(pgxmock.NewRows(flowCols()))
+	flows, err := s.ListFlows(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(flows) != 0 {
+		t.Errorf("expected empty list, got %d", len(flows))
+	}
+}
+
+func TestListFlows_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM flows ORDER BY updated_at`).
+		WillReturnError(errors.New("db error"))
+	_, err := s.ListFlows(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestUpdateFlow_Success(t *testing.T) {
+	s, mock := newMock(t)
+	graph := json.RawMessage(`{"nodes":[],"edges":[]}`)
+	mock.ExpectQuery(`UPDATE flows`).
+		WithArgs("fid1", "updated-pipeline", anyArg, anyArg).
+		WillReturnRows(flowRow("fid1", "updated-pipeline"))
+	f, err := s.UpdateFlow(context.Background(), UpdateFlowParams{
+		ID:          "fid1",
+		Name:        "updated-pipeline",
+		Description: "updated description",
+		Graph:       graph,
+	})
+	if err != nil || f.ID != "fid1" {
+		t.Fatalf("err=%v f=%v", err, f)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpdateFlow_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`UPDATE flows`).
+		WithArgs(anyArg, anyArg, anyArg, anyArg).
+		WillReturnRows(pgxmock.NewRows(flowCols()))
+	_, err := s.UpdateFlow(context.Background(), UpdateFlowParams{ID: "nope", Name: "x"})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestDeleteFlow_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM flows WHERE id`)).
+		WithArgs("fid1").
+		WillReturnResult(pgxmock.NewResult("DELETE", 1))
+	if err := s.DeleteFlow(context.Background(), "fid1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeleteFlow_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM flows WHERE id`)).
+		WithArgs("nope").
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+	if !errors.Is(s.DeleteFlow(context.Background(), "nope"), ErrNotFound) {
+		t.Fatal("expected ErrNotFound")
+	}
+}

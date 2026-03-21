@@ -2099,3 +2099,133 @@ func TestSchedules(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Flows
+// ---------------------------------------------------------------------------
+
+func TestFlows(t *testing.T) {
+	store := setupTest(t)
+	ctx := context.Background()
+
+	graph := []byte(`{"nodes":[{"id":"n1","type":"input_source","data":{}}],"edges":[]}`)
+	var flow *db.Flow
+
+	t.Run("CreateFlow", func(t *testing.T) {
+		f, err := store.CreateFlow(ctx, db.CreateFlowParams{
+			Name:        "integration-test-flow",
+			Description: "DB integration test",
+			Graph:       graph,
+		})
+		if err != nil {
+			t.Fatalf("CreateFlow: %v", err)
+		}
+		if f.ID == "" {
+			t.Error("expected non-empty ID")
+		}
+		if f.Name != "integration-test-flow" {
+			t.Errorf("name: got %q want integration-test-flow", f.Name)
+		}
+		if len(f.Graph) == 0 {
+			t.Error("expected non-empty graph")
+		}
+		flow = f
+	})
+
+	t.Run("GetFlowByID", func(t *testing.T) {
+		if flow == nil {
+			t.Skip("depends on CreateFlow")
+		}
+		got, err := store.GetFlowByID(ctx, flow.ID)
+		if err != nil {
+			t.Fatalf("GetFlowByID: %v", err)
+		}
+		if got.ID != flow.ID {
+			t.Errorf("id: got %q want %q", got.ID, flow.ID)
+		}
+		if got.Name != flow.Name {
+			t.Errorf("name: got %q want %q", got.Name, flow.Name)
+		}
+	})
+
+	t.Run("GetFlowByID_NotFound", func(t *testing.T) {
+		_, err := store.GetFlowByID(ctx, "nonexistent-flow-id")
+		if !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("ListFlows", func(t *testing.T) {
+		if flow == nil {
+			t.Skip("depends on CreateFlow")
+		}
+		flows, err := store.ListFlows(ctx)
+		if err != nil {
+			t.Fatalf("ListFlows: %v", err)
+		}
+		if len(flows) < 1 {
+			t.Errorf("expected at least 1 flow, got %d", len(flows))
+		}
+		found := false
+		for _, f := range flows {
+			if f.ID == flow.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("created flow %q not found in list", flow.ID)
+		}
+	})
+
+	t.Run("UpdateFlow", func(t *testing.T) {
+		if flow == nil {
+			t.Skip("depends on CreateFlow")
+		}
+		updatedGraph := []byte(`{"nodes":[{"id":"n1","type":"input_source","data":{}},{"id":"n2","type":"encode_x265","data":{}}],"edges":[{"id":"e1","source":"n1","target":"n2","sourceHandle":""}]}`)
+		updated, err := store.UpdateFlow(ctx, db.UpdateFlowParams{
+			ID:          flow.ID,
+			Name:        "integration-test-flow-updated",
+			Description: "updated description",
+			Graph:       updatedGraph,
+		})
+		if err != nil {
+			t.Fatalf("UpdateFlow: %v", err)
+		}
+		if updated.Name != "integration-test-flow-updated" {
+			t.Errorf("name after update: got %q want integration-test-flow-updated", updated.Name)
+		}
+		if updated.Description != "updated description" {
+			t.Errorf("description after update: got %q", updated.Description)
+		}
+	})
+
+	t.Run("DeleteFlow", func(t *testing.T) {
+		if flow == nil {
+			t.Skip("depends on CreateFlow")
+		}
+		if err := store.DeleteFlow(ctx, flow.ID); err != nil {
+			t.Fatalf("DeleteFlow: %v", err)
+		}
+		// Verify it's gone.
+		_, err := store.GetFlowByID(ctx, flow.ID)
+		if !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("expected ErrNotFound after delete, got %v", err)
+		}
+	})
+
+	t.Run("ListFlows_AfterDelete", func(t *testing.T) {
+		if flow == nil {
+			t.Skip("depends on DeleteFlow")
+		}
+		flows, err := store.ListFlows(ctx)
+		if err != nil {
+			t.Fatalf("ListFlows after delete: %v", err)
+		}
+		for _, f := range flows {
+			if f.ID == flow.ID {
+				t.Errorf("deleted flow %q still present in list", flow.ID)
+			}
+		}
+	})
+}
