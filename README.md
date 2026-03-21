@@ -506,34 +506,34 @@ Tests live alongside the code they cover in `internal/**/...`. Integration tests
 
 ## Roadmap
 
-### Phase 1 — UI Completeness
+### Phase 1 — UI Completeness ✅
 
-- [ ] Audio conversion page (API exists, needs frontend)
-- [ ] Path mappings admin page (UNC-to-Linux translations)
-- [ ] Agent enrollment tokens admin page
-- [ ] VNC "Open Remote Desktop" button on Agents page
+- [x] Audio conversion page (API exists, needs frontend)
+- [x] Path mappings admin page (UNC-to-Linux translations)
+- [x] Agent enrollment tokens admin page
+- [x] VNC "Open Remote Desktop" button on Agents page
 
-### Phase 2 — Hardening
+### Phase 2 — Hardening ✅
 
-- [ ] SHA-256 verification for agent self-upgrade binaries
-- [ ] Agent upgrade rollback on failed restart
-- [ ] OIDC end-to-end integration tests
-- [ ] Job expansion rollback on partial task creation failure
-- [ ] Offline journal cleanup (prune old synced entries)
+- [x] SHA-256 verification for agent self-upgrade binaries
+- [x] Agent upgrade rollback on failed restart
+- [x] OIDC end-to-end integration tests
+- [x] Job expansion rollback on partial task creation failure
+- [x] Offline journal cleanup (prune old synced entries)
 
-### Phase 3 — Chunked Encoding UI
+### Phase 3 — Chunked Encoding UI ✅
 
-- [ ] Scene-based chunking configuration in job creation
-- [ ] Chunk boundary visualization (preview API already exists)
-- [ ] Merge/concat task generation for chunked encodes
+- [x] Scene-based chunking configuration in job creation
+- [x] Chunk boundary visualization (preview API already exists)
+- [x] Merge/concat task generation for chunked encodes
 
-### Phase 4 — Observability & Polish
+### Phase 4 — Observability & Polish ✅
 
-- [ ] Agent resource utilization graphs (CPU/GPU/memory over time)
-- [ ] Structured audit logging for sensitive actions
-- [ ] Bulk operations (approve multiple agents, cancel multiple jobs)
-- [ ] Dark mode toggle in web UI
-- [ ] Capacity planning documentation
+- [x] Agent resource utilization graphs (CPU/GPU/memory over time)
+- [x] Structured audit logging for sensitive actions
+- [x] Bulk operations (approve multiple agents, cancel multiple jobs)
+- [x] Dark mode toggle in web UI
+- [x] Capacity planning documentation
 
 ### Future
 
