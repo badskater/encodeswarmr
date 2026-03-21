@@ -4,21 +4,21 @@
 
 - name: Download controller .deb from GitHub releases
   ansible.builtin.get_url:
-    url: "{{ _release_base_url }}/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
-    dest: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    url: "{{ _release_base_url }}/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
+    dest: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
     mode: "0644"
   tags: [controller, install]
 
 - name: Install controller .deb
   ansible.builtin.apt:
-    deb: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    deb: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
     state: present
   notify: Restart controller
   tags: [controller, install]
 
 - name: Remove downloaded .deb
   ansible.builtin.file:
-    path: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    path: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
     state: absent
   tags: [controller, install]
 
@@ -26,8 +26,8 @@
   ansible.builtin.file:
     path: "{{ controller_config_dir }}"
     state: directory
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0750"
   tags: [controller, configure]
 
@@ -35,8 +35,8 @@
   ansible.builtin.file:
     path: "{{ cert_dir }}"
     state: directory
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0750"
   tags: [controller, certs]
 
@@ -44,8 +44,8 @@
   ansible.builtin.file:
     path: "{{ controller_binary_dir }}"
     state: directory
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0750"
   tags: [controller, configure]
 
@@ -53,8 +53,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/ca.crt"
     dest: "{{ cert_dir }}/ca.crt"
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0640"
   notify: Restart controller
   tags: [controller, certs]
@@ -63,8 +63,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/controller.crt"
     dest: "{{ cert_dir }}/controller.crt"
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0640"
   notify: Restart controller
   tags: [controller, certs]
@@ -73,8 +73,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/controller.key"
     dest: "{{ cert_dir }}/controller.key"
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0600"
   notify: Restart controller
   tags: [controller, certs]
@@ -83,8 +83,8 @@
   ansible.builtin.template:
     src: controller.yaml.j2
     dest: "{{ controller_config_file }}"
-    owner: distributed-encoder
-    group: distributed-encoder
+    owner: encodeswarmr
+    group: encodeswarmr
     mode: "0640"
   notify: Restart controller
   tags: [controller, configure]

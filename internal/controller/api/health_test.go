@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/controller/ha"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // newHealthTestServer builds a Server with a non-nil *ha.Leader required by

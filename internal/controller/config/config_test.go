@@ -478,7 +478,7 @@ func TestLoad_UpgradeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Upgrade.BinDir != "/var/lib/distributed-encoder/agent-bins" {
+	if cfg.Upgrade.BinDir != "/var/lib/encodeswarmr/agent-bins" {
 		t.Errorf("Upgrade.BinDir default = %q", cfg.Upgrade.BinDir)
 	}
 	if cfg.Upgrade.Version != "0.0.0" {

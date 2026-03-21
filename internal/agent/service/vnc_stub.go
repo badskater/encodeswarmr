@@ -5,7 +5,7 @@ package service
 import (
 	"log/slog"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
 )
 
 // installAndConfigureVNC is a no-op on non-Windows platforms.

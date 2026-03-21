@@ -12,8 +12,8 @@ resource "tls_self_signed_cert" "ca" {
   private_key_pem = tls_private_key.ca.private_key_pem
 
   subject {
-    common_name  = "distributed-encoder-${var.environment}-ca"
-    organization = "distributed-encoder"
+    common_name  = "encodeswarmr-${var.environment}-ca"
+    organization = "encodeswarmr"
   }
 
   validity_period_hours = 87600 # 10 years
@@ -39,12 +39,12 @@ resource "tls_cert_request" "controller" {
   private_key_pem = tls_private_key.controller.private_key_pem
 
   subject {
-    common_name  = "controller.distencoder.internal"
-    organization = "distributed-encoder"
+    common_name  = "controller.encodeswarmr.internal"
+    organization = "encodeswarmr"
   }
 
   dns_names = [
-    "controller.distencoder.internal",
+    "controller.encodeswarmr.internal",
     "localhost",
   ]
 }
@@ -75,8 +75,8 @@ resource "tls_cert_request" "agent" {
   private_key_pem = tls_private_key.agent.private_key_pem
 
   subject {
-    common_name  = "agent.distencoder.internal"
-    organization = "distributed-encoder"
+    common_name  = "agent.encodeswarmr.internal"
+    organization = "encodeswarmr"
   }
 }
 
@@ -97,87 +97,87 @@ resource "tls_locally_signed_cert" "agent" {
 # ── SSM Parameter Store — CA ───────────────────────────────────────────────────
 
 resource "aws_ssm_parameter" "ca_cert" {
-  name  = "/distencoder/${var.environment}/certs/ca.crt"
+  name  = "/encodeswarmr/${var.environment}/certs/ca.crt"
   type  = "String"
   value = tls_self_signed_cert.ca.cert_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-ca-cert"
+    Name = "encodeswarmr-${var.environment}-ca-cert"
   }
 }
 
 resource "aws_ssm_parameter" "ca_key" {
-  name  = "/distencoder/${var.environment}/certs/ca.key"
+  name  = "/encodeswarmr/${var.environment}/certs/ca.key"
   type  = "SecureString"
   value = tls_private_key.ca.private_key_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-ca-key"
+    Name = "encodeswarmr-${var.environment}-ca-key"
   }
 }
 
 # ── SSM Parameter Store — Controller ──────────────────────────────────────────
 
 resource "aws_ssm_parameter" "controller_cert" {
-  name  = "/distencoder/${var.environment}/certs/controller.crt"
+  name  = "/encodeswarmr/${var.environment}/certs/controller.crt"
   type  = "String"
   value = tls_locally_signed_cert.controller.cert_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-controller-cert"
+    Name = "encodeswarmr-${var.environment}-controller-cert"
   }
 }
 
 resource "aws_ssm_parameter" "controller_key" {
-  name  = "/distencoder/${var.environment}/certs/controller.key"
+  name  = "/encodeswarmr/${var.environment}/certs/controller.key"
   type  = "SecureString"
   value = tls_private_key.controller.private_key_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-controller-key"
+    Name = "encodeswarmr-${var.environment}-controller-key"
   }
 }
 
 # ── SSM Parameter Store — Agent ────────────────────────────────────────────────
 
 resource "aws_ssm_parameter" "agent_cert" {
-  name  = "/distencoder/${var.environment}/certs/agent.crt"
+  name  = "/encodeswarmr/${var.environment}/certs/agent.crt"
   type  = "String"
   value = tls_locally_signed_cert.agent.cert_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-agent-cert"
+    Name = "encodeswarmr-${var.environment}-agent-cert"
   }
 }
 
 resource "aws_ssm_parameter" "agent_key" {
-  name  = "/distencoder/${var.environment}/certs/agent.key"
+  name  = "/encodeswarmr/${var.environment}/certs/agent.key"
   type  = "SecureString"
   value = tls_private_key.agent.private_key_pem
 
   tags = {
-    Name = "distencoder-${var.environment}-agent-key"
+    Name = "encodeswarmr-${var.environment}-agent-key"
   }
 }
 
 # ── SSM Parameter Store — Application secrets ──────────────────────────────────
 
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/distencoder/${var.environment}/db/password"
+  name  = "/encodeswarmr/${var.environment}/db/password"
   type  = "SecureString"
   value = var.db_password
 
   tags = {
-    Name = "distencoder-${var.environment}-db-password"
+    Name = "encodeswarmr-${var.environment}-db-password"
   }
 }
 
 resource "aws_ssm_parameter" "session_secret" {
-  name  = "/distencoder/${var.environment}/controller/session_secret"
+  name  = "/encodeswarmr/${var.environment}/controller/session_secret"
   type  = "SecureString"
   value = var.controller_session_secret
 
   tags = {
-    Name = "distencoder-${var.environment}-session-secret"
+    Name = "encodeswarmr-${var.environment}-session-secret"
   }
 }

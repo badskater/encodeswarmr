@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db/sqlite"
+	"github.com/badskater/encodeswarmr/internal/db/sqlite"
 	_ "modernc.org/sqlite"
 )
 

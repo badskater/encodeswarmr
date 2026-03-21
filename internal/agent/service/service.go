@@ -10,25 +10,25 @@ import (
 	"strings"
 	"syscall"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 )
 
-const serviceName = "distributed-encoder-agent"
+const serviceName = "encodeswarmr-agent"
 
 // defaultConfigPath returns the platform-appropriate default config file path.
 func defaultConfigPath() string {
 	if runtime.GOOS == "windows" {
-		return `C:\ProgramData\distributed-encoder\agent.yaml`
+		return `C:\ProgramData\encodeswarmr\agent.yaml`
 	}
-	return "/etc/distributed-encoder/agent.yaml"
+	return "/etc/encodeswarmr/agent.yaml"
 }
 
 // usageText returns the platform-appropriate usage string.
 func usageText() string {
 	if runtime.GOOS == "windows" {
 		return `Usage:
-  distencoder-agent <subcommand> [flags]
+  encodeswarmr-agent <subcommand> [flags]
 
 Subcommands:
   install    Install as Windows Service
@@ -39,13 +39,13 @@ Subcommands:
   setup-vnc  Download (if vnc.installer_url is set) and silently install TightVNC
 
 Flags (all subcommands):
-  --config <path>    Config file path (default: C:\ProgramData\distributed-encoder\agent.yaml)
+  --config <path>    Config file path (default: C:\ProgramData\encodeswarmr\agent.yaml)
   --debug            Enable debug logging
   --http-debug       Start local debug HTTP server on :9080 (run subcommand only)
 `
 	}
 	return `Usage:
-  distencoder-agent <subcommand> [flags]
+  encodeswarmr-agent <subcommand> [flags]
 
 Subcommands:
   install    Install as systemd service
@@ -56,7 +56,7 @@ Subcommands:
   setup-vnc  Install/configure VNC server (see vnc config section in agent.yaml)
 
 Flags (all subcommands):
-  --config <path>    Config file path (default: /etc/distributed-encoder/agent.yaml)
+  --config <path>    Config file path (default: /etc/encodeswarmr/agent.yaml)
   --debug            Enable debug logging
   --http-debug       Start local debug HTTP server on :9080 (run subcommand only)
 `

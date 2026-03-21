@@ -1,7 +1,7 @@
 # ── RDS PostgreSQL 16 ──────────────────────────────────────────────────────────
 
 resource "aws_db_instance" "main" {
-  identifier = "distencoder-${var.environment}-postgres"
+  identifier = "encodeswarmr-${var.environment}-postgres"
 
   # Engine
   engine               = "postgres"
@@ -44,17 +44,17 @@ resource "aws_db_instance" "main" {
 
   # Snapshot on delete for non-dev environments
   skip_final_snapshot       = var.environment == "dev" ? true : false
-  final_snapshot_identifier = var.environment != "dev" ? "distencoder-${var.environment}-final-snapshot" : null
+  final_snapshot_identifier = var.environment != "dev" ? "encodeswarmr-${var.environment}-final-snapshot" : null
 
   tags = {
-    Name = "distencoder-${var.environment}-postgres"
+    Name = "encodeswarmr-${var.environment}-postgres"
   }
 }
 
 # ── Parameter Group ────────────────────────────────────────────────────────────
 
 resource "aws_db_parameter_group" "main" {
-  name   = "distencoder-${var.environment}-pg16"
+  name   = "encodeswarmr-${var.environment}-pg16"
   family = "postgres16"
 
   parameter {
@@ -83,14 +83,14 @@ resource "aws_db_parameter_group" "main" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-pg16"
+    Name = "encodeswarmr-${var.environment}-pg16"
   }
 }
 
 # ── IAM Role for Enhanced Monitoring ──────────────────────────────────────────
 
 resource "aws_iam_role" "rds_monitoring" {
-  name = "distencoder-${var.environment}-rds-monitoring"
+  name = "encodeswarmr-${var.environment}-rds-monitoring"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -106,7 +106,7 @@ resource "aws_iam_role" "rds_monitoring" {
   })
 
   tags = {
-    Name = "distencoder-${var.environment}-rds-monitoring"
+    Name = "encodeswarmr-${var.environment}-rds-monitoring"
   }
 }
 

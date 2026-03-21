@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // generateTestCSRPEM returns a PEM-encoded certificate signing request for use

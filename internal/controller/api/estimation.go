@@ -7,8 +7,8 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/controller/presets"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/presets"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // estimateRequest is the payload accepted by POST /api/v1/estimate.

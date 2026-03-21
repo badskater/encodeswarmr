@@ -21,7 +21,7 @@ terraform {
   #   resource_group_name  = "tfstate-rg"
   #   storage_account_name = "tfstate<unique>"
   #   container_name       = "tfstate"
-  #   key                  = "distributed-encoder.tfstate"
+  #   key                  = "encodeswarmr.tfstate"
   # }
 }
 
@@ -52,7 +52,7 @@ locals {
   name_prefix = "distenc-${var.environment}"
 
   common_tags = {
-    project     = "distributed-encoder"
+    project     = "encodeswarmr"
     environment = var.environment
     managed_by  = "terraform"
   }

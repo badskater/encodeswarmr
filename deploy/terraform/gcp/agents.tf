@@ -4,7 +4,7 @@
 
 resource "google_service_account" "agent" {
   account_id   = "${local.name_prefix}-agent"
-  display_name = "distributed-encoder agent service account (${var.environment})"
+  display_name = "encodeswarmr agent service account (${var.environment})"
   project      = var.project_id
 }
 
@@ -45,11 +45,11 @@ locals {
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
 
-    echo "=== distributed-encoder agent startup ==="
+    echo "=== encodeswarmr agent startup ==="
 
     SECRET_PREFIX="${local.name_prefix}"
     PROJECT="${var.project_id}"
-    VERSION="${var.distencoder_version}"
+    VERSION="${var.encodeswarmr_version}"
 
     fetch_secret() {
       local name="$1"
@@ -89,9 +89,9 @@ locals {
     fi
 
     # ---------------------------------------------------------------------------
-    # Install distributed-encoder agent .deb
+    # Install encodeswarmr agent .deb
     # ---------------------------------------------------------------------------
-    DEB_URL="https://github.com/badskater/distributed-encoder/releases/download/v$${VERSION}/distributed-encoder-agent_$${VERSION}_amd64.deb"
+    DEB_URL="https://github.com/badskater/encodeswarmr/releases/download/v$${VERSION}/encodeswarmr-agent_$${VERSION}_amd64.deb"
     wget -q -O /tmp/agent.deb "$DEB_URL"
     dpkg -i /tmp/agent.deb || apt-get install -f -y
     rm /tmp/agent.deb
@@ -104,28 +104,28 @@ locals {
     # ---------------------------------------------------------------------------
     # Pull mTLS certificates from Secret Manager
     # ---------------------------------------------------------------------------
-    mkdir -p /etc/distributed-encoder-agent/certs
-    fetch_secret "$${SECRET_PREFIX}-ca-cert"    /etc/distributed-encoder-agent/certs/ca.crt
-    fetch_secret "$${SECRET_PREFIX}-agent-cert" /etc/distributed-encoder-agent/certs/agent.crt
-    fetch_secret "$${SECRET_PREFIX}-agent-key"  /etc/distributed-encoder-agent/certs/agent.key
-    chmod 600 /etc/distributed-encoder-agent/certs/agent.key
+    mkdir -p /etc/encodeswarmr-agent/certs
+    fetch_secret "$${SECRET_PREFIX}-ca-cert"    /etc/encodeswarmr-agent/certs/ca.crt
+    fetch_secret "$${SECRET_PREFIX}-agent-cert" /etc/encodeswarmr-agent/certs/agent.crt
+    fetch_secret "$${SECRET_PREFIX}-agent-key"  /etc/encodeswarmr-agent/certs/agent.key
+    chmod 600 /etc/encodeswarmr-agent/certs/agent.key
 
     # ---------------------------------------------------------------------------
     # Write agent config
     # ---------------------------------------------------------------------------
-    mkdir -p /etc/distributed-encoder-agent
+    mkdir -p /etc/encodeswarmr-agent
 
     # Resolve instance hostname for agent identification.
     HOSTNAME=$(curl -sf -H "Metadata-Flavor: Google" \
       http://metadata.google.internal/computeMetadata/v1/instance/name || hostname)
 
-    cat > /etc/distributed-encoder-agent/agent.yaml <<YAML
+    cat > /etc/encodeswarmr-agent/agent.yaml <<YAML
 controller:
   address: "${local.controller_grpc_address}"
   tls:
-    cert: "/etc/distributed-encoder-agent/certs/agent.crt"
-    key:  "/etc/distributed-encoder-agent/certs/agent.key"
-    ca:   "/etc/distributed-encoder-agent/certs/ca.crt"
+    cert: "/etc/encodeswarmr-agent/certs/agent.crt"
+    key:  "/etc/encodeswarmr-agent/certs/agent.key"
+    ca:   "/etc/encodeswarmr-agent/certs/ca.crt"
   reconnect:
     initial_delay: 5s
     max_delay: 5m
@@ -133,9 +133,9 @@ controller:
 
 agent:
   hostname: "$${HOSTNAME}"
-  work_dir: "/var/lib/distributed-encoder-agent/work"
-  log_dir:  "/var/log/distributed-encoder-agent"
-  offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+  work_dir: "/var/lib/encodeswarmr-agent/work"
+  log_dir:  "/var/log/encodeswarmr-agent"
+  offline_db: "/var/lib/encodeswarmr-agent/offline.db"
   heartbeat_interval: 30s
   poll_interval: 10s
   cleanup_on_success: true
@@ -174,7 +174,7 @@ YAML
     # ---------------------------------------------------------------------------
     # Start agent service
     # ---------------------------------------------------------------------------
-    systemctl enable --now distributed-encoder-agent
+    systemctl enable --now encodeswarmr-agent
 
     echo "=== agent startup complete ==="
   EOT
@@ -190,7 +190,7 @@ resource "google_compute_instance_template" "agent" {
   project      = var.project_id
   region       = var.region
 
-  tags   = ["distencoder-agent"]
+  tags   = ["encodeswarmr-agent"]
   labels = local.common_labels
 
   disk {

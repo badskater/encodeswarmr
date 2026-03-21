@@ -342,7 +342,7 @@ All errors use the [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `applicati
 
 ```json
 {
-  "type": "https://distencoder.dev/errors/validation",
+  "type": "https://encodeswarmr.dev/errors/validation",
   "title": "Validation Error",
   "status": 422,
   "detail": "Field 'source_path' must be a valid UNC path.",
@@ -938,7 +938,7 @@ Single-page app embedded in the Go binary (`embed.FS`). Built as a **TypeScript 
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Distributed Encoder — Farm Dashboard                [user ▼]│
+│  EncodeSwarmr — Farm Dashboard                [user ▼]│
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Servers         Jobs             Tasks          Sources     │
@@ -1420,15 +1420,15 @@ The agent **never** stops a running encode due to Controller connectivity loss.
 ```
 TaskAssignment received
   │
-  ├─► 1. Read DE_PARAM_SOURCE_DIR from task parameters
+  ├─► 1. Read ES_PARAM_SOURCE_DIR from task parameters
   │
   ├─► 2. Validate task parameters (see 3.2.5 Pre-Execution Validation)
-  │      ├── Required DE_PARAM_* vars present and non-empty
+  │      ├── Required ES_PARAM_* vars present and non-empty
   │      ├── encode.bat exists and is readable at UNC path
   │      └── UNC paths accessible
   │
-  ├─► 3. Set DE_PARAM_* environment variables for this chunk
-  │      (DE_PARAM_FRAME_START, DE_PARAM_CRF, DE_PARAM_PRESET, etc.)
+  ├─► 3. Set ES_PARAM_* environment variables for this chunk
+  │      (ES_PARAM_FRAME_START, ES_PARAM_CRF, ES_PARAM_PRESET, etc.)
   │
   ├─► 4. Open gRPC StreamLogs stream to controller (or buffer to SQLite if offline)
   │
@@ -1448,12 +1448,12 @@ TaskAssignment received
 
 Before executing any task, the agent validates the parameters it received:
 
-1. **Required parameters** — the agent checks that all `DE_PARAM_*` environment variables expected by the script are present and non-empty.
+1. **Required parameters** — the agent checks that all `ES_PARAM_*` environment variables expected by the script are present and non-empty.
 2. **Path validation** — parameters containing paths (UNC or local) are checked for accessibility: the agent verifies the file or directory exists and is reachable before invoking the script.
 3. **Timeout sanity** — the agent rejects tasks with a timeout of `0` or negative duration.
 4. **Script content** — the agent verifies the `.bat` script content is non-empty and was received intact.
 
-If validation fails, the agent immediately reports the task as `failed` with a descriptive error (e.g., `"validation: required param DE_PARAM_INPUT_PATH is empty"`) without executing the script. The server returns to `idle` and is available for other work. This catches issues like missing UNC shares, unreachable source files, or misconfigured job parameters before wasting execution time.
+If validation fails, the agent immediately reports the task as `failed` with a descriptive error (e.g., `"validation: required param ES_PARAM_INPUT_PATH is empty"`) without executing the script. The server returns to `idle` and is available for other work. This catches issues like missing UNC shares, unreachable source files, or misconfigured job parameters before wasting execution time.
 
 #### 3.2.6 GPU Management
 
@@ -1738,7 +1738,7 @@ Scene boundaries are stored and used to:
        └── chunk_002\
            ├── ...
    ```
-5. **Creates one task per chunk** with `DE_PARAM_SOURCE_DIR` pointing to that chunk's UNC subdirectory. Tasks do **not** carry script content in their payload — agents read and execute `encode.bat` directly from the UNC share.
+5. **Creates one task per chunk** with `ES_PARAM_SOURCE_DIR` pointing to that chunk's UNC subdirectory. Tasks do **not** carry script content in their payload — agents read and execute `encode.bat` directly from the UNC share.
 
 This design means scripts live on the shared UNC path — all agents execute the same files, and operators can inspect or manually edit them on the share before retrying a failed job. For scene-based chunking, each script contains the exact `Trim()` (AviSynth) or slice (VapourSynth) for that scene's frame range.
 
@@ -2270,12 +2270,12 @@ CREATE TABLE sessions (
 services:
   controller:
     build: .
-    image: distencoder/controller:latest
+    image: encodeswarmr/controller:latest
     ports:
       - "8080:8080"   # Web UI + REST API
       - "9443:9443"   # gRPC (agent comms)
     environment:
-      - DATABASE_URL=postgres://distenc:${DB_PASS}@postgres:5432/distencoder?sslmode=require
+      - DATABASE_URL=postgres://distenc:${DB_PASS}@postgres:5432/encodeswarmr?sslmode=require
       - GRPC_TLS_CERT=/certs/server.crt
       - GRPC_TLS_KEY=/certs/server.key
       - GRPC_TLS_CA=/certs/ca.crt
@@ -2288,7 +2288,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: distencoder
+      POSTGRES_DB: encodeswarmr
       POSTGRES_USER: distenc
       POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
@@ -2354,14 +2354,14 @@ ENTRYPOINT ["/app/controller", "run"]
 
 ```powershell
 # Download the agent binary
-Invoke-WebRequest -Uri "https://releases.example.com/distencoder-agent.exe" `
-  -OutFile "C:\DistEncoder\distencoder-agent.exe"
+Invoke-WebRequest -Uri "https://releases.example.com/encodeswarmr-agent.exe" `
+  -OutFile "C:\DistEncoder\encodeswarmr-agent.exe"
 
 # Install as Windows Service
 sc.exe create DistEncoderAgent `
-  binPath= "C:\DistEncoder\distencoder-agent.exe --config C:\DistEncoder\agent.yaml" `
+  binPath= "C:\DistEncoder\encodeswarmr-agent.exe --config C:\DistEncoder\agent.yaml" `
   start= auto `
-  DisplayName= "Distributed Encoder Agent"
+  DisplayName= "EncodeSwarmr Agent"
 
 # Start the service
 sc.exe start DistEncoderAgent
@@ -2467,7 +2467,7 @@ Secrets are loaded from a `.env` file at startup — see [Section 6 — Security
 **Controller `.env`:**
 ```env
 # PostgreSQL credentials
-DE_DB_USER=distencoder
+DE_DB_USER=encodeswarmr
 DE_DB_PASS=changeme
 
 # Agent pre-shared API keys (comma-separated for multiple key groups)
@@ -2536,7 +2536,7 @@ A `.env.example` is committed to the repo documenting all variables with placeho
 ## 8. Project Layout
 
 ```
-distributed-encoder/
+encodeswarmr/
 ├── cmd/
 │   ├── controller/         # Controller entrypoint
 │   │   └── main.go
@@ -2673,12 +2673,12 @@ User creates job via Web UI / API
          ▼
 ┌─────────────────┐
 │  Agent receives  │ via gRPC PollTask()
-│  TaskAssignment  │ includes UNC script_dir + DE_PARAM_* vars
+│  TaskAssignment  │ includes UNC script_dir + ES_PARAM_* vars
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Agent validates │ DE_PARAM_* completeness, UNC path
+│  Agent validates │ ES_PARAM_* completeness, UNC path
 │  task            │ allow-list, script presence, timeout
 └────────┬────────┘
          │

@@ -6,11 +6,11 @@
 # and reference it here as {{ vault_<name> }}.
 
 # ── Release version ────────────────────────────────────────────────────────────
-distencoder_version: "1.0.4"
-distencoder_github_repo: "badskater/distributed-encoder"
+encodeswarmr_version: "1.0.4"
+encodeswarmr_github_repo: "badskater/encodeswarmr"
 
 # GitHub release base URL (computed — do not override)
-_release_base_url: "https://github.com/{{ distencoder_github_repo }}/releases/download/v{{ distencoder_version }}"
+_release_base_url: "https://github.com/{{ encodeswarmr_github_repo }}/releases/download/v{{ encodeswarmr_version }}"
 
 # ── Network ports ──────────────────────────────────────────────────────────────
 controller_http_port: 8080
@@ -19,14 +19,14 @@ controller_grpc_port: 9443
 # ── PostgreSQL ─────────────────────────────────────────────────────────────────
 db_host: "localhost"
 db_port: 5432
-db_name: "distencoder"
-db_user: "distencoder"
+db_name: "encodeswarmr"
+db_user: "encodeswarmr"
 # Store real password in Ansible Vault as vault_db_password
 db_password: "{{ vault_db_password }}"
 
 # ── mTLS certificates ──────────────────────────────────────────────────────────
 # Linux path (controller + Linux agents)
-cert_dir: "/etc/distributed-encoder/certs"
+cert_dir: "/etc/encodeswarmr/certs"
 
 # Whether to generate certs on the Ansible control node (true) or assume
 # they are pre-provisioned and present on the control node already (false).

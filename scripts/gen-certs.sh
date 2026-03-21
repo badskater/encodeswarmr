@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gen-certs.sh — Generate mTLS certificates for the Distributed Encoder.
+# gen-certs.sh — Generate mTLS certificates for the EncodeSwarmr.
 #
 # Usage:
 #   ./scripts/gen-certs.sh [options]
@@ -20,7 +20,7 @@
 #
 #   # Production — custom CN, IP SAN, multiple agents
 #   ./scripts/gen-certs.sh \
-#     --out /etc/distencoder/certs \
+#     --out /etc/encodeswarmr/certs \
 #     --controller-cn encoder.example.com \
 #     --controller-ip 10.0.0.10 \
 #     --agents "ENCODE-01,ENCODE-02,ENCODE-03"

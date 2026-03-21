@@ -89,7 +89,7 @@
     daemon_reload: true
   tags: [patroni, service]
 
-- name: Create distributed-encoder database and user (run on first node only)
+- name: Create encodeswarmr database and user (run on first node only)
   ansible.builtin.command:
     cmd: >
       psql -U postgres -c

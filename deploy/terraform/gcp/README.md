@@ -1,6 +1,6 @@
-# distributed-encoder — Terraform (GCP)
+# encodeswarmr — Terraform (GCP)
 
-Terraform configuration for deploying distributed-encoder on Google Cloud Platform.
+Terraform configuration for deploying encodeswarmr on Google Cloud Platform.
 
 ## Architecture
 
@@ -92,7 +92,7 @@ Create a GCS bucket and uncomment the `backend "gcs"` block in `main.tf`:
 ```hcl
 backend "gcs" {
   bucket = "your-terraform-state-bucket"
-  prefix = "distributed-encoder/gcp"
+  prefix = "encodeswarmr/gcp"
 }
 ```
 
@@ -102,14 +102,14 @@ All VMs have no external IP. Connect through Identity-Aware Proxy:
 
 ```bash
 # Standard deployment — controller
-gcloud compute ssh --tunnel-through-iap --zone us-central1-a distencoder-prod-controller
+gcloud compute ssh --tunnel-through-iap --zone us-central1-a encodeswarmr-prod-controller
 
 # HA deployment — list instances first
-gcloud compute instances list --filter="tags.items=distencoder-controller"
+gcloud compute instances list --filter="tags.items=encodeswarmr-controller"
 gcloud compute ssh --tunnel-through-iap --zone us-central1-a <instance-name>
 
 # Agents
-gcloud compute instances list --filter="tags.items=distencoder-agent"
+gcloud compute instances list --filter="tags.items=encodeswarmr-agent"
 gcloud compute ssh --tunnel-through-iap --zone us-central1-a <instance-name>
 ```
 

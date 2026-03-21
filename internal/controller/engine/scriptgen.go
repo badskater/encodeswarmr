@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ScriptGenerator loads templates and global variables from the DB, renders

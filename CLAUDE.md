@@ -13,16 +13,16 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - Only the architecture agent should use Opus
 
 ## Documentation
-- Full project documentation: https://github.com/badskater/distributed-encoder/wiki
+- Full project documentation: https://github.com/badskater/encodeswarmr/wiki
 - Architecture: ARCHITECTURE.md (in repo)
-- Agent details: https://github.com/badskater/distributed-encoder/wiki/Agents
-- Deployment guide: https://github.com/badskater/distributed-encoder/wiki/Deployment
-- Architecture Decision Records: https://github.com/badskater/distributed-encoder/wiki/ADR-Index
+- Agent details: https://github.com/badskater/encodeswarmr/wiki/Agents
+- Deployment guide: https://github.com/badskater/encodeswarmr/wiki/Deployment
+- Architecture Decision Records: https://github.com/badskater/encodeswarmr/wiki/ADR-Index
 
 ## Session workflow
 - Begin each work session by reviewing:
   - ARCHITECTURE.md
-  - The [Wiki](https://github.com/badskater/distributed-encoder/wiki) for current roadmap and feature status
+  - The [Wiki](https://github.com/badskater/encodeswarmr/wiki) for current roadmap and feature status
 - Create a deployment document
   - DEPLOYMENT.md
 - If issues are discovered, add concise troubleshooting notes and prevention tips to:

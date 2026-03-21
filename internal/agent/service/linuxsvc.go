@@ -13,7 +13,7 @@ import (
 )
 
 const systemdUnitTemplate = `[Unit]
-Description=Distributed Encoder Agent
+Description=EncodeSwarmr Agent
 After=network-online.target
 Wants=network-online.target
 

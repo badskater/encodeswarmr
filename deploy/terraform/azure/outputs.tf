@@ -44,12 +44,12 @@ output "postgresql_fqdn" {
 
 output "postgresql_database_name" {
   description = "Name of the application database."
-  value       = azurerm_postgresql_flexible_server_database.distencoder.name
+  value       = azurerm_postgresql_flexible_server_database.encodeswarmr.name
 }
 
 output "postgresql_connection_string" {
   description = "PostgreSQL connection string (password redacted — retrieve db-password secret from Key Vault)."
-  value       = "postgres://${var.db_admin_login}:<db-password>@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${azurerm_postgresql_flexible_server_database.distencoder.name}?sslmode=require"
+  value       = "postgres://${var.db_admin_login}:<db-password>@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${azurerm_postgresql_flexible_server_database.encodeswarmr.name}?sslmode=require"
   sensitive   = false
 }
 

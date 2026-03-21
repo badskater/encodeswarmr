@@ -23,15 +23,15 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/analysis"
-	"github.com/badskater/distributed-encoder/internal/controller/api"
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/controller/engine"
-	controllergrpc "github.com/badskater/distributed-encoder/internal/controller/grpc"
-	"github.com/badskater/distributed-encoder/internal/controller/ha"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/analysis"
+	"github.com/badskater/encodeswarmr/internal/controller/api"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
+	controllergrpc "github.com/badskater/encodeswarmr/internal/controller/grpc"
+	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -1055,7 +1055,7 @@ func newWebhookTestCmd(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get webhook: %w", err)
 			}
-			payload := []byte(`{"event":"test","message":"Test notification from distributed-encoder"}`)
+			payload := []byte(`{"event":"test","message":"Test notification from encodeswarmr"}`)
 			client := &http.Client{Timeout: 10 * time.Second}
 			resp, err := client.Post(wh.URL, "application/json", bytes.NewReader(payload))
 			if err != nil {

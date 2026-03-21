@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/db"
-	"github.com/badskater/distributed-encoder/internal/db/teststore"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db/teststore"
 )
 
 // ---------------------------------------------------------------------------

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // CreateAdminUser creates an admin user via the db.Store directly, hashes the

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 )
 
 // healthResponse is returned by the /health endpoint.

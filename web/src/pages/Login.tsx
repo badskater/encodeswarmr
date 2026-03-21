@@ -34,7 +34,7 @@ export default function Login({ onLogin }: Props) {
   return (
     <div className="min-h-screen bg-th-bg flex items-center justify-center">
       <div className="bg-th-surface rounded-lg shadow p-8 w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-th-text mb-6 text-center">Distributed Encoder</h1>
+        <h1 className="text-2xl font-bold text-th-text mb-6 text-center">EncodeSwarmr</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-th-text-secondary mb-1">Username</label>

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // handleListTaskLogs returns a paginated list of logs for a task.

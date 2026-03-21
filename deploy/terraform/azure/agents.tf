@@ -11,7 +11,7 @@ locals {
 
   agent_cloud_init = templatefile("${path.module}/templates/agent-cloud-init.yaml.tpl", {
     controller_address  = local.controller_address
-    distencoder_version = var.distencoder_version
+    encodeswarmr_version = var.encodeswarmr_version
     storage_account     = azurerm_storage_account.nas.name
     key_vault_name      = azurerm_key_vault.main.name
     nfs_enabled         = var.storage_account_tier == "Premium"
@@ -26,10 +26,10 @@ resource "azurerm_linux_virtual_machine_scale_set" "agents" {
   location            = azurerm_resource_group.main.location
   sku                 = var.agent_vm_size
   instances           = var.agent_count
-  admin_username      = "distencoder"
+  admin_username      = "encodeswarmr"
 
   admin_ssh_key {
-    username   = "distencoder"
+    username   = "encodeswarmr"
     public_key = file(var.ssh_public_key_path)
   }
 

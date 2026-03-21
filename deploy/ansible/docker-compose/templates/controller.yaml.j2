@@ -1,5 +1,5 @@
 # controller.yaml — managed by Ansible ({{ ansible_managed }})
-# Bind-mounted into the controller container at /etc/distributed-encoder/controller.yaml
+# Bind-mounted into the controller container at /etc/encodeswarmr/controller.yaml
 
 server:
   host: "0.0.0.0"
@@ -18,9 +18,9 @@ grpc:
   host: "0.0.0.0"
   port: 9443
   tls:
-    cert: "/etc/distributed-encoder/certs/controller.crt"
-    key:  "/etc/distributed-encoder/certs/controller.key"
-    ca:   "/etc/distributed-encoder/certs/ca.crt"
+    cert: "/etc/encodeswarmr/certs/controller.crt"
+    key:  "/etc/encodeswarmr/certs/controller.key"
+    ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 auth:
   session_ttl: {{ controller_session_ttl | default('24h') }}
@@ -54,9 +54,9 @@ webhooks:
   max_retries: {{ controller_webhook_max_retries | default(3) }}
 
 tls:
-  cert: "/etc/distributed-encoder/certs/controller.crt"
-  key:  "/etc/distributed-encoder/certs/controller.key"
-  ca:   "/etc/distributed-encoder/certs/ca.crt"
+  cert: "/etc/encodeswarmr/certs/controller.crt"
+  key:  "/etc/encodeswarmr/certs/controller.key"
+  ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 analysis:
   ffmpeg_bin:    "/usr/local/bin/ffmpeg"

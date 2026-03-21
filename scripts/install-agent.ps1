@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs the Distributed Encoder agent on Windows Server 2019 / 2022.
+    Installs the EncodeSwarmr agent on Windows Server 2019 / 2022.
 
 .DESCRIPTION
     Creates the directory structure, downloads (or uses a local) agent binary,
@@ -24,7 +24,7 @@
     Files are copied from here into the install directory if needed.
 
 .PARAMETER AgentBinary
-    Full path to an already-downloaded distencoder-agent.exe.
+    Full path to an already-downloaded encodeswarmr-agent.exe.
     If not provided, the binary is downloaded from GitHub releases.
 
 .PARAMETER Version
@@ -40,7 +40,7 @@
     .\install-agent.ps1 `
         -ControllerAddress "encoder.example.com:9443" `
         -AgentHostname "ENCODE-01" `
-        -AgentBinary "C:\Downloads\distencoder-agent.exe" `
+        -AgentBinary "C:\Downloads\encodeswarmr-agent.exe" `
         -CertDir "C:\Downloads\certs"
 
 .EXAMPLE
@@ -100,7 +100,7 @@ if (-not $CertDir) {
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host '  Distributed Encoder Agent Installer' -ForegroundColor Cyan
+Write-Host '  EncodeSwarmr Agent Installer' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host "  Agent hostname  : $AgentHostname"
 Write-Host "  Controller      : $ControllerAddress"
@@ -126,7 +126,7 @@ foreach ($d in $dirs) {
 
 # ── Step 2: Resolve agent binary ─────────────────────────────────────────────
 Write-Step '2/7' 'Resolving agent binary'
-$BinaryDest = Join-Path $InstallDir 'distencoder-agent.exe'
+$BinaryDest = Join-Path $InstallDir 'encodeswarmr-agent.exe'
 
 if ($AgentBinary) {
     if (-not (Test-Path $AgentBinary)) {
@@ -138,7 +138,7 @@ if ($AgentBinary) {
     if (-not $Version) {
         $Version = Read-Required 'Version to download from GitHub (e.g. 1.0.0 — without v prefix)'
     }
-    $url = "https://github.com/badskater/distributed-encoder/releases/download/v${Version}/agent-windows-amd64.exe"
+    $url = "https://github.com/badskater/encodeswarmr/releases/download/v${Version}/agent-windows-amd64.exe"
     Write-OK "Downloading from $url"
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $url -OutFile $BinaryDest -UseBasicParsing
@@ -183,7 +183,7 @@ if ($certsMissing -gt 0) {
 
 # ── Step 4: Write agent.yaml ──────────────────────────────────────────────────
 Write-Step '4/7' 'Writing agent.yaml'
-$ConfigDir  = 'C:\ProgramData\distributed-encoder'
+$ConfigDir  = 'C:\ProgramData\encodeswarmr'
 $ConfigPath = Join-Path $ConfigDir 'agent.yaml'
 
 if (-not (Test-Path $ConfigDir)) {
@@ -294,7 +294,7 @@ if ($missing -gt 0) {
 
 # ── Step 6: Install Windows Service ──────────────────────────────────────────
 Write-Step '6/7' 'Installing Windows Service'
-$serviceName = 'distributed-encoder-agent'
+$serviceName = 'encodeswarmr-agent'
 
 $existingSvc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 if ($existingSvc) {
@@ -330,7 +330,7 @@ if ($svc -and $svc.Status -eq 'Running') {
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host '  Distributed Encoder Agent Installed!' -ForegroundColor Cyan
+Write-Host '  EncodeSwarmr Agent Installed!' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host "  Agent hostname  : $AgentHostname"

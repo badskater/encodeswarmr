@@ -43,7 +43,7 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, data any) {
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, detail string) {
 	reqID := r.Header.Get(requestIDHeader)
 	p := problem{
-		Type:      fmt.Sprintf("https://distencoder.dev/errors/%s", problemSlug(status)),
+		Type:      fmt.Sprintf("https://encodeswarmr.dev/errors/%s", problemSlug(status)),
 		Title:     title,
 		Status:    status,
 		Detail:    detail,

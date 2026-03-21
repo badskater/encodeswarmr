@@ -7,7 +7,7 @@
 #
 # Run the controller locally (no container needed):
 #   cp .env.example .env && $EDITOR .env
-#   DATABASE_URL="postgres://distencoder:<pass>@localhost:5432/distencoder?sslmode=disable" make migrate-up
+#   DATABASE_URL="postgres://encodeswarmr:<pass>@localhost:5432/encodeswarmr?sslmode=disable" make migrate-up
 #   go run ./cmd/controller run --config configs/controller.yaml.example
 #
 # Requires: POSTGRES_PASSWORD set in ../.env (or inline below)
@@ -16,15 +16,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: distencoder
-      POSTGRES_USER: distencoder
+      POSTGRES_DB: encodeswarmr
+      POSTGRES_USER: encodeswarmr
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U distencoder"]
+      test: ["CMD-SHELL", "pg_isready -U encodeswarmr"]
       interval: 5s
       timeout: 5s
       retries: 5

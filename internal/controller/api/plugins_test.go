@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/controller/plugins"
+	"github.com/badskater/encodeswarmr/internal/controller/plugins"
 )
 
 // ---------------------------------------------------------------------------

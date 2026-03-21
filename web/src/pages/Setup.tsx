@@ -64,7 +64,7 @@ export default function Setup({ onComplete }: Props) {
     <div className="min-h-screen bg-th-bg flex items-center justify-center px-4">
       <div className="bg-th-surface rounded-lg shadow p-8 w-full max-w-md">
         <h1 className="text-2xl font-bold text-th-text mb-1 text-center">
-          Distributed Encoder Setup
+          EncodeSwarmr Setup
         </h1>
         <p className="text-sm text-th-text-muted text-center mb-6">
           Welcome. Complete these steps to get started.

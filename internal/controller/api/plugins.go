@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/controller/plugins"
+	"github.com/badskater/encodeswarmr/internal/controller/plugins"
 )
 
 // handleListPlugins returns all registered plugins.

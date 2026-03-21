@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
 )
 
 // upgradeChecker polls the controller HTTP API for a newer agent version.

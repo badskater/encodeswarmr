@@ -26,7 +26,7 @@ import (
 )
 
 // lockKey is the fixed PostgreSQL advisory lock key used cluster-wide.
-// Value is derived from the ASCII sum of "distencoder" to avoid collisions.
+// Value is derived from the ASCII sum of "encodeswarmr" to avoid collisions.
 const lockKey = int64(0x646973_74656E63) // "distenc"
 
 // heartbeatInterval is how often the leader attempts to re-confirm the lock.

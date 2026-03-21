@@ -6,7 +6,7 @@
 
 # ─── General ──────────────────────────────────────────────────────────────────
 location            = "westus2"
-resource_group_name = "distributed-encoder-rg"
+resource_group_name = "encodeswarmr-rg"
 environment         = "prod"
 
 # ─── High Availability ────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ agent_count = 2
 # ─── PostgreSQL ───────────────────────────────────────────────────────────────
 db_sku_name       = "GP_Standard_D2s_v3"
 db_storage_mb     = 65536   # 64 GB — increase for large job log retention
-db_admin_login    = "distencoder_admin"
+db_admin_login    = "encodeswarmr_admin"
 db_version        = "16"
 
 # SENSITIVE: set via TF_VAR_db_admin_password env var or in terraform.tfvars
@@ -55,8 +55,8 @@ allowed_ssh_cidrs = []
 ssh_public_key_path = "~/.ssh/id_rsa.pub"
 
 # ─── Application ──────────────────────────────────────────────────────────────
-distencoder_version     = "1.0.4"
-controller_docker_image = "ghcr.io/badskater/distributed-encoder-controller:1.0.4"
+encodeswarmr_version     = "1.0.4"
+controller_docker_image = "ghcr.io/badskater/encodeswarmr-controller:1.0.4"
 
 # ─── Storage ──────────────────────────────────────────────────────────────────
 # Premium: required for NFS protocol (lower latency, better for encoding I/O)

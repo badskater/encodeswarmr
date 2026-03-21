@@ -5,7 +5,7 @@
 resource "google_compute_network" "main" {
   name                    = "${local.name_prefix}-vpc"
   auto_create_subnetworks = false
-  description             = "VPC for distributed-encoder (${var.environment})"
+  description             = "VPC for encodeswarmr (${var.environment})"
   project                 = var.project_id
 }
 

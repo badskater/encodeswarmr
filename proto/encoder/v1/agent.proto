@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package encoder.v1;
 
-option go_package = "github.com/badskater/distributed-encoder/internal/proto/encoderv1";
+option go_package = "github.com/badskater/encodeswarmr/internal/proto/encoderv1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";

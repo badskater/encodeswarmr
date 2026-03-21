@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/controller/presets"
+	"github.com/badskater/encodeswarmr/internal/controller/presets"
 )
 
 // handleListPresets returns all built-in encoding presets.

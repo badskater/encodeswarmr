@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // SessionCookieName is the name of the HTTP session cookie.

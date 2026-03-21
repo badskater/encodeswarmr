@@ -23,8 +23,8 @@ agent_vnc_port: 5900
 
 # ── Windows agent specifics ────────────────────────────────────────────────────
 windows_install_dir: 'C:\DistEncoder'
-windows_config_dir: 'C:\ProgramData\distributed-encoder'
-windows_service_name: "distributed-encoder-agent"
+windows_config_dir: 'C:\ProgramData\encodeswarmr'
+windows_service_name: "encodeswarmr-agent"
 
 # Tool paths expected on Windows agents
 windows_ffmpeg_bin: 'C:\Tools\ffmpeg\ffmpeg.exe'
@@ -37,13 +37,13 @@ windows_vspipe_bin: 'C:\Program Files\VapourSynth\vspipe.exe'
 windows_dovi_tool_bin: ''
 
 # ── Linux agent specifics ─────────────────────────────────────────────────────
-linux_agent_config_dir: "/etc/distributed-encoder"
-linux_agent_config_file: "/etc/distributed-encoder/agent.yaml"
-linux_agent_cert_dir: "/etc/distributed-encoder/certs"
-linux_agent_work_dir: "/var/lib/distributed-encoder-agent/work"
-linux_agent_log_dir: "/var/log/distributed-encoder-agent"
-linux_agent_offline_db: "/var/lib/distributed-encoder-agent/offline.db"
-linux_agent_service_name: "distributed-encoder-agent"
+linux_agent_config_dir: "/etc/encodeswarmr"
+linux_agent_config_file: "/etc/encodeswarmr/agent.yaml"
+linux_agent_cert_dir: "/etc/encodeswarmr/certs"
+linux_agent_work_dir: "/var/lib/encodeswarmr-agent/work"
+linux_agent_log_dir: "/var/log/encodeswarmr-agent"
+linux_agent_offline_db: "/var/lib/encodeswarmr-agent/offline.db"
+linux_agent_service_name: "encodeswarmr-agent"
 
 # Tool paths expected on Linux agents
 linux_ffmpeg_bin: "/usr/bin/ffmpeg"

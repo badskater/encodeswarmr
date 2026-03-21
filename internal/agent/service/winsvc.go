@@ -100,7 +100,7 @@ func installService(name, configPath string) error {
 
 	s, err := m.CreateService(name, exePath, mgr.Config{
 		StartType:   mgr.StartAutomatic,
-		DisplayName: "Distributed Encoder Agent",
+		DisplayName: "EncodeSwarmr Agent",
 		Description: "Distributed video encoding agent",
 	}, "--config", configPath)
 	if err != nil {

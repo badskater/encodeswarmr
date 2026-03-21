@@ -51,9 +51,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ── Stage 5: Runtime ─────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
-LABEL org.opencontainers.image.title="Distributed Encoder Controller" \
+LABEL org.opencontainers.image.title="EncodeSwarmr Controller" \
       org.opencontainers.image.description="Orchestrates distributed video encoding with HA, cloud storage, scheduling, and plugins" \
-      org.opencontainers.image.source="https://github.com/badskater/distributed-encoder" \
+      org.opencontainers.image.source="https://github.com/badskater/encodeswarmr" \
       org.opencontainers.image.licenses="AGPL-3.0"
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \

@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -300,13 +300,13 @@ func TestValidateTask_EmptyDEParamVariable(t *testing.T) {
 	task := &pb.TaskAssignment{
 		TaskId:    "task-6",
 		Scripts:   entrypointScript(),
-		Variables: map[string]string{"DE_PARAM_INPUT": ""},
+		Variables: map[string]string{"ES_PARAM_INPUT": ""},
 	}
 	err := r.validateTask(task)
 	if err == nil {
-		t.Fatal("expected error for empty DE_PARAM_ variable")
+		t.Fatal("expected error for empty ES_PARAM_ variable")
 	}
-	if !strings.Contains(err.Error(), "DE_PARAM_INPUT") {
+	if !strings.Contains(err.Error(), "ES_PARAM_INPUT") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -316,10 +316,10 @@ func TestValidateTask_NonEmptyDEParamOK(t *testing.T) {
 	task := &pb.TaskAssignment{
 		TaskId:    "task-7",
 		Scripts:   entrypointScript(),
-		Variables: map[string]string{"DE_PARAM_INPUT": "/mnt/nas/video.mkv"},
+		Variables: map[string]string{"ES_PARAM_INPUT": "/mnt/nas/video.mkv"},
 	}
 	if err := r.validateTask(task); err != nil {
-		t.Errorf("validateTask with valid DE_PARAM_: %v", err)
+		t.Errorf("validateTask with valid ES_PARAM_: %v", err)
 	}
 }
 

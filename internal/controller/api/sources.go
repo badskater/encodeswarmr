@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/badskater/distributed-encoder/internal/db"
-	"github.com/badskater/distributed-encoder/internal/shared"
+	"github.com/badskater/encodeswarmr/internal/db"
+	"github.com/badskater/encodeswarmr/internal/shared"
 )
 
 func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {

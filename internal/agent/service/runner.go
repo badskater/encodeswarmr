@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
-	"github.com/badskater/distributed-encoder/internal/cloudstorage"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
+	"github.com/badskater/encodeswarmr/internal/cloudstorage"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -436,9 +436,9 @@ func (r *runner) validateTask(task *pb.TaskAssignment) error {
 		return fmt.Errorf("validation: invalid timeout %d", task.GetTimeoutSec())
 	}
 
-	// DE_PARAM_* variable completeness — all variables must be non-empty.
+	// ES_PARAM_* variable completeness — all variables must be non-empty.
 	for k, v := range task.GetVariables() {
-		if strings.HasPrefix(k, "DE_PARAM_") && v == "" {
+		if strings.HasPrefix(k, "ES_PARAM_") && v == "" {
 			return fmt.Errorf("validation: required param %s is empty", k)
 		}
 	}
@@ -571,7 +571,7 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 
 	r.log.Info("executing task", "script", entryPath, "task_id", task.GetTaskId())
 
-	// §5.3 Build the entrypoint command with DE_PARAM_* environment variables.
+	// §5.3 Build the entrypoint command with ES_PARAM_* environment variables.
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.CommandContext(execCtx, "cmd.exe", "/c", entryPath)
@@ -596,9 +596,9 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		env = append(env, k+"="+v)
 	}
 	// If the source was downloaded from cloud storage, expose the local path
-	// so scripts can reference it via DE_SOURCE_PATH.
+	// so scripts can reference it via ES_SOURCE_PATH.
 	if localSourcePath != "" {
-		env = append(env, "DE_SOURCE_PATH="+localSourcePath)
+		env = append(env, "ES_SOURCE_PATH="+localSourcePath)
 	}
 	cmd.Env = env
 

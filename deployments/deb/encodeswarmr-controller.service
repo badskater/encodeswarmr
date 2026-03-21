@@ -1,0 +1,32 @@
+[Unit]
+Description=EncodeSwarmr Controller
+Documentation=https://github.com/badskater/encodeswarmr
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=encodeswarmr
+Group=encodeswarmr
+
+# Optional: place DE_* environment variables here instead of (or alongside)
+# the YAML config file. The leading '-' makes this file optional.
+EnvironmentFile=-/etc/encodeswarmr/environment
+
+ExecStart=/usr/bin/encodeswarmr-controller run \
+  --config /etc/encodeswarmr/controller.yaml
+
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=encodeswarmr-controller
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/encodeswarmr /var/log/encodeswarmr
+
+[Install]
+WantedBy=multi-user.target

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
-	"github.com/badskater/distributed-encoder/internal/agent/service"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
+	"github.com/badskater/encodeswarmr/internal/agent/service"
 )
 
 // TestAgent holds references to a running in-process agent.

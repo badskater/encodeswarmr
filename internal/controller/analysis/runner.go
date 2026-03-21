@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // Config holds the analysis runner settings.

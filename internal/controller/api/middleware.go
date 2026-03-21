@@ -117,7 +117,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"type":   "https://distencoder.dev/errors/rate-limit",
+				"type":   "https://encodeswarmr.dev/errors/rate-limit",
 				"title":  "Too Many Requests",
 				"status": 429,
 			})

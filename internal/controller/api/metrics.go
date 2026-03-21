@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,20 +49,20 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
 	// --- Job counts by status ---
-	fmt.Fprintln(w, "# HELP distencoder_jobs_total Number of jobs by status.")
-	fmt.Fprintln(w, "# TYPE distencoder_jobs_total gauge")
+	fmt.Fprintln(w, "# HELP encodeswarmr_jobs_total Number of jobs by status.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_jobs_total gauge")
 	for _, st := range []string{"queued", "running", "completed", "failed", "cancelled"} {
 		_, total, err := s.store.ListJobs(ctx, db.ListJobsFilter{Status: st, PageSize: 1})
 		if err != nil {
 			s.logger.Warn("metrics: list jobs", "status", st, "err", err)
 			continue
 		}
-		fmt.Fprintf(w, "distencoder_jobs_total{status=%q} %d\n", st, total)
+		fmt.Fprintf(w, "encodeswarmr_jobs_total{status=%q} %d\n", st, total)
 	}
 
 	// --- Task counts by status and type (derived from job task-count columns) ---
-	fmt.Fprintln(w, "# HELP distencoder_tasks_total Number of tasks by status and task_type.")
-	fmt.Fprintln(w, "# TYPE distencoder_tasks_total gauge")
+	fmt.Fprintln(w, "# HELP encodeswarmr_tasks_total Number of tasks by status and task_type.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_tasks_total gauge")
 	writeTaskCounts(ctx, w, s)
 
 	// --- Agent counts by status ---
@@ -77,53 +77,53 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		agentCounts[a.Status]++
 	}
 
-	fmt.Fprintln(w, "# HELP distencoder_agents_total Number of registered agents by status.")
-	fmt.Fprintln(w, "# TYPE distencoder_agents_total gauge")
+	fmt.Fprintln(w, "# HELP encodeswarmr_agents_total Number of registered agents by status.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_agents_total gauge")
 	for _, st := range []string{"idle", "running", "offline", "draining", "pending_approval"} {
-		fmt.Fprintf(w, "distencoder_agents_total{status=%q} %d\n", st, agentCounts[st])
+		fmt.Fprintf(w, "encodeswarmr_agents_total{status=%q} %d\n", st, agentCounts[st])
 	}
 
 	// --- Active agents gauge ---
-	fmt.Fprintln(w, "# HELP distencoder_active_agents Number of agents currently in running or idle state.")
-	fmt.Fprintln(w, "# TYPE distencoder_active_agents gauge")
+	fmt.Fprintln(w, "# HELP encodeswarmr_active_agents Number of agents currently in running or idle state.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_active_agents gauge")
 	active := agentCounts["running"] + agentCounts["idle"]
-	fmt.Fprintf(w, "distencoder_active_agents %d\n", active)
+	fmt.Fprintf(w, "encodeswarmr_active_agents %d\n", active)
 
 	// --- Encoding FPS across all running tasks ---
-	fmt.Fprintln(w, "# HELP distencoder_encoding_fps Current encoding FPS aggregated across all running tasks.")
-	fmt.Fprintln(w, "# TYPE distencoder_encoding_fps gauge")
+	fmt.Fprintln(w, "# HELP encodeswarmr_encoding_fps Current encoding FPS aggregated across all running tasks.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_encoding_fps gauge")
 	totalFPS := computeRunningFPS(ctx, s)
-	fmt.Fprintf(w, "distencoder_encoding_fps %.4f\n", totalFPS)
+	fmt.Fprintf(w, "encodeswarmr_encoding_fps %.4f\n", totalFPS)
 
 	// --- Task duration histogram ---
-	fmt.Fprintln(w, "# HELP distencoder_task_duration_seconds Histogram of task execution time (started_at to completed_at).")
-	fmt.Fprintln(w, "# TYPE distencoder_task_duration_seconds histogram")
+	fmt.Fprintln(w, "# HELP encodeswarmr_task_duration_seconds Histogram of task execution time (started_at to completed_at).")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_task_duration_seconds histogram")
 	writeDurationHistogram(ctx, w, s)
 
 	// --- Queue wait histogram ---
-	fmt.Fprintln(w, "# HELP distencoder_task_queue_wait_seconds Histogram of time tasks spend in pending state before being claimed.")
-	fmt.Fprintln(w, "# TYPE distencoder_task_queue_wait_seconds histogram")
+	fmt.Fprintln(w, "# HELP encodeswarmr_task_queue_wait_seconds Histogram of time tasks spend in pending state before being claimed.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_task_queue_wait_seconds histogram")
 	writeQueueWaitHistogram(ctx, w, s)
 
 	// --- Chunk throughput (total output bytes from completed tasks) ---
-	fmt.Fprintln(w, "# HELP distencoder_chunk_throughput_bytes Total encoded output bytes across all completed tasks.")
-	fmt.Fprintln(w, "# TYPE distencoder_chunk_throughput_bytes counter")
+	fmt.Fprintln(w, "# HELP encodeswarmr_chunk_throughput_bytes Total encoded output bytes across all completed tasks.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_chunk_throughput_bytes counter")
 	chunkBytes := computeChunkThroughput(ctx, s)
-	fmt.Fprintf(w, "distencoder_chunk_throughput_bytes %d\n", chunkBytes)
+	fmt.Fprintf(w, "encodeswarmr_chunk_throughput_bytes %d\n", chunkBytes)
 
 	// --- gRPC request counters ---
-	fmt.Fprintln(w, "# HELP distencoder_grpc_requests_total Total gRPC calls by method.")
-	fmt.Fprintln(w, "# TYPE distencoder_grpc_requests_total counter")
+	fmt.Fprintln(w, "# HELP encodeswarmr_grpc_requests_total Total gRPC calls by method.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_grpc_requests_total counter")
 	grpcRequestCounters.Range(func(k, v any) bool {
 		method := k.(string)
 		count := atomic.LoadInt64(v.(*int64))
-		fmt.Fprintf(w, "distencoder_grpc_requests_total{method=%q} %d\n", method, count)
+		fmt.Fprintf(w, "encodeswarmr_grpc_requests_total{method=%q} %d\n", method, count)
 		return true
 	})
 
 	// --- HTTP request counters ---
-	fmt.Fprintln(w, "# HELP distencoder_http_requests_total Total HTTP requests by method, path, and status code.")
-	fmt.Fprintln(w, "# TYPE distencoder_http_requests_total counter")
+	fmt.Fprintln(w, "# HELP encodeswarmr_http_requests_total Total HTTP requests by method, path, and status code.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_http_requests_total counter")
 	httpRequestCounters.Range(func(k, v any) bool {
 		var method, path string
 		var status int
@@ -131,7 +131,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		// Sscanf doesn't handle null-byte delimiters well; parse manually.
 		method, path, status = parseHTTPKey(k.(string))
 		count := atomic.LoadInt64(v.(*int64))
-		fmt.Fprintf(w, "distencoder_http_requests_total{method=%q,path=%q,status=\"%d\"} %d\n", method, path, status, count)
+		fmt.Fprintf(w, "encodeswarmr_http_requests_total{method=%q,path=%q,status=\"%d\"} %d\n", method, path, status, count)
 		return true
 	})
 }
@@ -193,7 +193,7 @@ func writeTaskCounts(ctx context.Context, w http.ResponseWriter, s *Server) {
 	}
 
 	for k, v := range counts {
-		fmt.Fprintf(w, "distencoder_tasks_total{status=%q,task_type=%q} %d\n", k.status, k.taskType, v)
+		fmt.Fprintf(w, "encodeswarmr_tasks_total{status=%q,task_type=%q} %d\n", k.status, k.taskType, v)
 	}
 }
 
@@ -241,11 +241,11 @@ func writeDurationHistogram(ctx context.Context, w http.ResponseWriter, s *Serve
 	cumulative := int64(0)
 	for i, b := range durationBuckets {
 		cumulative += bucketCounts[i]
-		fmt.Fprintf(w, "distencoder_task_duration_seconds_bucket{le=\"%.0f\"} %d\n", b, cumulative)
+		fmt.Fprintf(w, "encodeswarmr_task_duration_seconds_bucket{le=\"%.0f\"} %d\n", b, cumulative)
 	}
-	fmt.Fprintf(w, "distencoder_task_duration_seconds_bucket{le=\"+Inf\"} %d\n", count)
-	fmt.Fprintf(w, "distencoder_task_duration_seconds_sum %.4f\n", sum)
-	fmt.Fprintf(w, "distencoder_task_duration_seconds_count %d\n", count)
+	fmt.Fprintf(w, "encodeswarmr_task_duration_seconds_bucket{le=\"+Inf\"} %d\n", count)
+	fmt.Fprintf(w, "encodeswarmr_task_duration_seconds_sum %.4f\n", sum)
+	fmt.Fprintf(w, "encodeswarmr_task_duration_seconds_count %d\n", count)
 }
 
 // writeQueueWaitHistogram emits a Prometheus histogram of task queue wait time.
@@ -285,11 +285,11 @@ func writeQueueWaitHistogram(ctx context.Context, w http.ResponseWriter, s *Serv
 	cumulative := int64(0)
 	for i, b := range queueBuckets {
 		cumulative += bucketCounts[i]
-		fmt.Fprintf(w, "distencoder_task_queue_wait_seconds_bucket{le=\"%.0f\"} %d\n", b, cumulative)
+		fmt.Fprintf(w, "encodeswarmr_task_queue_wait_seconds_bucket{le=\"%.0f\"} %d\n", b, cumulative)
 	}
-	fmt.Fprintf(w, "distencoder_task_queue_wait_seconds_bucket{le=\"+Inf\"} %d\n", count)
-	fmt.Fprintf(w, "distencoder_task_queue_wait_seconds_sum %.4f\n", sum)
-	fmt.Fprintf(w, "distencoder_task_queue_wait_seconds_count %d\n", count)
+	fmt.Fprintf(w, "encodeswarmr_task_queue_wait_seconds_bucket{le=\"+Inf\"} %d\n", count)
+	fmt.Fprintf(w, "encodeswarmr_task_queue_wait_seconds_sum %.4f\n", sum)
+	fmt.Fprintf(w, "encodeswarmr_task_queue_wait_seconds_count %d\n", count)
 }
 
 // ---------------------------------------------------------------------------

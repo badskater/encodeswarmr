@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/badskater/distributed-encoder/internal/controller/engine"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

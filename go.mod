@@ -1,4 +1,4 @@
-module github.com/badskater/distributed-encoder
+module github.com/badskater/encodeswarmr
 
 go 1.25.0
 

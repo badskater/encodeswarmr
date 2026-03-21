@@ -32,8 +32,8 @@ web:
 
 proto:
 	protoc \
-		--go_out=. --go_opt=module=github.com/badskater/distributed-encoder \
-		--go-grpc_out=. --go-grpc_opt=module=github.com/badskater/distributed-encoder \
+		--go_out=. --go_opt=module=github.com/badskater/encodeswarmr \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/badskater/encodeswarmr \
 		proto/encoder/v1/agent.proto
 
 test:

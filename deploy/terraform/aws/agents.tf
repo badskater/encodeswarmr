@@ -1,7 +1,7 @@
 # ── IAM Role for Agent Instances ───────────────────────────────────────────────
 
 resource "aws_iam_role" "agent" {
-  name = "distencoder-${var.environment}-agent-role"
+  name = "encodeswarmr-${var.environment}-agent-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -17,12 +17,12 @@ resource "aws_iam_role" "agent" {
   })
 
   tags = {
-    Name = "distencoder-${var.environment}-agent-role"
+    Name = "encodeswarmr-${var.environment}-agent-role"
   }
 }
 
 resource "aws_iam_role_policy" "agent_ssm" {
-  name = "distencoder-${var.environment}-agent-ssm-policy"
+  name = "encodeswarmr-${var.environment}-agent-ssm-policy"
   role = aws_iam_role.agent.id
 
   policy = jsonencode({
@@ -36,9 +36,9 @@ resource "aws_iam_role_policy" "agent_ssm" {
           "ssm:GetParameters",
         ]
         Resource = [
-          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/distencoder/${var.environment}/certs/ca.crt",
-          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/distencoder/${var.environment}/certs/agent.crt",
-          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/distencoder/${var.environment}/certs/agent.key",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/encodeswarmr/${var.environment}/certs/ca.crt",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/encodeswarmr/${var.environment}/certs/agent.crt",
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/encodeswarmr/${var.environment}/certs/agent.key",
         ]
       },
       {
@@ -58,7 +58,7 @@ resource "aws_iam_role_policy" "agent_ssm" {
 }
 
 resource "aws_iam_instance_profile" "agent" {
-  name = "distencoder-${var.environment}-agent-profile"
+  name = "encodeswarmr-${var.environment}-agent-profile"
   role = aws_iam_role.agent.name
 }
 
@@ -69,7 +69,7 @@ resource "aws_iam_instance_profile" "agent" {
 locals {
   # NLB DNS is only available in HA mode; otherwise use the ASG instance DNS
   # The agent config references this at boot — resolved via local at plan time.
-  controller_grpc_endpoint = var.enable_ha ? "${aws_lb.grpc[0].dns_name}:${var.controller_grpc_port}" : "controller.distencoder.internal:${var.controller_grpc_port}"
+  controller_grpc_endpoint = var.enable_ha ? "${aws_lb.grpc[0].dns_name}:${var.controller_grpc_port}" : "controller.encodeswarmr.internal:${var.controller_grpc_port}"
 }
 
 # ── Agent User Data ────────────────────────────────────────────────────────────
@@ -78,10 +78,10 @@ locals {
   agent_userdata = <<-USERDATA
     #!/bin/bash
     set -euo pipefail
-    exec > >(tee /var/log/distencoder-agent-init.log | logger -t distencoder-agent-init) 2>&1
+    exec > >(tee /var/log/encodeswarmr-agent-init.log | logger -t encodeswarmr-agent-init) 2>&1
 
-    echo "=== distributed-encoder agent bootstrap ==="
-    echo "Version: ${var.distencoder_version}"
+    echo "=== encodeswarmr agent bootstrap ==="
+    echo "Version: ${var.encodeswarmr_version}"
     echo "Environment: ${var.environment}"
 
     # ── System update and encoding toolchain ──────────────────────────────────
@@ -113,44 +113,44 @@ $EFS_DNS:/ /mnt/nas/media    nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,t
 EOF
 
     # ── Fetch mTLS certificates from SSM ──────────────────────────────────────
-    CERT_DIR=/etc/distributed-encoder/certs
+    CERT_DIR=/etc/encodeswarmr/certs
     mkdir -p "$CERT_DIR"
     chmod 700 "$CERT_DIR"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/ca.crt" \
+      --name "/encodeswarmr/${var.environment}/certs/ca.crt" \
       --query "Parameter.Value" --output text > "$CERT_DIR/ca.crt"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/agent.crt" \
+      --name "/encodeswarmr/${var.environment}/certs/agent.crt" \
       --query "Parameter.Value" --output text > "$CERT_DIR/agent.crt"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/agent.key" \
+      --name "/encodeswarmr/${var.environment}/certs/agent.key" \
       --with-decryption \
       --query "Parameter.Value" --output text > "$CERT_DIR/agent.key"
 
     chmod 600 "$CERT_DIR/agent.key" "$CERT_DIR/ca.crt" "$CERT_DIR/agent.crt"
 
     # ── Download and install agent .deb ───────────────────────────────────────
-    RELEASE_URL="https://github.com/badskater/distributed-encoder/releases/download/v${var.distencoder_version}/distributed-encoder-agent_${var.distencoder_version}_amd64.deb"
-    curl -fsSL "$RELEASE_URL" -o /tmp/distencoder-agent.deb
-    dpkg -i /tmp/distencoder-agent.deb || apt-get install -f -y
-    rm -f /tmp/distencoder-agent.deb
+    RELEASE_URL="https://github.com/badskater/encodeswarmr/releases/download/v${var.encodeswarmr_version}/encodeswarmr-agent_${var.encodeswarmr_version}_amd64.deb"
+    curl -fsSL "$RELEASE_URL" -o /tmp/encodeswarmr-agent.deb
+    dpkg -i /tmp/encodeswarmr-agent.deb || apt-get install -f -y
+    rm -f /tmp/encodeswarmr-agent.deb
 
     # ── Write agent config ────────────────────────────────────────────────────
     HOSTNAME=$(hostname -f)
 
-    cat > /etc/distributed-encoder/agent.yaml <<EOF
+    cat > /etc/encodeswarmr/agent.yaml <<EOF
 controller:
   address: "${local.controller_grpc_endpoint}"
   tls:
-    cert: "/etc/distributed-encoder/certs/agent.crt"
-    key:  "/etc/distributed-encoder/certs/agent.key"
-    ca:   "/etc/distributed-encoder/certs/ca.crt"
+    cert: "/etc/encodeswarmr/certs/agent.crt"
+    key:  "/etc/encodeswarmr/certs/agent.key"
+    ca:   "/etc/encodeswarmr/certs/ca.crt"
   reconnect:
     initial_delay: 5s
     max_delay: 5m
@@ -158,9 +158,9 @@ controller:
 
 agent:
   hostname: "$HOSTNAME"
-  work_dir: "/var/lib/distributed-encoder-agent/work"
-  log_dir:  "/var/log/distributed-encoder-agent"
-  offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+  work_dir: "/var/lib/encodeswarmr-agent/work"
+  log_dir:  "/var/log/encodeswarmr-agent"
+  offline_db: "/var/lib/encodeswarmr-agent/offline.db"
   heartbeat_interval: 30s
   poll_interval: 10s
   cleanup_on_success: true
@@ -201,8 +201,8 @@ EOF
 
     # ── Enable and start agent service ────────────────────────────────────────
     systemctl daemon-reload
-    systemctl enable distributed-encoder-agent
-    systemctl start distributed-encoder-agent
+    systemctl enable encodeswarmr-agent
+    systemctl start encodeswarmr-agent
 
     echo "=== Agent bootstrap complete ==="
   USERDATA
@@ -211,7 +211,7 @@ EOF
 # ── Launch Template ────────────────────────────────────────────────────────────
 
 resource "aws_launch_template" "agent" {
-  name_prefix   = "distencoder-${var.environment}-agent-"
+  name_prefix   = "encodeswarmr-${var.environment}-agent-"
   image_id      = data.aws_ami.ubuntu_24_04.id
   instance_type = var.agent_instance_type
 
@@ -247,13 +247,13 @@ resource "aws_launch_template" "agent" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "distencoder-${var.environment}-agent"
+      Name = "encodeswarmr-${var.environment}-agent"
       Role = "agent"
     }
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-agent-lt"
+    Name = "encodeswarmr-${var.environment}-agent-lt"
   }
 
   lifecycle {
@@ -264,7 +264,7 @@ resource "aws_launch_template" "agent" {
 # ── Auto Scaling Group ─────────────────────────────────────────────────────────
 
 resource "aws_autoscaling_group" "agent" {
-  name                = "distencoder-${var.environment}-agent-asg"
+  name                = "encodeswarmr-${var.environment}-agent-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
 
   min_size         = var.agent_count
@@ -288,7 +288,7 @@ resource "aws_autoscaling_group" "agent" {
 
   tag {
     key                 = "Name"
-    value               = "distencoder-${var.environment}-agent"
+    value               = "encodeswarmr-${var.environment}-agent"
     propagate_at_launch = true
   }
 

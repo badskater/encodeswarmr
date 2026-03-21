@@ -1,0 +1,32 @@
+[Unit]
+Description=EncodeSwarmr Agent
+Documentation=https://github.com/badskater/encodeswarmr
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=encodeswarmr-agent
+Group=encodeswarmr-agent
+
+# Optional: place DE_* environment variables here instead of (or alongside)
+# the YAML config file. The leading '-' makes this file optional.
+EnvironmentFile=-/etc/encodeswarmr/agent-environment
+
+ExecStart=/usr/bin/encodeswarmr-agent run \
+  --config /etc/encodeswarmr/agent.yaml
+
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=encodeswarmr-agent
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/encodeswarmr-agent /var/log/encodeswarmr-agent
+
+[Install]
+WantedBy=multi-user.target

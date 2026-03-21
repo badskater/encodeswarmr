@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // timeStr formats a time as RFC3339 UTC.
@@ -176,7 +176,7 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 
 	payload, _ := json.Marshal(map[string]string{
 		"event":   "test",
-		"message": "Test notification from distributed-encoder",
+		"message": "Test notification from encodeswarmr",
 	})
 
 	client := &http.Client{Timeout: 10 * time.Second}

@@ -52,5 +52,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions CI (build, test, race detector) on every push and PR
 - GitHub Actions release pipeline: `.deb`, `.rpm`, Windows `.exe`, Windows installer, container image on every semver tag
 
-[Unreleased]: https://github.com/badskater/distributed-encoder/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/badskater/distributed-encoder/releases/tag/v1.0.0
+[Unreleased]: https://github.com/badskater/encodeswarmr/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/badskater/encodeswarmr/releases/tag/v1.0.0

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // handleListPathMappings returns all path mappings.

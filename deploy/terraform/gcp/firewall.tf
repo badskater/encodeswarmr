@@ -25,7 +25,7 @@ resource "google_compute_firewall" "controller_http" {
 
   direction     = "INGRESS"
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["distencoder-controller"]
+  target_tags   = ["encodeswarmr-controller"]
 }
 
 # Allow gRPC (9443) from the agent subnet only.
@@ -45,7 +45,7 @@ resource "google_compute_firewall" "controller_grpc" {
     [var.agent_subnet_cidr],
     local.google_health_check_ranges
   )
-  target_tags = ["distencoder-controller"]
+  target_tags = ["encodeswarmr-controller"]
 }
 
 # Allow SSH to controllers via IAP tunnel (no direct public SSH).
@@ -62,7 +62,7 @@ resource "google_compute_firewall" "controller_ssh_iap" {
 
   direction     = "INGRESS"
   source_ranges = local.iap_ssh_range
-  target_tags   = ["distencoder-controller"]
+  target_tags   = ["encodeswarmr-controller"]
 }
 
 # Allow LB health checks to reach controller on both service ports.
@@ -79,7 +79,7 @@ resource "google_compute_firewall" "controller_healthcheck" {
 
   direction     = "INGRESS"
   source_ranges = local.google_health_check_ranges
-  target_tags   = ["distencoder-controller"]
+  target_tags   = ["encodeswarmr-controller"]
 }
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ resource "google_compute_firewall" "agent_ssh_iap" {
 
   direction     = "INGRESS"
   source_ranges = local.iap_ssh_range
-  target_tags   = ["distencoder-agent"]
+  target_tags   = ["encodeswarmr-agent"]
 }
 
 # Agents connect outbound to the controller on port 9443.
@@ -120,7 +120,7 @@ resource "google_compute_firewall" "agent_egress_grpc" {
 
   direction          = "EGRESS"
   destination_ranges = [var.controller_subnet_cidr]
-  target_tags        = ["distencoder-agent"]
+  target_tags        = ["encodeswarmr-agent"]
 }
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ func TestHDRResultSentinel(t *testing.T) {
 		t.Error("HDRResultSentinel must not be empty")
 	}
 	// The sentinel is what the controller searches for in task stdout logs.
-	const expected = "DE_HDR_RESULT="
+	const expected = "ES_HDR_RESULT="
 	if HDRResultSentinel != expected {
 		t.Errorf("HDRResultSentinel = %q, want %q", HDRResultSentinel, expected)
 	}

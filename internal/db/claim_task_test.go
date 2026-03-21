@@ -4,7 +4,7 @@ package db_test
 //
 // Requires a live PostgreSQL instance.  Set TEST_DATABASE_URL to run:
 //
-//	TEST_DATABASE_URL=postgres://distencoder:test@localhost:5432/distencoder_test \
+//	TEST_DATABASE_URL=postgres://encodeswarmr:test@localhost:5432/encodeswarmr_test \
 //	    go test ./internal/db/... -run TestClaimNextTask -v
 
 import (
@@ -14,14 +14,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 func testDB(t *testing.T) db.Store {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://distencoder:test@localhost:5432/distencoder_test?sslmode=disable"
+		dsn = "postgres://encodeswarmr:test@localhost:5432/encodeswarmr_test?sslmode=disable"
 	}
 	ctx := context.Background()
 	store, pool, err := db.New(ctx, dsn)

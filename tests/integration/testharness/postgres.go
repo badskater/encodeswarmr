@@ -16,7 +16,7 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcwait "github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // SetupPostgres returns a DSN, a db.Store, and the underlying *pgxpool.Pool
@@ -58,8 +58,8 @@ func startContainer(t *testing.T, ctx context.Context) string {
 	t.Helper()
 
 	const (
-		dbName = "distencoder_test"
-		dbUser = "distencoder"
+		dbName = "encodeswarmr_test"
+		dbUser = "encodeswarmr"
 		dbPass = "test"
 	)
 

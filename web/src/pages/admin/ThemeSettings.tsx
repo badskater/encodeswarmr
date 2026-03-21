@@ -51,7 +51,7 @@ function BrandingPreview({ branding }: { branding: BrandingSettings }) {
   const sidebar = branding.sidebarBg || '#374151'
   const primary = branding.primaryColor || '#3b82f6'
   const primaryHover = branding.primaryHoverColor || '#2563eb'
-  const title = branding.appTitle || 'Distributed Encoder'
+  const title = branding.appTitle || 'EncodeSwarmr'
 
   return (
     <div className="rounded-lg overflow-hidden border border-th-border shadow-md w-full max-w-sm">
@@ -217,7 +217,7 @@ export default function ThemeSettings() {
                 type="text"
                 value={localBranding.appTitle}
                 onChange={e => setLocalBranding(prev => ({ ...prev, appTitle: e.target.value }))}
-                placeholder="Distributed Encoder"
+                placeholder="EncodeSwarmr"
                 className="w-full rounded border border-th-input-border bg-th-input-bg text-th-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

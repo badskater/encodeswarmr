@@ -172,7 +172,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("webhooks.worker_count", 4)
 	v.SetDefault("webhooks.delivery_timeout", "10s")
 	v.SetDefault("webhooks.max_retries", 3)
-	v.SetDefault("upgrade.bin_dir", "/var/lib/distributed-encoder/agent-bins")
+	v.SetDefault("upgrade.bin_dir", "/var/lib/encodeswarmr/agent-bins")
 	v.SetDefault("upgrade.version", "0.0.0")
 	v.SetDefault("vnc.novnc_base_url", "https://unpkg.com/@novnc/novnc@1.5.0")
 	v.SetDefault("analysis.ffmpeg_bin", "")

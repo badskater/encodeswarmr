@@ -6,7 +6,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "distencoder-${var.environment}-vpc"
+    Name = "encodeswarmr-${var.environment}-vpc"
   }
 }
 
@@ -22,7 +22,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "distencoder-${var.environment}-public-${count.index + 1}"
+    Name = "encodeswarmr-${var.environment}-public-${count.index + 1}"
     Tier = "public"
   }
 }
@@ -36,7 +36,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "distencoder-${var.environment}-private-${count.index + 1}"
+    Name = "encodeswarmr-${var.environment}-private-${count.index + 1}"
     Tier = "private"
   }
 }
@@ -47,7 +47,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "distencoder-${var.environment}-igw"
+    Name = "encodeswarmr-${var.environment}-igw"
   }
 }
 
@@ -60,7 +60,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "distencoder-${var.environment}-nat-eip-${count.index + 1}"
+    Name = "encodeswarmr-${var.environment}-nat-eip-${count.index + 1}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -73,7 +73,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "distencoder-${var.environment}-nat-${count.index + 1}"
+    Name = "encodeswarmr-${var.environment}-nat-${count.index + 1}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -90,7 +90,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-rt-public"
+    Name = "encodeswarmr-${var.environment}-rt-public"
   }
 }
 
@@ -112,7 +112,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-rt-private-${count.index + 1}"
+    Name = "encodeswarmr-${var.environment}-rt-private-${count.index + 1}"
   }
 }
 
@@ -125,10 +125,10 @@ resource "aws_route_table_association" "private" {
 # ── RDS Subnet Group ───────────────────────────────────────────────────────────
 
 resource "aws_db_subnet_group" "main" {
-  name       = "distencoder-${var.environment}-db-subnet-group"
+  name       = "encodeswarmr-${var.environment}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "distencoder-${var.environment}-db-subnet-group"
+    Name = "encodeswarmr-${var.environment}-db-subnet-group"
   }
 }

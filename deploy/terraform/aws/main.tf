@@ -19,7 +19,7 @@ terraform {
   # Uncomment and configure to use S3 remote state
   # backend "s3" {
   #   bucket         = "your-terraform-state-bucket"
-  #   key            = "distributed-encoder/terraform.tfstate"
+  #   key            = "encodeswarmr/terraform.tfstate"
   #   region         = "us-east-1"
   #   encrypt        = true
   #   dynamodb_table = "terraform-state-lock"
@@ -31,7 +31,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "distributed-encoder"
+      Project     = "encodeswarmr"
       Environment = var.environment
       ManagedBy   = "terraform"
     }

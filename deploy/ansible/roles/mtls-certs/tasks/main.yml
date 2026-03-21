@@ -42,7 +42,7 @@
       -key {{ role_path }}/files/ca.key
       -out {{ role_path }}/files/ca.crt
       -days {{ mtls_ca_days }}
-      -subj "/CN=distributed-encoder-ca/O=DistEncoder/OU=CA"
+      -subj "/CN=encodeswarmr-ca/O=DistEncoder/OU=CA"
     creates: "{{ role_path }}/files/ca.crt"
   when: mtls_generate_certs | bool
   tags: [certs]
@@ -63,7 +63,7 @@
       openssl req -new
       -key {{ role_path }}/files/controller.key
       -out {{ role_path }}/files/controller.csr
-      -subj "/CN=distributed-encoder-controller/O=DistEncoder/OU=Controller"
+      -subj "/CN=encodeswarmr-controller/O=DistEncoder/OU=Controller"
     creates: "{{ role_path }}/files/controller.csr"
   when: mtls_generate_certs | bool
   tags: [certs]
@@ -122,7 +122,7 @@
       openssl req -new
       -key {{ role_path }}/files/agent.key
       -out {{ role_path }}/files/agent.csr
-      -subj "/CN=distributed-encoder-agent/O=DistEncoder/OU=Agent"
+      -subj "/CN=encodeswarmr-agent/O=DistEncoder/OU=Agent"
     creates: "{{ role_path }}/files/agent.csr"
   when: mtls_generate_certs | bool
   tags: [certs]

@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
 )
 
 // installAndConfigureVNC downloads (if InstallerURL is set) and silently

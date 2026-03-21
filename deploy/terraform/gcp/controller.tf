@@ -4,7 +4,7 @@
 
 resource "google_service_account" "controller" {
   account_id   = "${local.name_prefix}-controller"
-  display_name = "distributed-encoder controller service account (${var.environment})"
+  display_name = "encodeswarmr controller service account (${var.environment})"
   project      = var.project_id
 }
 
@@ -32,7 +32,7 @@ locals {
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive
 
-    echo "=== distributed-encoder controller startup ==="
+    echo "=== encodeswarmr controller startup ==="
 
     # Fetch secrets from Secret Manager using the instance metadata token.
     SECRET_PREFIX="${local.name_prefix}"
@@ -77,11 +77,11 @@ locals {
     # ---------------------------------------------------------------------------
     # Pull mTLS certificates from Secret Manager
     # ---------------------------------------------------------------------------
-    mkdir -p /etc/distributed-encoder/certs
-    fetch_secret "$${SECRET_PREFIX}-ca-cert"         /etc/distributed-encoder/certs/ca.crt
-    fetch_secret "$${SECRET_PREFIX}-controller-cert" /etc/distributed-encoder/certs/controller.crt
-    fetch_secret "$${SECRET_PREFIX}-controller-key"  /etc/distributed-encoder/certs/controller.key
-    chmod 600 /etc/distributed-encoder/certs/controller.key
+    mkdir -p /etc/encodeswarmr/certs
+    fetch_secret "$${SECRET_PREFIX}-ca-cert"         /etc/encodeswarmr/certs/ca.crt
+    fetch_secret "$${SECRET_PREFIX}-controller-cert" /etc/encodeswarmr/certs/controller.crt
+    fetch_secret "$${SECRET_PREFIX}-controller-key"  /etc/encodeswarmr/certs/controller.key
+    chmod 600 /etc/encodeswarmr/certs/controller.key
 
     # Pull DB password
     fetch_secret "$${SECRET_PREFIX}-db-password" /tmp/db_pass
@@ -90,8 +90,8 @@ locals {
     # ---------------------------------------------------------------------------
     # Write controller config
     # ---------------------------------------------------------------------------
-    mkdir -p /etc/distributed-encoder
-    cat > /etc/distributed-encoder/controller.yaml <<YAML
+    mkdir -p /etc/encodeswarmr
+    cat > /etc/encodeswarmr/controller.yaml <<YAML
 server:
   host: "0.0.0.0"
   port: 8080
@@ -103,20 +103,20 @@ database:
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "/usr/share/distributed-encoder/migrations"
+  migrations_path: "/usr/share/encodeswarmr/migrations"
 
 grpc:
   host: "0.0.0.0"
   port: 9443
   tls:
-    cert: "/etc/distributed-encoder/certs/controller.crt"
-    key:  "/etc/distributed-encoder/certs/controller.key"
-    ca:   "/etc/distributed-encoder/certs/ca.crt"
+    cert: "/etc/encodeswarmr/certs/controller.crt"
+    key:  "/etc/encodeswarmr/certs/controller.key"
+    ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 tls:
-  cert: "/etc/distributed-encoder/certs/controller.crt"
-  key:  "/etc/distributed-encoder/certs/controller.key"
-  ca:   "/etc/distributed-encoder/certs/ca.crt"
+  cert: "/etc/encodeswarmr/certs/controller.crt"
+  key:  "/etc/encodeswarmr/certs/controller.key"
+  ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 auth:
   session_ttl: 24h
@@ -154,20 +154,20 @@ analysis:
 YAML
 
     # ---------------------------------------------------------------------------
-    # Run distributed-encoder controller in Docker
+    # Run encodeswarmr controller in Docker
     # ---------------------------------------------------------------------------
-    docker pull "ghcr.io/badskater/distributed-encoder/controller:${var.distencoder_version}" || \
-      docker pull "ghcr.io/badskater/distributed-encoder/controller:latest"
+    docker pull "ghcr.io/badskater/encodeswarmr/controller:${var.encodeswarmr_version}" || \
+      docker pull "ghcr.io/badskater/encodeswarmr/controller:latest"
 
     docker run -d \
-      --name distencoder-controller \
+      --name encodeswarmr-controller \
       --restart unless-stopped \
       -p 8080:8080 \
       -p 9443:9443 \
-      -v /etc/distributed-encoder:/etc/distributed-encoder:ro \
+      -v /etc/encodeswarmr:/etc/encodeswarmr:ro \
       -v /mnt/nas:/mnt/nas \
-      -v /usr/share/distributed-encoder:/usr/share/distributed-encoder \
-      ghcr.io/badskater/distributed-encoder/controller:${var.distencoder_version}
+      -v /usr/share/encodeswarmr:/usr/share/encodeswarmr \
+      ghcr.io/badskater/encodeswarmr/controller:${var.encodeswarmr_version}
 
     echo "=== controller startup complete ==="
   EOT
@@ -185,7 +185,7 @@ resource "google_compute_instance" "controller" {
   zone         = var.zone
   project      = var.project_id
 
-  tags   = ["distencoder-controller"]
+  tags   = ["encodeswarmr-controller"]
   labels = local.common_labels
 
   boot_disk {
@@ -234,7 +234,7 @@ resource "google_compute_instance_template" "controller" {
   project      = var.project_id
   region       = var.region
 
-  tags   = ["distencoder-controller"]
+  tags   = ["encodeswarmr-controller"]
   labels = local.common_labels
 
   disk {

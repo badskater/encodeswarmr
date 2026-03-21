@@ -8,7 +8,7 @@
 resource "aws_lb" "http" {
   count = var.enable_ha ? 1 : 0
 
-  name               = "distencoder-${var.environment}-alb"
+  name               = "encodeswarmr-${var.environment}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -17,7 +17,7 @@ resource "aws_lb" "http" {
   enable_deletion_protection = var.environment == "prod" ? true : false
 
   tags = {
-    Name = "distencoder-${var.environment}-alb"
+    Name = "encodeswarmr-${var.environment}-alb"
   }
 }
 
@@ -26,7 +26,7 @@ resource "aws_lb" "http" {
 resource "aws_lb_target_group" "http" {
   count = var.enable_ha ? 1 : 0
 
-  name     = "distencoder-${var.environment}-http-tg"
+  name     = "encodeswarmr-${var.environment}-http-tg"
   port     = var.controller_http_port
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -43,7 +43,7 @@ resource "aws_lb_target_group" "http" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-http-tg"
+    Name = "encodeswarmr-${var.environment}-http-tg"
   }
 }
 
@@ -70,7 +70,7 @@ resource "aws_lb_listener" "http" {
 resource "aws_lb" "grpc" {
   count = var.enable_ha ? 1 : 0
 
-  name               = "distencoder-${var.environment}-nlb"
+  name               = "encodeswarmr-${var.environment}-nlb"
   internal           = false
   load_balancer_type = "network"
   subnets            = aws_subnet.public[*].id
@@ -79,7 +79,7 @@ resource "aws_lb" "grpc" {
   enable_cross_zone_load_balancing = true
 
   tags = {
-    Name = "distencoder-${var.environment}-nlb"
+    Name = "encodeswarmr-${var.environment}-nlb"
   }
 }
 
@@ -88,7 +88,7 @@ resource "aws_lb" "grpc" {
 resource "aws_lb_target_group" "grpc" {
   count = var.enable_ha ? 1 : 0
 
-  name     = "distencoder-${var.environment}-grpc-tg"
+  name     = "encodeswarmr-${var.environment}-grpc-tg"
   port     = var.controller_grpc_port
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
@@ -102,7 +102,7 @@ resource "aws_lb_target_group" "grpc" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-grpc-tg"
+    Name = "encodeswarmr-${var.environment}-grpc-tg"
   }
 }
 

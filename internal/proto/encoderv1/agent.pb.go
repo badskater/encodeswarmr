@@ -1360,7 +1360,7 @@ const file_proto_encoder_v1_agent_proto_rawDesc = "" +
 	"\fReportResult\x12\x16.encoder.v1.TaskResult\x1a\x0f.encoder.v1.Ack\x125\n" +
 	"\n" +
 	"StreamLogs\x12\x14.encoder.v1.LogEntry\x1a\x0f.encoder.v1.Ack(\x01\x12H\n" +
-	"\x12SyncOfflineResults\x12\x16.encoder.v1.TaskResult\x1a\x18.encoder.v1.SyncResponse(\x01BCZAgithub.com/badskater/distributed-encoder/internal/proto/encoderv1b\x06proto3"
+	"\x12SyncOfflineResults\x12\x16.encoder.v1.TaskResult\x1a\x18.encoder.v1.SyncResponse(\x01BCZAgithub.com/badskater/encodeswarmr/internal/proto/encoderv1b\x06proto3"
 
 var (
 	file_proto_encoder_v1_agent_proto_rawDescOnce sync.Once

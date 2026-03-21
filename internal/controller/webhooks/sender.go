@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // retryDelays are the wait durations between delivery attempts (10s, 30s, 90s).

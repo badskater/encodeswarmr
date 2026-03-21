@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 export type Theme = 'light' | 'dark' | 'dim'
 
 const STORAGE_KEY = 'de-theme'
-const OVERRIDES_KEY = 'distencoder-theme-overrides'
+const OVERRIDES_KEY = 'encodeswarmr-theme-overrides'
 const VALID: Theme[] = ['light', 'dark', 'dim']
 
 function getInitialTheme(): Theme {

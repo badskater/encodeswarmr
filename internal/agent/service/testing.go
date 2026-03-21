@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	agentcfg "github.com/badskater/encodeswarmr/internal/agent/config"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 )
 
 // RunForTest starts the agent runner lifecycle in the calling goroutine.

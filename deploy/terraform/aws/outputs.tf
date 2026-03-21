@@ -108,6 +108,6 @@ output "ssh_commands" {
 # ── SSM Paths ──────────────────────────────────────────────────────────────────
 
 output "ssm_parameter_prefix" {
-  description = "SSM Parameter Store path prefix for all distributed-encoder secrets."
-  value       = "/distencoder/${var.environment}/"
+  description = "SSM Parameter Store path prefix for all encodeswarmr secrets."
+  value       = "/encodeswarmr/${var.environment}/"
 }
