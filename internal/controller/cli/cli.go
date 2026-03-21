@@ -29,6 +29,7 @@ import (
 	"github.com/badskater/distributed-encoder/internal/controller/config"
 	"github.com/badskater/distributed-encoder/internal/controller/engine"
 	controllergrpc "github.com/badskater/distributed-encoder/internal/controller/grpc"
+	"github.com/badskater/distributed-encoder/internal/controller/ha"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 	"github.com/spf13/cobra"
@@ -113,6 +114,18 @@ func runServer(ctx context.Context, cfgPath string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// Start HA leader election.  nodeID defaults to hostname; override via the
+	// HA_NODE_ID environment variable for deployments where multiple replicas
+	// share the same hostname (e.g. Docker Swarm / Kubernetes).
+	nodeID, _ := os.Hostname()
+	if envID := os.Getenv("HA_NODE_ID"); envID != "" {
+		nodeID = envID
+	}
+	ldr := ha.NewLeader(pool, nodeID, logger)
+	ldr.Start(ctx)
+	defer ldr.Stop()
+	logger.Info("ha leader election started", "node_id", nodeID)
+
 	authSvc, err := auth.NewService(ctx, store, &cfg.Auth, logger)
 	if err != nil {
 		return fmt.Errorf("cli: init auth: %w", err)
@@ -128,7 +141,7 @@ func runServer(ctx context.Context, cfgPath string) error {
 	logger.Info("webhook delivery service started", "workers", cfg.Webhooks.WorkerCount)
 
 	// Start HTTP API server.
-	httpSrv, err := api.New(store, authSvc, cfg, logger, whSvc)
+	httpSrv, err := api.New(store, authSvc, cfg, logger, whSvc, ldr)
 	if err != nil {
 		return fmt.Errorf("create api server: %w", err)
 	}

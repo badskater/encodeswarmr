@@ -189,6 +189,31 @@ func buildTLSConfig(cfg agentcfg.TLSConfig) (*tls.Config, error) {
 // register calls the controller Register RPC with exponential backoff until
 // the agent is registered AND approved. Implements the PENDING_APPROVAL state
 // from the agent state machine (AGENTS.md §3).
+//
+// HA reconnection behaviour
+//
+// In an active-passive HA deployment two controller replicas sit behind a
+// load balancer (or DNS round-robin). Only the leader processes gRPC requests;
+// the standby does not accept agent connections (it will return
+// codes.Unavailable or close the connection).
+//
+// When the primary controller fails:
+//  1. The PostgreSQL advisory lock is released (either explicitly via Stop()
+//     or implicitly when the connection drops).
+//  2. The standby acquires the lock within one heartbeat interval (≤5 s) and
+//     starts processing jobs.
+//  3. The load balancer (or DNS TTL expiry) routes new connections to the
+//     newly promoted leader.
+//  4. The agent's Register call returns codes.Unavailable (or a network
+//     error).  The existing exponential-backoff loop below handles this
+//     transparently: it retries indefinitely with up to maxDelay between
+//     attempts.  No agent-side code change is needed.
+//
+// Agents do not need to know which controller is the leader; they simply
+// retry the Register RPC until it succeeds.  The heartbeat loop and poll loop
+// also log errors on transient failures and continue retrying, so in-flight
+// tasks survive brief failovers (results are buffered in the offline journal
+// if the reporting RPC fails — see §8 in AGENTS.md).
 func (r *runner) register(ctx context.Context) error {
 	hostname := r.cfg.Agent.Hostname
 	if hostname == "" {
