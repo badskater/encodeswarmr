@@ -146,7 +146,7 @@ func (s *pgStore) UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent,
 		          gpu_vendor, gpu_model, gpu_enabled,
 		          agent_version, os_version, cpu_count, ram_mib,
 		          nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-		          created_at, updated_at`
+		          upgrade_requested, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.Name, p.Hostname, p.IPAddress, p.Tags,
 		p.GPUVendor, p.GPUModel, p.GPUEnabled,
@@ -161,7 +161,7 @@ func (s *pgStore) GetAgentByID(ctx context.Context, id string) (*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  created_at, updated_at
+	                  upgrade_requested, created_at, updated_at
 	           FROM agents WHERE id = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, id))
 }
@@ -171,7 +171,7 @@ func (s *pgStore) GetAgentByName(ctx context.Context, name string) (*Agent, erro
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  created_at, updated_at
+	                  upgrade_requested, created_at, updated_at
 	           FROM agents WHERE name = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, name))
 }
@@ -181,7 +181,7 @@ func (s *pgStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  created_at, updated_at
+	                  upgrade_requested, created_at, updated_at
 	           FROM agents ORDER BY name`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
@@ -262,7 +262,7 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 		&a.GPUVendor, &a.GPUModel, &a.GPUEnabled,
 		&a.AgentVersion, &a.OSVersion, &a.CPUCount, &a.RAMMIB,
 		&a.NVENC, &a.QSV, &a.AMF, &a.VNCPort, &a.APIKeyHash, &a.LastHeartbeat,
-		&a.CreatedAt, &a.UpdatedAt,
+		&a.UpgradeRequested, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -426,25 +426,25 @@ func (s *pgStore) CreateJob(ctx context.Context, p CreateJobParams) (*Job, error
 	}
 	const q = `
 		WITH ins AS (
-		    INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config)
-		    VALUES ($1, $2, $3, $4, $5)
+		    INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config, max_retries)
+		    VALUES ($1, $2, $3, $4, $5, $6)
 		    RETURNING id, source_id, status, job_type, priority, target_tags,
 		              tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-		              encode_config, completed_at, failed_at, created_at, updated_at
+		              encode_config, max_retries, completed_at, failed_at, created_at, updated_at
 		)
 		SELECT ins.id, ins.source_id, ins.status, ins.job_type, ins.priority, ins.target_tags,
 		       ins.tasks_total, ins.tasks_pending, ins.tasks_running, ins.tasks_completed, ins.tasks_failed,
-		       ins.encode_config, ins.completed_at, ins.failed_at, ins.created_at, ins.updated_at,
+		       ins.encode_config, ins.max_retries, ins.completed_at, ins.failed_at, ins.created_at, ins.updated_at,
 		       COALESCE(s.unc_path, '') AS source_path
 		FROM ins LEFT JOIN sources s ON ins.source_id = s.id`
-	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON)
+	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON, p.MaxRetries)
 	return scanJob(row)
 }
 
 func (s *pgStore) GetJobByID(ctx context.Context, id string) (*Job, error) {
 	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	                  j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	                  COALESCE(s.unc_path, '') AS source_path
 	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
 	           WHERE j.id = $1`
@@ -508,7 +508,7 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 
 	q := `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	             j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	             j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	             j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	             COALESCE(s.unc_path, '') AS source_path
 	      FROM jobs j LEFT JOIN sources s ON j.source_id = s.id`
 	if len(whereConds) > 0 {
@@ -538,7 +538,7 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 func (s *pgStore) GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error) {
 	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	                  j.encode_config, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	                  COALESCE(s.unc_path, '') AS source_path
 	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
 	           WHERE j.status = 'queued' AND j.tasks_total = 0
@@ -601,7 +601,7 @@ func scanJob(row pgx.Row) (*Job, error) {
 	err := row.Scan(
 		&j.ID, &j.SourceID, &j.Status, &j.JobType, &j.Priority, &j.TargetTags,
 		&j.TasksTotal, &j.TasksPending, &j.TasksRunning, &j.TasksCompleted, &j.TasksFailed,
-		&rawCfg, &j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
+		&rawCfg, &j.MaxRetries, &j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
 		&j.SourcePath,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -646,6 +646,7 @@ func (s *pgStore) CreateTask(ctx context.Context, p CreateTaskParams) (*Task, er
 		          script_dir, source_path, output_path, variables,
 		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 		          vmaf_score, psnr, ssim, error_msg,
+		          retry_count, retry_after,
 		          started_at, completed_at, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.JobID, p.ChunkIndex, p.TaskType, p.SourcePath, p.OutputPath, varsJSON,
@@ -658,6 +659,7 @@ func (s *pgStore) GetTaskByID(ctx context.Context, id string) (*Task, error) {
 	                  script_dir, source_path, output_path, variables,
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
+	                  retry_count, retry_after,
 	                  started_at, completed_at, created_at, updated_at
 	           FROM tasks WHERE id = $1`
 	return scanTask(s.pool.QueryRow(ctx, q, id))
@@ -668,6 +670,7 @@ func (s *pgStore) ListTasksByJob(ctx context.Context, jobID string) ([]*Task, er
 	                  script_dir, source_path, output_path, variables,
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
+	                  retry_count, retry_after,
 	                  started_at, completed_at, created_at, updated_at
 	           FROM tasks WHERE job_id = $1 ORDER BY chunk_index`
 	rows, err := s.pool.Query(ctx, q, jobID)
@@ -706,6 +709,8 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		      -- Concat tasks are handled by the controller-side ConcatRunner and
 		      -- must never be dispatched to an agent.
 		      AND  t.task_type <> 'concat'
+		      -- Respect retry backoff: only claim if retry_after has elapsed.
+		      AND  (t.retry_after IS NULL OR t.retry_after <= now())
 		    ORDER BY j.priority DESC, j.created_at ASC, t.chunk_index ASC
 		    LIMIT  1
 		    FOR UPDATE OF t SKIP LOCKED
@@ -721,6 +726,7 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		          tasks.script_dir, tasks.source_path, tasks.output_path, tasks.variables,
 		          tasks.exit_code, tasks.frames_encoded, tasks.avg_fps, tasks.output_size,
 		          tasks.duration_sec, tasks.vmaf_score, tasks.psnr, tasks.ssim, tasks.error_msg,
+		          tasks.retry_count, tasks.retry_after,
 		          tasks.started_at, tasks.completed_at, tasks.created_at, tasks.updated_at`
 	row := s.pool.QueryRow(ctx, q, agentID, tags)
 	t, err := scanTask(row)
@@ -825,6 +831,7 @@ func scanTask(row pgx.Row) (*Task, error) {
 		&t.ScriptDir, &t.SourcePath, &t.OutputPath, &rawVars,
 		&t.ExitCode, &t.FramesEncoded, &t.AvgFPS, &t.OutputSize, &t.DurationSec,
 		&t.VMafScore, &t.PSNR, &t.SSIM, &t.ErrorMsg,
+		&t.RetryCount, &t.RetryAfter,
 		&t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1821,6 +1828,77 @@ func (s *pgStore) DeleteAPIKey(ctx context.Context, id string) error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Notification Preferences
+// ---------------------------------------------------------------------------
+
+// GetNotificationPrefs returns the notification preferences for the given user.
+// Returns ErrNotFound if no preferences row exists yet (use defaults in that case).
+func (s *pgStore) GetNotificationPrefs(ctx context.Context, userID string) (*NotificationPrefs, error) {
+	const q = `SELECT id, user_id, notify_on_job_complete, notify_on_job_failed,
+	                  notify_on_agent_stale, webhook_filter_user_only, created_at, updated_at
+	           FROM notification_preferences WHERE user_id = $1`
+	return scanNotificationPrefs(s.pool.QueryRow(ctx, q, userID))
+}
+
+// UpsertNotificationPrefs creates or updates the notification preferences for a user.
+func (s *pgStore) UpsertNotificationPrefs(ctx context.Context, p UpsertNotificationPrefsParams) error {
+	const q = `
+		INSERT INTO notification_preferences
+		    (user_id, notify_on_job_complete, notify_on_job_failed,
+		     notify_on_agent_stale, webhook_filter_user_only)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE SET
+		    notify_on_job_complete   = EXCLUDED.notify_on_job_complete,
+		    notify_on_job_failed     = EXCLUDED.notify_on_job_failed,
+		    notify_on_agent_stale    = EXCLUDED.notify_on_agent_stale,
+		    webhook_filter_user_only = EXCLUDED.webhook_filter_user_only,
+		    updated_at               = now()`
+	_, err := s.pool.Exec(ctx, q,
+		p.UserID, p.NotifyOnJobComplete, p.NotifyOnJobFailed,
+		p.NotifyOnAgentStale, p.WebhookFilterUserOnly,
+	)
+	if err != nil {
+		return fmt.Errorf("db: upsert notification prefs: %w", err)
+	}
+	return nil
+}
+
+func scanNotificationPrefs(row pgx.Row) (*NotificationPrefs, error) {
+	var np NotificationPrefs
+	err := row.Scan(
+		&np.ID, &np.UserID,
+		&np.NotifyOnJobComplete, &np.NotifyOnJobFailed,
+		&np.NotifyOnAgentStale, &np.WebhookFilterUserOnly,
+		&np.CreatedAt, &np.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan notification prefs: %w", err)
+	}
+	return &np, nil
+}
+
+// ---------------------------------------------------------------------------
+// Agent upgrade flag
+// ---------------------------------------------------------------------------
+
+// SetAgentUpgradeRequested sets or clears the upgrade_requested flag for the
+// given agent. Use requested=true to request an upgrade, false to clear it.
+func (s *pgStore) SetAgentUpgradeRequested(ctx context.Context, agentID string, requested bool) error {
+	const q = `UPDATE agents SET upgrade_requested = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, agentID, requested)
+	if err != nil {
+		return fmt.Errorf("db: set agent upgrade_requested: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *pgStore) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {
 	const q = `UPDATE api_keys SET last_used_at = now() WHERE id = $1`
 	_, err := s.pool.Exec(ctx, q, id)
@@ -1840,4 +1918,46 @@ func scanAPIKey(row pgx.Row) (*APIKey, error) {
 		return nil, fmt.Errorf("db: scan api key: %w", err)
 	}
 	return &k, nil
+}
+
+// ClearAgentUpgradeRequested clears the upgrade_requested flag for the given agent.
+func (s *pgStore) ClearAgentUpgradeRequested(ctx context.Context, agentID string) error {
+	return s.SetAgentUpgradeRequested(ctx, agentID, false)
+}
+
+// ---------------------------------------------------------------------------
+// Task retry with exponential backoff
+// ---------------------------------------------------------------------------
+
+// RetryTaskWithBackoff inserts a new pending task row that is a copy of the
+// failed task, with retry_count incremented and retry_after set to
+// now() + (2^retryCount * 30 seconds).  The original failed task is left
+// unchanged.  Returns the newly created task row.
+func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retryCount int) (*Task, error) {
+	// backoffSeconds = 2^retryCount * 30 (capped at 1 hour = 3600 s).
+	backoffSeconds := (1 << retryCount) * 30
+	if backoffSeconds > 3600 {
+		backoffSeconds = 3600
+	}
+
+	const q = `
+		INSERT INTO tasks
+		    (job_id, chunk_index, task_type, source_path, output_path, variables,
+		     retry_count, retry_after)
+		SELECT job_id, chunk_index, task_type, source_path, output_path, variables,
+		       $2, now() + ($3 * interval '1 second')
+		FROM   tasks
+		WHERE  id = $1
+		RETURNING id, job_id, chunk_index, task_type, status, agent_id,
+		          script_dir, source_path, output_path, variables,
+		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
+		          vmaf_score, psnr, ssim, error_msg,
+		          retry_count, retry_after,
+		          started_at, completed_at, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, taskID, retryCount+1, backoffSeconds)
+	t, err := scanTask(row)
+	if err != nil {
+		return nil, fmt.Errorf("db: retry task with backoff: %w", err)
+	}
+	return t, nil
 }

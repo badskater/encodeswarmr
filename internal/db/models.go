@@ -70,11 +70,14 @@ type Agent struct {
 	AMF           bool       `json:"amf"`
 	// VNCPort is the TCP port the agent's VNC server is listening on.
 	// 0 means VNC is not configured or not running on this agent.
-	VNCPort       int        `json:"vnc_port"`
-	APIKeyHash    *string    `json:"-"`
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	VNCPort          int        `json:"vnc_port"`
+	APIKeyHash       *string    `json:"-"`
+	LastHeartbeat    *time.Time `json:"last_heartbeat,omitempty"`
+	// UpgradeRequested indicates the controller has requested this agent
+	// self-upgrade on its next upgrade check poll.
+	UpgradeRequested bool       `json:"upgrade_requested"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // Source is a row from the sources table.
@@ -113,10 +116,13 @@ type Job struct {
 	TasksCompleted int          `json:"tasks_completed"`
 	TasksFailed    int          `json:"tasks_failed"`
 	EncodeConfig   EncodeConfig `json:"encode_config"`
-	CompletedAt    *time.Time   `json:"completed_at,omitempty"`
-	FailedAt       *time.Time   `json:"failed_at,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
-	UpdatedAt      time.Time    `json:"updated_at"`
+	// MaxRetries is the maximum number of automatic retries for failed tasks
+	// within this job. 0 means no automatic retry.
+	MaxRetries  int        `json:"max_retries"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	FailedAt    *time.Time `json:"failed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // TaskType constants identify the role of a task within a job.
@@ -147,10 +153,16 @@ type Task struct {
 	PSNR          *float64          `json:"psnr,omitempty"`
 	SSIM          *float64          `json:"ssim,omitempty"`
 	ErrorMsg      *string           `json:"error_msg,omitempty"`
-	StartedAt     *time.Time        `json:"started_at,omitempty"`
-	CompletedAt   *time.Time        `json:"completed_at,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	// RetryCount is the number of times this task has been retried.
+	// A task created fresh starts at 0; each automatic retry increments this.
+	RetryCount  int        `json:"retry_count"`
+	// RetryAfter is the earliest time this task is eligible to be claimed.
+	// nil means it can be claimed immediately.
+	RetryAfter  *time.Time `json:"retry_after,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // TaskLog is a row from the task_logs table.
@@ -331,6 +343,7 @@ type CreateJobParams struct {
 	Priority     int
 	TargetTags   []string
 	EncodeConfig EncodeConfig
+	MaxRetries   int
 }
 
 type ListJobsFilter struct {
@@ -479,6 +492,29 @@ type CreateAuditEntryParams struct {
 	ResourceID string
 	Detail     []byte
 	IPAddress  string
+}
+
+// NotificationPrefs is a row from the notification_preferences table.
+// It stores per-user preferences for which events trigger notifications.
+type NotificationPrefs struct {
+	ID                    string    `json:"id"`
+	UserID                string    `json:"user_id"`
+	NotifyOnJobComplete   bool      `json:"notify_on_job_complete"`
+	NotifyOnJobFailed     bool      `json:"notify_on_job_failed"`
+	NotifyOnAgentStale    bool      `json:"notify_on_agent_stale"`
+	WebhookFilterUserOnly bool      `json:"webhook_filter_user_only"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+// UpsertNotificationPrefsParams holds values for creating or updating
+// a user's notification preferences.
+type UpsertNotificationPrefsParams struct {
+	UserID                string
+	NotifyOnJobComplete   bool
+	NotifyOnJobFailed     bool
+	NotifyOnAgentStale    bool
+	WebhookFilterUserOnly bool
 }
 
 // Schedule is a row from the schedules table.

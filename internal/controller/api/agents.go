@@ -95,6 +95,46 @@ func (s *Server) handleApproveAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleRequestAgentUpgrade sets the upgrade_requested flag on an agent, causing
+// it to self-upgrade on its next upgrade check poll.
+// POST /api/v1/agents/{id}/upgrade
+func (s *Server) handleRequestAgentUpgrade(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	_, err := s.store.GetAgentByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "agent not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get agent for upgrade request", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	if err := s.store.SetAgentUpgradeRequested(r.Context(), id, true); err != nil {
+		s.logger.Error("set agent upgrade requested", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	// Emit audit entry — best-effort, never fail the request.
+	auditParams := db.CreateAuditEntryParams{
+		Action:     "agent.upgrade_requested",
+		Resource:   "agent",
+		ResourceID: id,
+		IPAddress:  r.RemoteAddr,
+	}
+	if claims, ok := auth.FromContext(r.Context()); ok {
+		auditParams.UserID = &claims.UserID
+		auditParams.Username = claims.Username
+	}
+	if err := s.store.CreateAuditEntry(r.Context(), auditParams); err != nil {
+		s.logger.Warn("audit log: request agent upgrade", "err", err, "agent_id", id)
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleGetAgentMetrics returns time-series CPU/GPU/memory samples for an agent.
 // GET /api/v1/agents/{id}/metrics
 // Optional query param: window=1h (default) — duration string parsed by time.ParseDuration.

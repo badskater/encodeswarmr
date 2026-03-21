@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -83,6 +84,49 @@ func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 	if err := s.store.FailTask(ctx, req.GetTaskId(), int(req.GetExitCode()), req.GetErrorMsg()); err != nil {
 		return status.Errorf(codes.Internal, "grpc reportresult: fail task: %v", err)
 	}
+
+	// Automatic retry: if the job allows retries and this task has not exhausted
+	// them, create a new pending task with exponential backoff.
+	if err := s.maybeRetryTask(ctx, req.GetTaskId(), req.GetJobId()); err != nil {
+		// Non-fatal: log the error and continue.  The task is already failed;
+		// the job will eventually reach a terminal state.
+		s.logger.Error("auto-retry task",
+			slog.String("task_id", req.GetTaskId()),
+			slog.String("job_id", req.GetJobId()),
+			slog.String("error", err.Error()),
+		)
+	}
+	return nil
+}
+
+// maybeRetryTask checks whether a failed task should be automatically retried
+// according to the parent job's max_retries setting. If eligible, it creates a
+// new pending task row with exponential backoff and re-queues the job.
+func (s *Server) maybeRetryTask(ctx context.Context, taskID, jobID string) error {
+	task, err := s.store.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+
+	job, err := s.store.GetJobByID(ctx, jobID)
+	if err != nil {
+		return fmt.Errorf("get job: %w", err)
+	}
+
+	if job.MaxRetries <= 0 || task.RetryCount >= job.MaxRetries {
+		return nil // no retries configured or limit reached
+	}
+
+	if _, err := s.store.RetryTaskWithBackoff(ctx, taskID, task.RetryCount); err != nil {
+		return fmt.Errorf("retry task with backoff: %w", err)
+	}
+
+	s.logger.LogAttrs(ctx, slog.LevelInfo, "task queued for auto-retry",
+		slog.String("task_id", taskID),
+		slog.String("job_id", jobID),
+		slog.Int("retry_count", task.RetryCount+1),
+		slog.Int("max_retries", job.MaxRetries),
+	)
 	return nil
 }
 

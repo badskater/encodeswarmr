@@ -87,7 +87,7 @@ func agentCols() []string {
 		"gpu_vendor", "gpu_model", "gpu_enabled",
 		"agent_version", "os_version", "cpu_count", "ram_mib",
 		"nvenc", "qsv", "amf", "vnc_port", "api_key_hash", "last_heartbeat",
-		"created_at", "updated_at",
+		"upgrade_requested", "created_at", "updated_at",
 	}
 }
 
@@ -97,7 +97,7 @@ func agentRow(id, name string) *pgxmock.Rows {
 			"nvidia", "RTX 4090", true,
 			"1.0.0", "Windows Server 2022", int32(16), int64(32768),
 			true, false, false, 5900, nil, nil,
-			now, now)
+			false, now, now)
 }
 
 func sourceCols() []string {
@@ -117,7 +117,7 @@ func jobCols() []string {
 	return []string{
 		"id", "source_id", "status", "job_type", "priority", "target_tags",
 		"tasks_total", "tasks_pending", "tasks_running", "tasks_completed", "tasks_failed",
-		"encode_config", "completed_at", "failed_at", "created_at", "updated_at",
+		"encode_config", "max_retries", "completed_at", "failed_at", "created_at", "updated_at",
 		"source_path",
 	}
 }
@@ -127,7 +127,7 @@ func jobRow(id, sourceID string) *pgxmock.Rows {
 	return pgxmock.NewRows(jobCols()).
 		AddRow(id, sourceID, "queued", "encode", 0, []string{},
 			0, 0, 0, 0, 0,
-			cfg, nil, nil, now, now,
+			cfg, 0, nil, nil, now, now,
 			`\\nas\share\video.mkv`)
 }
 
@@ -137,6 +137,7 @@ func taskCols() []string {
 		"script_dir", "source_path", "output_path", "variables",
 		"exit_code", "frames_encoded", "avg_fps", "output_size", "duration_sec",
 		"vmaf_score", "psnr", "ssim", "error_msg",
+		"retry_count", "retry_after",
 		"started_at", "completed_at", "created_at", "updated_at",
 	}
 }
@@ -148,6 +149,7 @@ func taskRow(id, jobID string) *pgxmock.Rows {
 			"", `\\nas\src.mkv`, `\\out\chunk0.mkv`, vars,
 			nil, nil, nil, nil, nil,
 			nil, nil, nil, nil,
+			0, nil,
 			nil, nil, now, now)
 }
 
@@ -501,7 +503,7 @@ func TestListAgents_Success(t *testing.T) {
 	rows := pgxmock.NewRows(agentCols()).
 		AddRow("aid1", "agent-01", "host1", "192.168.1.1", "idle", []string{},
 			"", "", false, "1.0", "Win", int32(4), int64(8192),
-			false, false, false, 0, nil, nil, now, now)
+			false, false, false, 0, nil, nil, false, now, now)
 	mock.ExpectQuery(regexp.QuoteMeta(`FROM agents ORDER BY name`)).
 		WillReturnRows(rows)
 	agents, err := s.ListAgents(context.Background())
@@ -822,7 +824,7 @@ func TestDeleteSource_NotFound(t *testing.T) {
 func TestCreateJob_Success(t *testing.T) {
 	s, mock := newMock(t)
 	mock.ExpectQuery(`WITH ins AS`).
-		WithArgs(anyArg, anyArg, anyArg, anyArg, anyArg).
+		WithArgs(anyArg, anyArg, anyArg, anyArg, anyArg, anyArg).
 		WillReturnRows(jobRow("jid1", "src1"))
 	job, err := s.CreateJob(context.Background(), CreateJobParams{
 		SourceID: "src1", JobType: "encode", Priority: 0, TargetTags: []string{},

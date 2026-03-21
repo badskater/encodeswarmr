@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,12 +11,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/badskater/distributed-encoder/internal/db"
 )
 
 // safeNameRe restricts os/arch values to lowercase alphanumeric characters only.
 var safeNameRe = regexp.MustCompile(`^[a-z0-9]+$`)
 
 // handleAgentUpgradeCheck returns the current agent version and available binaries.
+// If the agent_id query parameter is present and that agent has upgrade_requested=true,
+// the response will include push_requested=true and the flag will be cleared.
 // GET /api/v1/agent/upgrade/check
 func (s *Server) handleAgentUpgradeCheck(w http.ResponseWriter, r *http.Request) {
 	version := s.cfg.Upgrade.Version
@@ -25,10 +30,26 @@ func (s *Server) handleAgentUpgradeCheck(w http.ResponseWriter, r *http.Request)
 
 	available := listAvailableBinaries(s.cfg.Upgrade.BinDir)
 
-	writeJSON(w, r, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"version":   version,
 		"available": available,
-	})
+	}
+
+	// If the agent identifies itself, check and clear the push upgrade flag.
+	if agentID := r.URL.Query().Get("agent_id"); agentID != "" {
+		agent, err := s.store.GetAgentByID(r.Context(), agentID)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
+			s.logger.Error("upgrade check: get agent", "err", err, "agent_id", agentID)
+		} else if err == nil && agent.UpgradeRequested {
+			resp["push_requested"] = true
+			// Clear the flag — best-effort, do not fail the response.
+			if clearErr := s.store.ClearAgentUpgradeRequested(r.Context(), agentID); clearErr != nil {
+				s.logger.Warn("upgrade check: clear upgrade_requested", "err", clearErr, "agent_id", agentID)
+			}
+		}
+	}
+
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 // handleAgentUpgradeDownload streams an agent binary for the given os/arch.
