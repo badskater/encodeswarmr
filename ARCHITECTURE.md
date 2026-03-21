@@ -16,8 +16,8 @@ A distributed video encoding system that offloads encoding tasks from a central 
 │                                                                     │
 │  ┌────────────┐  ┌────────────┐  ┌──────────┐  ┌───────────────┐   │
 │  │  REST API   │  │  gRPC svc  │  │  Web UI  │  │  Webhook Svc  │   │
-│  │  (Go HTTP)  │  │ (agent     │  │  (Svelte │  │  (Discord,    │   │
-│  │            │  │  comms)    │  │   /Vue)   │  │  Teams,Slack) │   │
+│  │  (Go HTTP)  │  │ (agent     │  │ (React + │  │  (Discord,    │   │
+│  │            │  │  comms)    │  │  Vite)   │  │  Teams,Slack) │   │
 │  └─────┬──────┘  └─────┬──────┘  └────┬─────┘  └──────┬────────┘   │
 │        │               │              │               │             │
 │        ▼               ▼              ▼               ▼             │
@@ -194,16 +194,16 @@ A distributed video encoding system that offloads encoding tasks from a central 
 
 | Concern | Choice | Rationale |
 |---|---|---|
-| **Language** | **Go 1.23+** | Single static binary, trivial cross-compilation (`GOOS=windows`/`linux`), fast compile, low memory, strong concurrency. No Python, no Java. |
+| **Language** | **Go 1.25+** | Single static binary, trivial cross-compilation (`GOOS=windows`/`linux`), fast compile, low memory, strong concurrency. No Python, no Java. |
 | **Agent ↔ Controller** | **gRPC + mTLS** | Bi-directional streaming, protobuf schemas, auto-generated client/server, TLS mutual auth. |
 | **REST API** | **`net/http`** (stdlib) | No framework — stdlib router with minimal middleware. Keeps the dependency tree small and avoids churn. |
-| **Web UI** | **SvelteKit** (static build) or **Vue 3** | Compiled to static assets, served by the Go binary itself (embed). No separate Node runtime in production. |
+| **Web UI** | **React 19 + Vite 8** | Compiled to static assets, served by the Go binary itself (embed). No separate Node runtime in production. |
 | **Database** | **PostgreSQL 16+** | JSONB for flexible metadata, strong indexing, mature HA tooling. |
 | **DB HA** | **Patroni + pgBouncer** (optional) | Automatic leader election, connection pooling, zero-downtime failover. |
 | **Migrations** | **golang-migrate** | Plain SQL migration files, embedded in the binary. |
 | **Agent offline store** | **SQLite** (via modernc/sqlite) | Pure-Go SQLite driver, no CGO, local journal for offline resilience. |
 | **Containerisation** | **Docker / Podman** | Multi-stage build → ~30 MB image. Compose file for Controller + Postgres + pgBouncer. |
-| **CLI** | **cobra** | CLI framework for the controller binary (`controller server`, `controller job`, etc.). |
+| **CLI** | **cobra** | CLI framework for the controller binary (`controller agent`, `controller job`, etc.). |
 | **Logging** | **`log/slog`** (stdlib) | Structured JSON logging, zero external dependencies. Go 1.21+. |
 | **OIDC** | **`go-oidc/v3`** + **`golang.org/x/oauth2`** | OpenID Connect token verification and redirect flow for SSO. |
 | **Password hashing** | **`golang.org/x/crypto/bcrypt`** | bcrypt for local user password storage. |
@@ -239,7 +239,7 @@ The Controller is the single source of truth. It runs on **Ubuntu 22.04+** bare-
 │  │                       ▼             ▼                                │   │
 │  │              ┌──────────────────────────┐   ┌────────────────────┐  │   │
 │  │              │  Static File Server      │   │  WebSocket Hub     │  │   │
-│  │              │  (embed.FS — SvelteKit)  │   │  (live job updates)│  │   │
+│  │              │  (embed.FS — React/Vite) │   │  (live job updates)│  │   │
 │  │              └──────────────────────────┘   └────────────────────┘  │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -2306,20 +2306,48 @@ volumes:
 ### 5.2 Controller Dockerfile
 
 ```dockerfile
-# Build stage
-FROM golang:1.23-alpine AS builder
+# Stage 1: Web UI
+FROM node:22-alpine AS web-builder
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ .
+RUN npm run build
+
+# Stage 2: Go binary
+FROM golang:1.25-alpine AS go-builder
+ARG VERSION=dev
+RUN apk add --no-cache git
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /distencoder ./cmd/controller
+COPY --from=web-builder /web/dist ./web/dist
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.Version=${VERSION}" \
+    -o /controller ./cmd/controller
 
-# Runtime stage
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
-COPY --from=builder /distencoder /usr/local/bin/distencoder
+# Stage 3: FFmpeg (static build with VMAF, HDR10+, Dolby Vision)
+FROM mwader/static-ffmpeg:latest AS ffmpeg-source
+
+# Stage 4: dovi_tool (Dolby Vision RPU extraction)
+FROM debian:bookworm-slim AS tools-fetcher
+ARG DOVI_TOOL_VERSION=2.1.3
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && curl -fsSL "https://github.com/quietvoid/dovi_tool/releases/download/${DOVI_TOOL_VERSION}/dovi_tool-${DOVI_TOOL_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+       | tar xz -C /usr/local/bin
+
+# Stage 5: Runtime (~30 MB)
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=go-builder    /controller               /app/controller
+COPY --from=ffmpeg-source /ffmpeg                    /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-source /ffprobe                   /usr/local/bin/ffprobe
+COPY --from=tools-fetcher /usr/local/bin/dovi_tool   /usr/local/bin/dovi_tool
+WORKDIR /app
 EXPOSE 8080 9443
-ENTRYPOINT ["distencoder", "controller"]
+ENTRYPOINT ["/app/controller", "run"]
 ```
 
 ### 5.3 Agent Installation (Windows Server)
@@ -2543,7 +2571,7 @@ distributed-encoder/
 │       ├── proto/          # Protobuf definitions
 │       ├── models/         # Shared domain types
 │       └── unc/            # UNC path utilities + validation
-├── web/                    # SvelteKit / Vue frontend source
+├── web/                    # React + Vite frontend source
 │   ├── src/
 │   └── package.json
 ├── proto/

@@ -78,7 +78,7 @@ Makefile
 
 | Tool | Version |
 |---|---|
-| Go | 1.24+ |
+| Go | 1.25+ |
 | Node / npm | For web UI build |
 | Docker + Compose v2 | Controller deployment |
 | `protoc` + Go plugins | Only if regenerating proto |
@@ -463,7 +463,7 @@ INITIALISING -> REGISTERING -> PENDING_APPROVAL -> IDLE -> VALIDATING -> RUNNING
 
 | Concern | Choice |
 |---|---|
-| Language | Go 1.24+ (CGO-free static binaries) |
+| Language | Go 1.25+ (CGO-free static binaries) |
 | Agent to Controller | gRPC + mTLS (protobuf) |
 | REST API | stdlib `net/http` |
 | Web UI | React + Vite (embedded in binary via `embed.FS`) |
@@ -501,6 +501,46 @@ make proto
 ```
 
 Tests live alongside the code they cover in `internal/**/...`. Integration tests requiring a live database are skipped unless `TEST_DATABASE_URL` is set.
+
+---
+
+## Roadmap
+
+### Phase 1 — UI Completeness
+
+- [ ] Audio conversion page (API exists, needs frontend)
+- [ ] Path mappings admin page (UNC-to-Linux translations)
+- [ ] Agent enrollment tokens admin page
+- [ ] VNC "Open Remote Desktop" button on Agents page
+
+### Phase 2 — Hardening
+
+- [ ] SHA-256 verification for agent self-upgrade binaries
+- [ ] Agent upgrade rollback on failed restart
+- [ ] OIDC end-to-end integration tests
+- [ ] Job expansion rollback on partial task creation failure
+- [ ] Offline journal cleanup (prune old synced entries)
+
+### Phase 3 — Chunked Encoding UI
+
+- [ ] Scene-based chunking configuration in job creation
+- [ ] Chunk boundary visualization (preview API already exists)
+- [ ] Merge/concat task generation for chunked encodes
+
+### Phase 4 — Observability & Polish
+
+- [ ] Agent resource utilization graphs (CPU/GPU/memory over time)
+- [ ] Structured audit logging for sensitive actions
+- [ ] Bulk operations (approve multiple agents, cancel multiple jobs)
+- [ ] Dark mode toggle in web UI
+- [ ] Capacity planning documentation
+
+### Future
+
+- Multi-controller HA (active-passive failover)
+- Cloud storage source support (S3, GCS, Azure Blob)
+- Job scheduling / cron (recurring encodes)
+- OpenAPI-generated client SDKs
 
 ---
 

@@ -536,7 +536,11 @@ System logs cover:
 - Offline journal operations
 - Configuration reloads
 
-These are written to `C:\DistEncoder\logs\` (rotated by size, compressed). They can optionally be shipped to an external aggregator (Loki, ELK) via Promtail or Filebeat for ops/SRE diagnostics.
+When `agent.log_dir` is configured, logs are written to `<log_dir>/agent.log` with size-based rotation (controlled by `logging.max_size_mb` and `logging.max_backups`). This is critical for Windows Service mode where stderr is discarded by the SCM. Logs are written to both stderr and the file simultaneously via `io.MultiWriter`, so foreground mode (`run` subcommand) still produces console output.
+
+Default path: `C:\DistEncoder\logs\agent.log` (Windows), `/var/log/distributed-encoder-agent/agent.log` (Linux).
+
+They can optionally be shipped to an external aggregator (Loki, ELK) via Promtail or Filebeat for ops/SRE diagnostics.
 
 ### 8.3 Health Endpoint
 
