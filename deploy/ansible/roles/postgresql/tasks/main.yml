@@ -1,0 +1,87 @@
+---
+# postgresql/tasks/main.yml — Install and configure PostgreSQL 16 for the
+# distributed-encoder controller database.
+
+- name: Install PostgreSQL GPG key
+  ansible.builtin.apt:
+    name: gnupg
+    state: present
+  tags: [postgresql, install]
+
+- name: Add PostgreSQL apt repository key
+  ansible.builtin.get_url:
+    url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+    dest: /etc/apt/trusted.gpg.d/postgresql.asc
+    mode: "0644"
+  tags: [postgresql, install]
+
+- name: Add PostgreSQL apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+    filename: pgdg
+  tags: [postgresql, install]
+
+- name: Install PostgreSQL 16 and client tools
+  ansible.builtin.apt:
+    name:
+      - postgresql-16
+      - postgresql-client-16
+      - python3-psycopg2
+    state: present
+    update_cache: true
+  tags: [postgresql, install]
+
+- name: Ensure PostgreSQL service is enabled and started
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: true
+    state: started
+  tags: [postgresql, service]
+
+- name: Create distributed-encoder database user
+  community.postgresql.postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    state: present
+  become_user: postgres
+  tags: [postgresql, configure]
+
+- name: Create distributed-encoder database
+  community.postgresql.postgresql_db:
+    name: "{{ db_name }}"
+    owner: "{{ db_user }}"
+    encoding: UTF8
+    state: present
+  become_user: postgres
+  tags: [postgresql, configure]
+
+- name: Grant privileges on database to user
+  community.postgresql.postgresql_privs:
+    database: "{{ db_name }}"
+    role: "{{ db_user }}"
+    type: database
+    privs: ALL
+    state: present
+  become_user: postgres
+  tags: [postgresql, configure]
+
+- name: Template pg_hba.conf
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: /etc/postgresql/16/main/pg_hba.conf
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: Reload PostgreSQL
+  tags: [postgresql, configure]
+
+- name: Configure PostgreSQL to listen on all interfaces (if remote access needed)
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = '*'"
+    state: present
+  notify: Restart PostgreSQL
+  when: db_host != 'localhost'
+  tags: [postgresql, configure]

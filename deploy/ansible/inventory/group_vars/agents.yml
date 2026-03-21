@@ -1,0 +1,56 @@
+---
+# group_vars/agents.yml — Variables shared by all agent hosts (Windows + Linux).
+
+# ── Agent behaviour ────────────────────────────────────────────────────────────
+# The controller address that agents connect to via gRPC.
+# In HA deployments this should point at the HAProxy load balancer.
+agent_controller_address: "controller-01:9443"
+
+# Reconnect / backoff
+agent_reconnect_initial_delay: "5s"
+agent_reconnect_max_delay: "5m"
+agent_reconnect_multiplier: 2.0
+
+# GPU settings
+agent_gpu_enabled: true
+agent_gpu_vendor: ""        # leave empty for auto-detect; or: nvidia | intel | amd
+agent_gpu_max_vram_mb: 0    # 0 = unlimited
+agent_gpu_monitor_interval: "5s"
+
+# VNC (disabled by default)
+agent_vnc_enabled: false
+agent_vnc_port: 5900
+
+# ── Windows agent specifics ────────────────────────────────────────────────────
+windows_install_dir: 'C:\DistEncoder'
+windows_config_dir: 'C:\ProgramData\distributed-encoder'
+windows_service_name: "distributed-encoder-agent"
+
+# Tool paths expected on Windows agents
+windows_ffmpeg_bin: 'C:\Tools\ffmpeg\ffmpeg.exe'
+windows_ffprobe_bin: 'C:\Tools\ffmpeg\ffprobe.exe'
+windows_x265_bin: 'C:\Tools\x265\x265.exe'
+windows_x264_bin: 'C:\Tools\x264\x264.exe'
+windows_svt_av1_bin: ''
+windows_avs_pipe_bin: 'C:\Program Files\AviSynth+\avs2pipemod.exe'
+windows_vspipe_bin: 'C:\Program Files\VapourSynth\vspipe.exe'
+windows_dovi_tool_bin: ''
+
+# ── Linux agent specifics ─────────────────────────────────────────────────────
+linux_agent_config_dir: "/etc/distributed-encoder"
+linux_agent_config_file: "/etc/distributed-encoder/agent.yaml"
+linux_agent_cert_dir: "/etc/distributed-encoder/certs"
+linux_agent_work_dir: "/var/lib/distributed-encoder-agent/work"
+linux_agent_log_dir: "/var/log/distributed-encoder-agent"
+linux_agent_offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+linux_agent_service_name: "distributed-encoder-agent"
+
+# Tool paths expected on Linux agents
+linux_ffmpeg_bin: "/usr/bin/ffmpeg"
+linux_ffprobe_bin: "/usr/bin/ffprobe"
+linux_x265_bin: "/usr/bin/x265"
+linux_x264_bin: "/usr/bin/x264"
+linux_svt_av1_bin: ""
+linux_avs_pipe_bin: ""   # AviSynth not available on Linux
+linux_vspipe_bin: ""     # Set if VapourSynth is installed
+linux_dovi_tool_bin: ""

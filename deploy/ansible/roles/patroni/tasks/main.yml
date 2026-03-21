@@ -1,0 +1,104 @@
+---
+# patroni/tasks/main.yml — Install and configure Patroni HA PostgreSQL cluster.
+# Deploys a three-node Patroni cluster with etcd for consensus.
+# Requires the 'patroni' inventory group with at least two hosts (three recommended).
+
+- name: Install PostgreSQL 16
+  ansible.builtin.apt:
+    name:
+      - postgresql-16
+      - postgresql-client-16
+    state: present
+    update_cache: true
+  tags: [patroni, postgresql, install]
+
+- name: Install Patroni and etcd dependencies
+  ansible.builtin.apt:
+    name:
+      - python3-pip
+      - python3-psycopg2
+      - etcd
+    state: present
+  tags: [patroni, install]
+
+- name: Install Patroni via pip
+  ansible.builtin.pip:
+    name:
+      - patroni[etcd]
+    state: present
+    executable: pip3
+  tags: [patroni, install]
+
+- name: Stop PostgreSQL (Patroni will manage it)
+  ansible.builtin.systemd:
+    name: postgresql
+    state: stopped
+    enabled: false
+  tags: [patroni, configure]
+
+- name: Ensure Patroni config directory exists
+  ansible.builtin.file:
+    path: /etc/patroni
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+  tags: [patroni, configure]
+
+- name: Template Patroni configuration
+  ansible.builtin.template:
+    src: patroni.yml.j2
+    dest: /etc/patroni/patroni.yml
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: Restart Patroni
+  tags: [patroni, configure]
+
+- name: Create Patroni systemd service unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/patroni.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Patroni HA PostgreSQL
+      Documentation=https://patroni.readthedocs.io
+      After=syslog.target network.target
+
+      [Service]
+      Type=simple
+      User=postgres
+      Group=postgres
+      ExecStart=/usr/local/bin/patroni /etc/patroni/patroni.yml
+      ExecReload=/bin/kill -s HUP $MAINPID
+      KillMode=process
+      TimeoutSec=30
+      Restart=no
+
+      [Install]
+      WantedBy=multi-user.target
+  tags: [patroni, configure]
+
+- name: Enable and start Patroni
+  ansible.builtin.systemd:
+    name: patroni
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [patroni, service]
+
+- name: Create distributed-encoder database and user (run on first node only)
+  ansible.builtin.command:
+    cmd: >
+      psql -U postgres -c
+      "DO $$ BEGIN
+         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ db_user }}') THEN
+           CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';
+         END IF;
+       END $$;
+       CREATE DATABASE IF NOT EXISTS {{ db_name }} OWNER {{ db_user }};"
+  become_user: postgres
+  run_once: true
+  tags: [patroni, configure]

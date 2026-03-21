@@ -1,0 +1,100 @@
+---
+# agent-linux/tasks/main.yml — Install the Linux agent .deb, deploy config,
+# distribute mTLS certs, mount NFS shares, and start the systemd service.
+
+- name: Download Linux agent .deb from GitHub releases
+  ansible.builtin.get_url:
+    url: "{{ _release_base_url }}/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    dest: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    mode: "0644"
+  tags: [agent, agent-linux, install]
+
+- name: Install Linux agent .deb
+  ansible.builtin.apt:
+    deb: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    state: present
+  notify: Restart agent
+  tags: [agent, agent-linux, install]
+
+- name: Remove downloaded .deb
+  ansible.builtin.file:
+    path: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    state: absent
+  tags: [agent, agent-linux, install]
+
+- name: Ensure agent cert directory exists
+  ansible.builtin.file:
+    path: "{{ linux_agent_cert_dir }}"
+    state: directory
+    owner: distributed-encoder-agent
+    group: distributed-encoder-agent
+    mode: "0750"
+  tags: [agent, agent-linux, certs]
+
+- name: Copy CA certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/ca.crt"
+    dest: "{{ linux_agent_cert_dir }}/ca.crt"
+    owner: distributed-encoder-agent
+    group: distributed-encoder-agent
+    mode: "0640"
+  notify: Restart agent
+  tags: [agent, agent-linux, certs]
+
+- name: Copy agent TLS certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.crt"
+    dest: "{{ linux_agent_cert_dir }}/agent.crt"
+    owner: distributed-encoder-agent
+    group: distributed-encoder-agent
+    mode: "0640"
+  notify: Restart agent
+  tags: [agent, agent-linux, certs]
+
+- name: Copy agent TLS key
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.key"
+    dest: "{{ linux_agent_cert_dir }}/agent.key"
+    owner: distributed-encoder-agent
+    group: distributed-encoder-agent
+    mode: "0600"
+  notify: Restart agent
+  tags: [agent, agent-linux, certs]
+
+- name: Template agent.yaml configuration
+  ansible.builtin.template:
+    src: agent.yaml.j2
+    dest: "{{ linux_agent_config_file }}"
+    owner: distributed-encoder-agent
+    group: distributed-encoder-agent
+    mode: "0640"
+  notify: Restart agent
+  tags: [agent, agent-linux, configure]
+
+- name: Create NFS mount points for agent
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ nas_nfs_exports }}"
+  tags: [agent, agent-linux, nfs]
+
+- name: Mount NFS shares for agent
+  ansible.posix.mount:
+    src: "{{ item.src }}"
+    path: "{{ item.dest }}"
+    fstype: nfs
+    opts: "{{ item.opts }}"
+    state: mounted
+  loop: "{{ nas_nfs_exports }}"
+  tags: [agent, agent-linux, nfs]
+
+- name: Enable and start agent service
+  ansible.builtin.systemd:
+    name: "{{ linux_agent_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [agent, agent-linux, service]

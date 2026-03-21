@@ -1,0 +1,108 @@
+---
+# controller/tasks/main.yml — Install the controller .deb, deploy config,
+# distribute mTLS certs, and start the systemd service.
+
+- name: Download controller .deb from GitHub releases
+  ansible.builtin.get_url:
+    url: "{{ _release_base_url }}/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    dest: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    mode: "0644"
+  tags: [controller, install]
+
+- name: Install controller .deb
+  ansible.builtin.apt:
+    deb: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    state: present
+  notify: Restart controller
+  tags: [controller, install]
+
+- name: Remove downloaded .deb
+  ansible.builtin.file:
+    path: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+    state: absent
+  tags: [controller, install]
+
+- name: Ensure controller config directory exists
+  ansible.builtin.file:
+    path: "{{ controller_config_dir }}"
+    state: directory
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0750"
+  tags: [controller, configure]
+
+- name: Ensure cert directory exists
+  ansible.builtin.file:
+    path: "{{ cert_dir }}"
+    state: directory
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0750"
+  tags: [controller, certs]
+
+- name: Ensure binary upgrade directory exists
+  ansible.builtin.file:
+    path: "{{ controller_binary_dir }}"
+    state: directory
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0750"
+  tags: [controller, configure]
+
+- name: Copy CA certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/ca.crt"
+    dest: "{{ cert_dir }}/ca.crt"
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0640"
+  notify: Restart controller
+  tags: [controller, certs]
+
+- name: Copy controller TLS certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/controller.crt"
+    dest: "{{ cert_dir }}/controller.crt"
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0640"
+  notify: Restart controller
+  tags: [controller, certs]
+
+- name: Copy controller TLS key
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/controller.key"
+    dest: "{{ cert_dir }}/controller.key"
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0600"
+  notify: Restart controller
+  tags: [controller, certs]
+
+- name: Template controller.yaml configuration
+  ansible.builtin.template:
+    src: controller.yaml.j2
+    dest: "{{ controller_config_file }}"
+    owner: distributed-encoder
+    group: distributed-encoder
+    mode: "0640"
+  notify: Restart controller
+  tags: [controller, configure]
+
+- name: Enable and start controller service
+  ansible.builtin.systemd:
+    name: "{{ controller_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [controller, service]
+
+- name: Wait for controller HTTP health check
+  ansible.builtin.uri:
+    url: "http://localhost:{{ controller_http_port }}/health"
+    status_code: 200
+  register: _health
+  until: _health.status == 200
+  retries: 15
+  delay: 5
+  tags: [controller, service]

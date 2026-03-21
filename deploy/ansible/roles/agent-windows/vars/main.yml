@@ -1,0 +1,8 @@
+---
+# agent-windows/vars/main.yml — Role-level constants for the Windows agent.
+# Override these in group_vars/agents.yml or host_vars as needed.
+
+# Inno Setup installer exit codes
+_inno_success_codes:
+  - 0   # success
+  - 1   # already installed / no change needed (some versions)

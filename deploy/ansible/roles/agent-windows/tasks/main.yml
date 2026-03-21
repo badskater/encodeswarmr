@@ -1,0 +1,77 @@
+---
+# agent-windows/tasks/main.yml — Install the Windows agent via the Inno Setup
+# installer, deploy config, copy mTLS certs, and start the Windows service.
+# Requires WinRM connectivity and the ansible.windows collection.
+
+- name: Ensure install directory exists
+  ansible.windows.win_file:
+    path: "{{ windows_install_dir }}"
+    state: directory
+  tags: [agent, agent-windows, install]
+
+- name: Ensure certs directory exists
+  ansible.windows.win_file:
+    path: "{{ windows_install_dir }}\\certs"
+    state: directory
+  tags: [agent, agent-windows, certs]
+
+- name: Ensure config directory exists
+  ansible.windows.win_file:
+    path: "{{ windows_config_dir }}"
+    state: directory
+  tags: [agent, agent-windows, configure]
+
+- name: Download Windows agent installer from GitHub releases
+  ansible.windows.win_get_url:
+    url: "{{ _release_base_url }}/distributed-encoder-agent-setup-{{ distencoder_version }}-amd64.exe"
+    dest: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+  tags: [agent, agent-windows, install]
+
+- name: Run Windows agent installer silently
+  ansible.windows.win_shell: |
+    $result = Start-Process -Wait -PassThru `
+      -FilePath "{{ windows_install_dir }}\agent-setup-{{ distencoder_version }}.exe" `
+      -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
+                    "/DIR={{ windows_install_dir }}"
+    exit $result.ExitCode
+  register: _install_result
+  failed_when: _install_result.rc != 0
+  tags: [agent, agent-windows, install]
+
+- name: Remove installer after successful install
+  ansible.windows.win_file:
+    path: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+    state: absent
+  tags: [agent, agent-windows, install]
+
+- name: Copy CA certificate to agent certs directory
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/ca.crt"
+    dest: "{{ windows_install_dir }}\\certs\\ca.crt"
+  tags: [agent, agent-windows, certs]
+
+- name: Copy agent TLS certificate to agent certs directory
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.crt"
+    dest: "{{ windows_install_dir }}\\certs\\agent.crt"
+  tags: [agent, agent-windows, certs]
+
+- name: Copy agent TLS key to agent certs directory
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.key"
+    dest: "{{ windows_install_dir }}\\certs\\agent.key"
+  tags: [agent, agent-windows, certs]
+
+- name: Template agent.yaml configuration
+  ansible.windows.win_template:
+    src: agent.yaml.j2
+    dest: "{{ windows_config_dir }}\\agent.yaml"
+  notify: Restart Windows agent service
+  tags: [agent, agent-windows, configure]
+
+- name: Ensure Windows agent service is running
+  ansible.windows.win_service:
+    name: "{{ windows_service_name }}"
+    state: started
+    start_mode: auto
+  tags: [agent, agent-windows, service]

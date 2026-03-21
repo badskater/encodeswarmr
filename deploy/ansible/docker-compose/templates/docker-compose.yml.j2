@@ -1,0 +1,56 @@
+# docker-compose.yml — managed by Ansible ({{ ansible_managed }})
+# Generated for host: {{ inventory_hostname }}
+
+services:
+  controller:
+    image: ghcr.io/{{ distencoder_github_repo }}/controller:{{ distencoder_version }}
+    ports:
+      - "{{ controller_http_port }}:8080"
+      - "{{ controller_grpc_port }}:9443"
+    volumes:
+      - {{ controller_config_file_docker }}:/etc/distributed-encoder/controller.yaml:ro
+      - {{ docker_cert_dir }}:/etc/distributed-encoder/certs:ro
+{% for export in nas_nfs_exports %}
+      - {{ export.dest }}:{{ export.dest }}:rw
+{% endfor %}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/controller", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    env_file:
+      - .env
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: {{ db_name }}
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ db_user }}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASE_URL: "postgres://{{ db_user }}:${POSTGRES_PASSWORD}@postgres:5432/{{ db_name }}"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

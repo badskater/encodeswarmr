@@ -1,0 +1,23 @@
+---
+# agents.yml — Deploy (or update) all agents (Windows + Linux).
+# Controller must be running and certs must already exist.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml playbooks/agents.yml
+#   ansible-playbook -i inventory/hosts.yml playbooks/agents.yml --limit agents_linux
+#   ansible-playbook -i inventory/hosts.yml playbooks/agents.yml --limit agents_windows
+
+- name: Deploy Linux agents
+  hosts: agents_linux
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: agent-linux
+      tags: [agent, agent-linux, install, configure, service]
+
+- name: Deploy Windows agents
+  hosts: agents_windows
+  roles:
+    - role: agent-windows
+      tags: [agent, agent-windows, install, configure, service]

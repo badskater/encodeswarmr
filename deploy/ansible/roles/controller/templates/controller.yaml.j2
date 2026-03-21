@@ -1,0 +1,79 @@
+# controller.yaml — managed by Ansible ({{ ansible_managed }})
+# Do not edit directly; update group_vars and re-run the playbook.
+
+server:
+  host: "0.0.0.0"
+  port: {{ controller_http_port }}
+  read_timeout: 30s
+  write_timeout: 30s
+
+database:
+  url: "postgres://{{ db_user }}:{{ db_password }}@{{ db_host }}:{{ db_port }}/{{ db_name }}"
+  max_conns: {{ controller_db_max_conns }}
+  min_conns: {{ controller_db_min_conns }}
+  max_conn_lifetime: {{ controller_db_max_conn_lifetime }}
+  migrations_path: "{{ controller_migrations_path }}"
+
+grpc:
+  host: "0.0.0.0"
+  port: {{ controller_grpc_port }}
+  tls:
+    cert: "{{ cert_dir }}/controller.crt"
+    key:  "{{ cert_dir }}/controller.key"
+    ca:   "{{ cert_dir }}/ca.crt"
+
+auth:
+  session_ttl: {{ controller_session_ttl }}
+  session_secret: "{{ controller_session_secret }}"
+  oidc:
+    enabled: {{ controller_oidc_enabled | lower }}
+    provider_url: "{{ controller_oidc_provider_url }}"
+    client_id: "{{ controller_oidc_client_id }}"
+    client_secret: "{{ controller_oidc_client_secret }}"
+    redirect_url: "{{ controller_oidc_redirect_url }}"
+    auto_provision: {{ controller_oidc_auto_provision | lower }}
+    groups_claim: "groups"
+    default_role: "viewer"
+
+logging:
+  level: {{ controller_log_level }}
+  format: json
+  task_log_retention: {{ controller_task_log_retention }}
+  task_log_cleanup_interval: {{ controller_task_log_cleanup_interval }}
+  task_log_max_lines_per_job: {{ controller_task_log_max_lines_per_job }}
+
+agent:
+  auto_approve: {{ controller_auto_approve | lower }}
+  heartbeat_timeout: {{ controller_heartbeat_timeout }}
+  dispatch_interval: {{ controller_dispatch_interval }}
+  stale_threshold: {{ controller_agent_stale_threshold }}
+
+engine:
+  tick_interval: {{ controller_dispatch_interval }}
+  stale_threshold: {{ controller_agent_stale_threshold }}
+
+upgrade:
+  binary_dir: "{{ controller_binary_dir }}"
+
+webhooks:
+  worker_count: {{ controller_webhook_worker_count }}
+  delivery_timeout: {{ controller_webhook_delivery_timeout }}
+  max_retries: {{ controller_webhook_max_retries }}
+
+tls:
+  cert: "{{ cert_dir }}/controller.crt"
+  key:  "{{ cert_dir }}/controller.key"
+  ca:   "{{ cert_dir }}/ca.crt"
+
+analysis:
+  ffmpeg_bin:    "{{ controller_ffmpeg_bin }}"
+  ffprobe_bin:   "{{ controller_ffprobe_bin }}"
+  dovi_tool_bin: "{{ controller_dovi_tool_bin }}"
+  concurrency:   {{ controller_analysis_concurrency }}
+
+  path_mappings:
+{% for mapping in controller_path_mappings %}
+    - name:    "{{ mapping.name }}"
+      windows: "{{ mapping.windows }}"
+      linux:   "{{ mapping.linux }}"
+{% endfor %}

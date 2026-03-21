@@ -1,0 +1,76 @@
+---
+# ha.yml — High-Availability deployment.
+# Deploys two controller hosts, HAProxy load balancer, and optionally Patroni
+# for HA PostgreSQL.
+#
+# Inventory groups required:
+#   controllers_ha  — two controller Linux hosts
+#   loadbalancer    — HAProxy host
+#   patroni         — (optional) three PostgreSQL hosts for Patroni cluster
+#   database        — (optional) standalone PostgreSQL host (if not using Patroni)
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml playbooks/ha.yml
+#   # With Patroni:
+#   ansible-playbook -i inventory/hosts.yml playbooks/ha.yml -e use_patroni=true
+
+- name: Generate mTLS certificates
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: mtls-certs
+  tags: [certs]
+
+- name: Deploy Patroni HA PostgreSQL cluster (optional)
+  hosts: patroni
+  become: true
+  when: use_patroni | default(false) | bool
+  roles:
+    - role: common
+      tags: [common]
+    - role: patroni
+      tags: [patroni, postgresql, install]
+
+- name: Deploy standalone PostgreSQL (when not using Patroni)
+  hosts: database
+  become: true
+  when: not (use_patroni | default(false) | bool)
+  roles:
+    - role: common
+      tags: [common]
+    - role: postgresql
+      tags: [postgresql, install]
+
+- name: Deploy HA controllers
+  hosts: controllers_ha
+  become: true
+  serial: 1          # deploy one at a time for safety
+  roles:
+    - role: common
+      tags: [common]
+    - role: controller
+      tags: [controller, install, configure, service]
+
+- name: Deploy HAProxy load balancer
+  hosts: loadbalancer
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: haproxy
+      tags: [haproxy, install, configure, service]
+
+- name: Deploy Linux agents
+  hosts: agents_linux
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: agent-linux
+      tags: [agent, agent-linux, install, configure, service]
+
+- name: Deploy Windows agents
+  hosts: agents_windows
+  roles:
+    - role: agent-windows
+      tags: [agent, agent-windows, install, configure, service]

@@ -1,0 +1,9 @@
+# chrony.conf — managed by Ansible
+{% for srv in ntp_servers %}
+pool {{ srv }} iburst
+{% endfor %}
+
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+logdir /var/log/chrony

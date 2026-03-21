@@ -1,0 +1,57 @@
+# agent.yaml — managed by Ansible ({{ ansible_managed }})
+# Do not edit directly; update group_vars and re-run the playbook.
+
+controller:
+  address: "{{ agent_controller_address }}"
+  tls:
+    cert: "{{ windows_install_dir }}\\certs\\agent.crt"
+    key:  "{{ windows_install_dir }}\\certs\\agent.key"
+    ca:   "{{ windows_install_dir }}\\certs\\ca.crt"
+  reconnect:
+    initial_delay: {{ agent_reconnect_initial_delay }}
+    max_delay:     {{ agent_reconnect_max_delay }}
+    multiplier:    {{ agent_reconnect_multiplier }}
+
+agent:
+  hostname: "{{ inventory_hostname }}"
+  work_dir:   "{{ windows_install_dir }}\\work"
+  log_dir:    "{{ windows_install_dir }}\\logs"
+  offline_db: "{{ windows_install_dir }}\\offline.db"
+  heartbeat_interval: {{ agent_heartbeat_interval }}
+  poll_interval: {{ agent_poll_interval }}
+  cleanup_on_success: {{ agent_cleanup_on_success | lower }}
+  keep_failed_jobs: {{ agent_keep_failed_jobs }}
+
+tools:
+  ffmpeg:    "{{ windows_ffmpeg_bin }}"
+  ffprobe:   "{{ windows_ffprobe_bin }}"
+  x265:      "{{ windows_x265_bin }}"
+  x264:      "{{ windows_x264_bin }}"
+  svt_av1:   "{{ windows_svt_av1_bin }}"
+  avs_pipe:  "{{ windows_avs_pipe_bin }}"
+  vspipe:    "{{ windows_vspipe_bin }}"
+  dovi_tool: "{{ windows_dovi_tool_bin }}"
+
+gpu:
+  enabled:          {{ agent_gpu_enabled | lower }}
+  vendor:           "{{ agent_gpu_vendor }}"
+  max_vram_mb:      {{ agent_gpu_max_vram_mb }}
+  monitor_interval: {{ agent_gpu_monitor_interval }}
+
+allowed_shares:
+{% for share in nas_smb_shares %}
+  - "{{ share }}"
+{% endfor %}
+
+logging:
+  level:                 {{ agent_log_level }}
+  format:                json
+  max_size_mb:           100
+  max_backups:           5
+  compress:              true
+  stream_buffer_size:    1000
+  stream_flush_interval: 1s
+
+vnc:
+  enabled: {{ agent_vnc_enabled | lower }}
+  port:    {{ agent_vnc_port }}

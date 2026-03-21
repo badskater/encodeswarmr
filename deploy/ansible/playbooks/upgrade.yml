@@ -1,0 +1,144 @@
+---
+# upgrade.yml — Rolling upgrade for all components.
+# Upgrades controller(s) and agents one host at a time to avoid downtime.
+#
+# Usage:
+#   # Upgrade everything to the version set in group_vars/all.yml
+#   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml
+#
+#   # Override version at runtime
+#   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
+#     -e distencoder_version=1.1.0
+#
+#   # Upgrade only Linux agents
+#   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
+#     --tags agent-linux
+#
+#   # Dry-run (check mode)
+#   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml --check
+
+- name: Rolling upgrade — controllers
+  hosts: controllers:controllers_ha
+  become: true
+  serial: 1     # one controller at a time
+  tags: [controller]
+  tasks:
+    - name: Download new controller .deb
+      ansible.builtin.get_url:
+        url: "{{ _release_base_url }}/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        dest: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        mode: "0644"
+      tags: [install]
+
+    - name: Install new controller .deb
+      ansible.builtin.apt:
+        deb: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        state: present
+      tags: [install]
+
+    - name: Restart controller service
+      ansible.builtin.systemd:
+        name: "{{ controller_service_name }}"
+        state: restarted
+        daemon_reload: true
+      tags: [service]
+
+    - name: Wait for controller health check
+      ansible.builtin.uri:
+        url: "http://localhost:{{ controller_http_port }}/health"
+        status_code: 200
+      register: _health
+      until: _health.status == 200
+      retries: 15
+      delay: 5
+      tags: [service]
+
+    - name: Remove downloaded .deb
+      ansible.builtin.file:
+        path: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        state: absent
+      tags: [install]
+
+- name: Rolling upgrade — Linux agents
+  hosts: agents_linux
+  become: true
+  serial: 1     # one agent at a time
+  tags: [agent-linux]
+  tasks:
+    - name: Download new agent .deb
+      ansible.builtin.get_url:
+        url: "{{ _release_base_url }}/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        dest: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        mode: "0644"
+      tags: [install]
+
+    - name: Install new agent .deb
+      ansible.builtin.apt:
+        deb: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        state: present
+      tags: [install]
+
+    - name: Restart agent service
+      ansible.builtin.systemd:
+        name: "{{ linux_agent_service_name }}"
+        state: restarted
+        daemon_reload: true
+      tags: [service]
+
+    - name: Wait for agent service to be running
+      ansible.builtin.systemd:
+        name: "{{ linux_agent_service_name }}"
+      register: _svc
+      until: _svc.status.ActiveState == "active"
+      retries: 10
+      delay: 5
+      tags: [service]
+
+    - name: Remove downloaded .deb
+      ansible.builtin.file:
+        path: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        state: absent
+      tags: [install]
+
+- name: Rolling upgrade — Windows agents
+  hosts: agents_windows
+  serial: 1     # one agent at a time
+  tags: [agent-windows]
+  tasks:
+    - name: Download new Windows agent installer
+      ansible.windows.win_get_url:
+        url: "{{ _release_base_url }}/distributed-encoder-agent-setup-{{ distencoder_version }}-amd64.exe"
+        dest: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+      tags: [install]
+
+    - name: Stop agent service before upgrade
+      ansible.windows.win_service:
+        name: "{{ windows_service_name }}"
+        state: stopped
+      tags: [service]
+
+    - name: Run silent upgrade installer
+      ansible.windows.win_shell: |
+        Start-Process -Wait -FilePath "{{ windows_install_dir }}\agent-setup-{{ distencoder_version }}.exe" `
+          -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
+                        "/DIR={{ windows_install_dir }}"
+      tags: [install]
+
+    - name: Start agent service after upgrade
+      ansible.windows.win_service:
+        name: "{{ windows_service_name }}"
+        state: started
+      tags: [service]
+
+    - name: Verify Windows agent service is running
+      ansible.windows.win_service:
+        name: "{{ windows_service_name }}"
+      register: _winsvc
+      failed_when: _winsvc.state != "running"
+      tags: [service]
+
+    - name: Remove installer file
+      ansible.windows.win_file:
+        path: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+        state: absent
+      tags: [install]

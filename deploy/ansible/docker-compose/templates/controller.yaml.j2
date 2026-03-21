@@ -1,0 +1,72 @@
+# controller.yaml — managed by Ansible ({{ ansible_managed }})
+# Bind-mounted into the controller container at /etc/distributed-encoder/controller.yaml
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+
+database:
+  url: "postgres://{{ db_user }}:{{ db_password }}@pgbouncer:5432/{{ db_name }}"
+  max_conns: {{ controller_db_max_conns | default(25) }}
+  min_conns: {{ controller_db_min_conns | default(5) }}
+  max_conn_lifetime: {{ controller_db_max_conn_lifetime | default('1h') }}
+  migrations_path: "/app/migrations"
+
+grpc:
+  host: "0.0.0.0"
+  port: 9443
+  tls:
+    cert: "/etc/distributed-encoder/certs/controller.crt"
+    key:  "/etc/distributed-encoder/certs/controller.key"
+    ca:   "/etc/distributed-encoder/certs/ca.crt"
+
+auth:
+  session_ttl: {{ controller_session_ttl | default('24h') }}
+  session_secret: "{{ controller_session_secret }}"
+  oidc:
+    enabled: {{ controller_oidc_enabled | default(false) | lower }}
+
+logging:
+  level: {{ controller_log_level | default('info') }}
+  format: json
+  task_log_retention: {{ controller_task_log_retention | default('720h') }}
+  task_log_cleanup_interval: {{ controller_task_log_cleanup_interval | default('6h') }}
+  task_log_max_lines_per_job: {{ controller_task_log_max_lines_per_job | default(500000) }}
+
+agent:
+  auto_approve: {{ controller_auto_approve | default(false) | lower }}
+  heartbeat_timeout: {{ controller_heartbeat_timeout | default('90s') }}
+  dispatch_interval: {{ controller_dispatch_interval | default('10s') }}
+  stale_threshold: {{ controller_agent_stale_threshold | default('5m') }}
+
+engine:
+  tick_interval: {{ controller_dispatch_interval | default('10s') }}
+  stale_threshold: {{ controller_agent_stale_threshold | default('5m') }}
+
+upgrade:
+  binary_dir: ""
+
+webhooks:
+  worker_count: {{ controller_webhook_worker_count | default(4) }}
+  delivery_timeout: {{ controller_webhook_delivery_timeout | default('10s') }}
+  max_retries: {{ controller_webhook_max_retries | default(3) }}
+
+tls:
+  cert: "/etc/distributed-encoder/certs/controller.crt"
+  key:  "/etc/distributed-encoder/certs/controller.key"
+  ca:   "/etc/distributed-encoder/certs/ca.crt"
+
+analysis:
+  ffmpeg_bin:    "/usr/local/bin/ffmpeg"
+  ffprobe_bin:   "/usr/local/bin/ffprobe"
+  dovi_tool_bin: "/usr/local/bin/dovi_tool"
+  concurrency:   {{ controller_analysis_concurrency | default(2) }}
+
+  path_mappings:
+{% for mapping in controller_path_mappings | default([]) %}
+    - name:    "{{ mapping.name }}"
+      windows: "{{ mapping.windows }}"
+      linux:   "{{ mapping.linux }}"
+{% endfor %}

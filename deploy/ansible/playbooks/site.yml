@@ -1,0 +1,48 @@
+---
+# site.yml — Full deployment: controller + all agents.
+# Runs the complete stack on all configured hosts.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml playbooks/site.yml
+#   ansible-playbook -i inventory/hosts.yml playbooks/site.yml --tags certs
+#   ansible-playbook -i inventory/hosts.yml playbooks/site.yml --limit controllers
+
+- name: Generate mTLS certificates
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: mtls-certs
+  tags: [certs]
+
+- name: Deploy database
+  hosts: database
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: postgresql
+      tags: [postgresql, install]
+
+- name: Deploy controller
+  hosts: controllers
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: controller
+      tags: [controller, install, configure]
+
+- name: Deploy Linux agents
+  hosts: agents_linux
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: agent-linux
+      tags: [agent, agent-linux, install, configure]
+
+- name: Deploy Windows agents
+  hosts: agents_windows
+  roles:
+    - role: agent-windows
+      tags: [agent, agent-windows, install, configure]

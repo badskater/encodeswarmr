@@ -1,0 +1,84 @@
+# patroni.yml — managed by Ansible ({{ ansible_managed }})
+# Patroni HA PostgreSQL configuration for {{ inventory_hostname }}.
+
+scope: distencoder-pg
+namespace: /service/
+name: {{ inventory_hostname }}
+
+restapi:
+  listen: {{ ansible_host }}:8008
+  connect_address: {{ ansible_host }}:8008
+
+etcd3:
+  hosts:
+{% for host in groups['patroni'] %}
+    - {{ hostvars[host]['ansible_host'] }}:2379
+{% endfor %}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_keep_size: 1GB
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_log_hints: "on"
+        archive_mode: "on"
+        archive_command: "cd ."
+
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+  pg_hba:
+    - host replication replicator 127.0.0.1/32 md5
+{% for host in groups['patroni'] %}
+    - host replication replicator {{ hostvars[host]['ansible_host'] }}/32 md5
+    - host all all {{ hostvars[host]['ansible_host'] }}/32 md5
+{% endfor %}
+{% for host in groups['controllers'] | default([]) %}
+    - host {{ db_name }} {{ db_user }} {{ hostvars[host]['ansible_host'] }}/32 md5
+{% endfor %}
+{% for host in groups['controllers_ha'] | default([]) %}
+    - host {{ db_name }} {{ db_user }} {{ hostvars[host]['ansible_host'] }}/32 md5
+{% endfor %}
+
+  users:
+    admin:
+      password: "{{ db_password }}"
+      options:
+        - createrole
+        - createdb
+
+postgresql:
+  listen: {{ ansible_host }}:5432
+  connect_address: {{ ansible_host }}:5432
+  data_dir: /var/lib/postgresql/16/main
+  bin_dir: /usr/lib/postgresql/16/bin
+  config_dir: /etc/postgresql/16/main
+  pgpass: /tmp/pgpass0
+
+  authentication:
+    replication:
+      username: replicator
+      password: "{{ db_password }}"
+    superuser:
+      username: postgres
+      password: "{{ db_password }}"
+    rewind:
+      username: rewind_user
+      password: "{{ db_password }}"
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

@@ -1,0 +1,24 @@
+---
+# controller.yml — Deploy (or update) the controller only.
+# Assumes PostgreSQL is already running and accessible via db_host.
+# Run mTLS cert generation first if certs do not yet exist.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml playbooks/controller.yml
+#   ansible-playbook -i inventory/hosts.yml playbooks/controller.yml --tags configure
+
+- name: Generate mTLS certificates (if not already present)
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: mtls-certs
+  tags: [certs]
+
+- name: Deploy controller
+  hosts: controllers
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: controller
+      tags: [controller, install, configure, service]

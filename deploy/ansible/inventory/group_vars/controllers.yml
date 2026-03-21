@@ -1,0 +1,65 @@
+---
+# group_vars/controllers.yml — Variables specific to controller hosts.
+
+# ── Controller config paths ────────────────────────────────────────────────────
+controller_config_dir: "/etc/distributed-encoder"
+controller_config_file: "/etc/distributed-encoder/controller.yaml"
+controller_migrations_path: "/usr/share/distributed-encoder/migrations"
+controller_binary_dir: "/var/lib/distributed-encoder/binaries"
+
+# ── Service ────────────────────────────────────────────────────────────────────
+controller_service_name: "distributed-encoder-controller"
+
+# ── Auth / session — store real values in Ansible Vault ───────────────────────
+controller_session_ttl: "24h"
+# vault_session_secret must be defined in inventory/group_vars/vault.yml
+controller_session_secret: "{{ vault_session_secret }}"
+
+# ── OIDC (optional — set enabled: true and fill remaining fields to use) ───────
+controller_oidc_enabled: false
+controller_oidc_provider_url: ""
+controller_oidc_client_id: ""
+# vault_oidc_client_secret must be defined in vault
+controller_oidc_client_secret: "{{ vault_oidc_client_secret | default('') }}"
+controller_oidc_redirect_url: "http://{{ ansible_host }}:{{ controller_http_port }}/auth/oidc/callback"
+controller_oidc_auto_provision: false
+
+# ── Analysis tools ─────────────────────────────────────────────────────────────
+controller_ffmpeg_bin: "/usr/local/bin/ffmpeg"
+controller_ffprobe_bin: "/usr/local/bin/ffprobe"
+controller_dovi_tool_bin: "/usr/local/bin/dovi_tool"
+controller_analysis_concurrency: 2
+
+# ── Path mappings seeded on first startup ─────────────────────────────────────
+# After first run, manage via web UI or API (/api/v1/path-mappings).
+controller_path_mappings:
+  - name: "NAS media"
+    windows: "\\\\NAS01\\media"
+    linux: "/mnt/nas/media"
+  - name: "NAS encodes"
+    windows: "\\\\NAS01\\encodes"
+    linux: "/mnt/nas/encodes"
+  - name: "NAS temp"
+    windows: "\\\\NAS01\\temp"
+    linux: "/mnt/nas/temp"
+
+# ── Agent dispatch ─────────────────────────────────────────────────────────────
+controller_auto_approve: false
+controller_heartbeat_timeout: "90s"
+controller_dispatch_interval: "10s"
+controller_agent_stale_threshold: "5m"
+
+# ── Webhooks ───────────────────────────────────────────────────────────────────
+controller_webhook_worker_count: 4
+controller_webhook_delivery_timeout: "10s"
+controller_webhook_max_retries: 3
+
+# ── Task log retention ─────────────────────────────────────────────────────────
+controller_task_log_retention: "720h"
+controller_task_log_cleanup_interval: "6h"
+controller_task_log_max_lines_per_job: 500000
+
+# ── DB pool ────────────────────────────────────────────────────────────────────
+controller_db_max_conns: 25
+controller_db_min_conns: 5
+controller_db_max_conn_lifetime: "1h"

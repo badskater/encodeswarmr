@@ -1,0 +1,6 @@
+---
+- name: Restart agent
+  ansible.builtin.systemd:
+    name: "{{ linux_agent_service_name }}"
+    state: restarted
+    daemon_reload: true

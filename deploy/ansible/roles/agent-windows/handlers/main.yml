@@ -1,0 +1,5 @@
+---
+- name: Restart Windows agent service
+  ansible.windows.win_service:
+    name: "{{ windows_service_name }}"
+    state: restarted

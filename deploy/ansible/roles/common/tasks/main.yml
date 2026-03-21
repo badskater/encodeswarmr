@@ -1,0 +1,60 @@
+---
+# common/tasks/main.yml — Shared baseline setup for all Linux hosts.
+# Installs NTP, common packages, configures NFS mounts where applicable.
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [common, packages]
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - nfs-common
+      - chrony
+      - logrotate
+      - unattended-upgrades
+    state: present
+  tags: [common, packages]
+
+- name: Configure chrony NTP servers
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+  tags: [common, ntp]
+
+- name: Enable and start chrony
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: true
+    state: started
+  tags: [common, ntp]
+
+- name: Create NFS mount points
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ nas_nfs_exports }}"
+  tags: [common, nfs]
+
+- name: Mount NFS shares
+  ansible.posix.mount:
+    src: "{{ item.src }}"
+    path: "{{ item.dest }}"
+    fstype: nfs
+    opts: "{{ item.opts }}"
+    state: mounted
+  loop: "{{ nas_nfs_exports }}"
+  tags: [common, nfs]

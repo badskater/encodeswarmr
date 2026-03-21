@@ -1,0 +1,73 @@
+---
+# group_vars/all.yml — Variables shared across all hosts.
+# Sensitive values (db_password, session_secret, etc.) must be stored in
+# Ansible Vault.  Create a vault file with:
+#   ansible-vault create inventory/group_vars/vault.yml
+# and reference it here as {{ vault_<name> }}.
+
+# ── Release version ────────────────────────────────────────────────────────────
+distencoder_version: "1.0.4"
+distencoder_github_repo: "badskater/distributed-encoder"
+
+# GitHub release base URL (computed — do not override)
+_release_base_url: "https://github.com/{{ distencoder_github_repo }}/releases/download/v{{ distencoder_version }}"
+
+# ── Network ports ──────────────────────────────────────────────────────────────
+controller_http_port: 8080
+controller_grpc_port: 9443
+
+# ── PostgreSQL ─────────────────────────────────────────────────────────────────
+db_host: "localhost"
+db_port: 5432
+db_name: "distencoder"
+db_user: "distencoder"
+# Store real password in Ansible Vault as vault_db_password
+db_password: "{{ vault_db_password }}"
+
+# ── mTLS certificates ──────────────────────────────────────────────────────────
+# Linux path (controller + Linux agents)
+cert_dir: "/etc/distributed-encoder/certs"
+
+# Whether to generate certs on the Ansible control node (true) or assume
+# they are pre-provisioned and present on the control node already (false).
+mtls_generate_certs: true
+
+# How many days the generated CA and leaf certs should be valid for
+mtls_ca_days: 3650    # 10 years
+mtls_cert_days: 1825  # 5 years
+
+# ── NAS / storage ─────────────────────────────────────────────────────────────
+nas_nfs_server: "nas01.local"
+
+# NFS exports to mount on the controller and Linux agents.
+# Each entry: { src: "server:/export", dest: "/mnt/local", opts: "rw,..." }
+nas_nfs_exports:
+  - src: "{{ nas_nfs_server }}:/media"
+    dest: "/mnt/nas/media"
+    opts: "rw,hard,intr,noatime,_netdev"
+  - src: "{{ nas_nfs_server }}:/encodes"
+    dest: "/mnt/nas/encodes"
+    opts: "rw,hard,intr,noatime,_netdev"
+  - src: "{{ nas_nfs_server }}:/temp"
+    dest: "/mnt/nas/temp"
+    opts: "rw,hard,intr,noatime,_netdev"
+
+# UNC shares for Windows agents (must match allowed_shares in agent.yaml)
+nas_smb_shares:
+  - "\\\\NAS01\\media"
+  - "\\\\NAS01\\encodes"
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+controller_log_level: "info"
+agent_log_level: "info"
+
+# ── Agent behaviour ────────────────────────────────────────────────────────────
+agent_heartbeat_interval: "30s"
+agent_poll_interval: "10s"
+agent_cleanup_on_success: true
+agent_keep_failed_jobs: 10
+
+# ── NTP ────────────────────────────────────────────────────────────────────────
+ntp_servers:
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"

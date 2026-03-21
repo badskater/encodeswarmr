@@ -1,0 +1,30 @@
+---
+# haproxy/tasks/main.yml — Install and configure HAProxy for HA deployments.
+# Provides:
+#   - HTTP frontend :8080 → backend controllers (health check /health)
+#   - TCP frontend :9443  → backend controllers (TCP passthrough for mTLS)
+
+- name: Install HAProxy
+  ansible.builtin.apt:
+    name: haproxy
+    state: present
+    update_cache: true
+  tags: [haproxy, install]
+
+- name: Template haproxy.cfg
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    validate: haproxy -c -f %s
+  notify: Restart HAProxy
+  tags: [haproxy, configure]
+
+- name: Enable and start HAProxy
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: true
+    state: started
+  tags: [haproxy, service]

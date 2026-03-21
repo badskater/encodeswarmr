@@ -1,0 +1,174 @@
+---
+# mtls-certs/tasks/main.yml — Generate the mTLS certificate chain on the
+# Ansible control node when mtls_generate_certs is true.
+# Generated files are written to roles/mtls-certs/files/ and then copied to
+# each host by the controller and agent roles.
+#
+# If mtls_generate_certs is false, pre-provision the following files:
+#   roles/mtls-certs/files/ca.crt
+#   roles/mtls-certs/files/ca.key
+#   roles/mtls-certs/files/controller.crt
+#   roles/mtls-certs/files/controller.key
+#   roles/mtls-certs/files/agent.crt
+#   roles/mtls-certs/files/agent.key
+
+- name: Create local cert staging directory
+  ansible.builtin.file:
+    path: "{{ role_path }}/files"
+    state: directory
+    mode: "0700"
+  tags: [certs]
+
+# ── CA ────────────────────────────────────────────────────────────────────────
+
+- name: Check if CA key already exists
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/ca.key"
+  register: _ca_key_stat
+  tags: [certs]
+
+- name: Generate CA private key
+  ansible.builtin.command:
+    cmd: >
+      openssl genrsa -out {{ role_path }}/files/ca.key 4096
+    creates: "{{ role_path }}/files/ca.key"
+  when: mtls_generate_certs | bool and not _ca_key_stat.stat.exists
+  tags: [certs]
+
+- name: Generate self-signed CA certificate
+  ansible.builtin.command:
+    cmd: >
+      openssl req -new -x509
+      -key {{ role_path }}/files/ca.key
+      -out {{ role_path }}/files/ca.crt
+      -days {{ mtls_ca_days }}
+      -subj "/CN=distributed-encoder-ca/O=DistEncoder/OU=CA"
+    creates: "{{ role_path }}/files/ca.crt"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+# ── Controller certificate ─────────────────────────────────────────────────────
+
+- name: Generate controller private key
+  ansible.builtin.command:
+    cmd: >
+      openssl genrsa -out {{ role_path }}/files/controller.key 2048
+    creates: "{{ role_path }}/files/controller.key"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+- name: Generate controller certificate signing request
+  ansible.builtin.command:
+    cmd: >
+      openssl req -new
+      -key {{ role_path }}/files/controller.key
+      -out {{ role_path }}/files/controller.csr
+      -subj "/CN=distributed-encoder-controller/O=DistEncoder/OU=Controller"
+    creates: "{{ role_path }}/files/controller.csr"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+- name: Write controller cert extensions file
+  ansible.builtin.copy:
+    dest: "{{ role_path }}/files/controller_ext.cnf"
+    content: |
+      [v3_req]
+      subjectAltName = @alt_names
+      keyUsage = digitalSignature, keyEncipherment
+      extendedKeyUsage = serverAuth, clientAuth
+
+      [alt_names]
+      {% for host in groups['controllers'] | default([]) %}
+      IP.{{ loop.index }} = {{ hostvars[host]['ansible_host'] }}
+      DNS.{{ loop.index }} = {{ host }}
+      {% endfor %}
+      {% for host in groups['controllers_ha'] | default([]) %}
+      IP.{{ loop.index + (groups['controllers'] | default([]) | length) }} = {{ hostvars[host]['ansible_host'] }}
+      DNS.{{ loop.index + (groups['controllers'] | default([]) | length) }} = {{ host }}
+      {% endfor %}
+    mode: "0644"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+- name: Sign controller certificate with CA
+  ansible.builtin.command:
+    cmd: >
+      openssl x509 -req
+      -in {{ role_path }}/files/controller.csr
+      -CA {{ role_path }}/files/ca.crt
+      -CAkey {{ role_path }}/files/ca.key
+      -CAcreateserial
+      -out {{ role_path }}/files/controller.crt
+      -days {{ mtls_cert_days }}
+      -extensions v3_req
+      -extfile {{ role_path }}/files/controller_ext.cnf
+    creates: "{{ role_path }}/files/controller.crt"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+# ── Agent certificate (shared template cert for all agents) ────────────────────
+
+- name: Generate agent private key
+  ansible.builtin.command:
+    cmd: >
+      openssl genrsa -out {{ role_path }}/files/agent.key 2048
+    creates: "{{ role_path }}/files/agent.key"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+- name: Generate agent certificate signing request
+  ansible.builtin.command:
+    cmd: >
+      openssl req -new
+      -key {{ role_path }}/files/agent.key
+      -out {{ role_path }}/files/agent.csr
+      -subj "/CN=distributed-encoder-agent/O=DistEncoder/OU=Agent"
+    creates: "{{ role_path }}/files/agent.csr"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+- name: Sign agent certificate with CA
+  ansible.builtin.command:
+    cmd: >
+      openssl x509 -req
+      -in {{ role_path }}/files/agent.csr
+      -CA {{ role_path }}/files/ca.crt
+      -CAkey {{ role_path }}/files/ca.key
+      -CAcreateserial
+      -out {{ role_path }}/files/agent.crt
+      -days {{ mtls_cert_days }}
+      -extensions v3_req
+      -extfile /dev/stdin
+    stdin: |
+      [v3_req]
+      keyUsage = digitalSignature, keyEncipherment
+      extendedKeyUsage = clientAuth
+    creates: "{{ role_path }}/files/agent.crt"
+  when: mtls_generate_certs | bool
+  tags: [certs]
+
+# ── Verify generated files exist ──────────────────────────────────────────────
+
+- name: Verify all required cert files are present
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ item }}"
+  loop:
+    - ca.crt
+    - ca.key
+    - controller.crt
+    - controller.key
+    - agent.crt
+    - agent.key
+  register: _cert_files
+  failed_when: not _cert_files.stat.exists
+  tags: [certs]
+
+- name: Secure key file permissions
+  ansible.builtin.file:
+    path: "{{ role_path }}/files/{{ item }}"
+    mode: "0600"
+  loop:
+    - ca.key
+    - controller.key
+    - agent.key
+  tags: [certs]

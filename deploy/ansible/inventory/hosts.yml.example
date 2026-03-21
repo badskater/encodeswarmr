@@ -1,0 +1,87 @@
+---
+# Example Ansible inventory for distributed-encoder deployments.
+# Copy this file to hosts.yml, fill in your IP addresses and credentials,
+# then run one of the playbooks in playbooks/.
+#
+# Usage:
+#   cp inventory/hosts.yml.example inventory/hosts.yml
+#   ansible-playbook -i inventory/hosts.yml playbooks/site.yml
+
+all:
+  children:
+
+    # ── Standard / HA controller hosts ────────────────────────────────────────
+    controllers:
+      hosts:
+        controller-01:
+          ansible_host: 192.168.1.10
+          ansible_user: deploy
+
+    # ── Only used by ha.yml (two controller hosts + load balancer) ─────────────
+    controllers_ha:
+      hosts:
+        controller-01:
+          ansible_host: 192.168.1.10
+          ansible_user: deploy
+        controller-02:
+          ansible_host: 192.168.1.11
+          ansible_user: deploy
+
+    # ── HAProxy load balancer (used by ha.yml) ─────────────────────────────────
+    loadbalancer:
+      hosts:
+        lb-01:
+          ansible_host: 192.168.1.5
+          ansible_user: deploy
+
+    # ── PostgreSQL host (standalone; skip if using Patroni or existing DB) ─────
+    database:
+      hosts:
+        db-01:
+          ansible_host: 192.168.1.20
+          ansible_user: deploy
+
+    # ── Patroni HA PostgreSQL cluster (optional; used with ha.yml) ─────────────
+    patroni:
+      hosts:
+        pg-01:
+          ansible_host: 192.168.1.21
+          ansible_user: deploy
+        pg-02:
+          ansible_host: 192.168.1.22
+          ansible_user: deploy
+        pg-03:
+          ansible_host: 192.168.1.23
+          ansible_user: deploy
+
+    # ── Windows encoding agents (WinRM) ────────────────────────────────────────
+    agents_windows:
+      vars:
+        ansible_connection: winrm
+        ansible_winrm_transport: ntlm
+        ansible_port: 5986
+        ansible_winrm_server_cert_validation: ignore
+      hosts:
+        encode-01:
+          ansible_host: 192.168.1.100
+          ansible_user: Administrator
+        encode-02:
+          ansible_host: 192.168.1.101
+          ansible_user: Administrator
+
+    # ── Linux encoding agents ──────────────────────────────────────────────────
+    agents_linux:
+      hosts:
+        encode-03:
+          ansible_host: 192.168.1.102
+          ansible_user: deploy
+        encode-04:
+          ansible_host: 192.168.1.103
+          ansible_user: deploy
+
+    # ── Docker Compose target (alternative deployment) ─────────────────────────
+    docker_hosts:
+      hosts:
+        docker-01:
+          ansible_host: 192.168.1.30
+          ansible_user: deploy
