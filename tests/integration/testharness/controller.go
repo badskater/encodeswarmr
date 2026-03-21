@@ -53,7 +53,7 @@ func StartController(t *testing.T) *TestController {
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Host:           "127.0.0.1",
-			Port:            httpPort,
+			Port:           httpPort,
 			ReadTimeout:    30 * time.Second,
 			WriteTimeout:   30 * time.Second,
 			AllowedOrigins: []string{"*"},
@@ -67,9 +67,8 @@ func StartController(t *testing.T) *TestController {
 			TLS:  config.TLSConfig{}, // plaintext
 		},
 		Auth: config.AuthConfig{
-			SessionTTL:    1 * time.Hour,
-			SessionSecret: "test-secret-32chars-long-enough!!",
-			OIDC:          config.OIDCConfig{Enabled: false},
+			SessionTTL: 1 * time.Hour,
+			OIDC:       config.OIDCConfig{Enabled: false},
 		},
 		Agent: config.AgentConfig{
 			AutoApprove:      true,
@@ -105,7 +104,7 @@ func StartController(t *testing.T) *TestController {
 	leader := ha.NewLeader(pool, "test-node", logger)
 	leader.Start(ctx)
 
-	// 8. Create and start HTTP API server.
+	// 9 (HTTP). Create and start HTTP API server.
 	apiSrv, err := api.New(store, authSvc, cfg, logger, whSvc, leader)
 	if err != nil {
 		cancel()
@@ -121,7 +120,7 @@ func StartController(t *testing.T) *TestController {
 	}()
 
 	// 9. Create and start gRPC server.
-	grpcSrv := grpc.New(store, &cfg.GRPC, &cfg.Agent, logger, whSvc)
+	grpcSrv := controllergrpc.New(store, &cfg.GRPC, &cfg.Agent, logger, whSvc)
 	go func() {
 		if serveErr := grpcSrv.Serve(ctx); serveErr != nil {
 			if ctx.Err() == nil {

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -63,7 +64,7 @@ func NewAuthService(t *testing.T, store db.Store) *auth.Service {
 		SessionTTL: 24 * time.Hour,
 		OIDC:       config.OIDCConfig{Enabled: false},
 	}
-	svc, err := auth.NewService(ctx, store, cfg, nil)
+	svc, err := auth.NewService(ctx, store, cfg, slog.Default())
 	if err != nil {
 		t.Fatalf("fixtures: new auth service: %v", err)
 	}
@@ -135,25 +136,21 @@ func AuthenticatedClient(t *testing.T, baseURL, sessionToken string) *http.Clien
 		t.Fatalf("fixtures: cookiejar: %v", err)
 	}
 
-	// Pre-seed the jar with the session cookie so the client sends it on
-	// every request to baseURL.
-	_ = baseURL // the jar is keyed by URL when cookies are actually set
-
 	client := &http.Client{Jar: jar}
 
-	// Add the cookie via a synthetic response so we don't need a real URL
-	// at construction time.  The caller must pass the correct baseURL so
-	// the cookie domain matches.
+	// Pre-seed the cookie jar by parsing a synthetic Set-Cookie header so
+	// the client sends the session cookie on every request to baseURL.
 	req, err := http.NewRequest(http.MethodGet, baseURL, nil)
 	if err != nil {
 		t.Fatalf("fixtures: build base request: %v", err)
 	}
 
+	cookieHeader := fmt.Sprintf("session=%s; Path=/", sessionToken)
 	resp := &http.Response{
-		Header: make(http.Header),
+		Header:  make(http.Header),
 		Request: req,
 	}
-	resp.Header.Set("Set-Cookie", fmt.Sprintf("session=%s; Path=/", sessionToken))
+	resp.Header.Set("Set-Cookie", cookieHeader)
 	jar.SetCookies(req.URL, resp.Cookies())
 
 	return client

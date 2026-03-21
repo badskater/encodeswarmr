@@ -7,7 +7,6 @@ package testharness
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -15,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	tc "github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+	tcwait "github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/badskater/distributed-encoder/internal/db"
 )
@@ -70,7 +69,7 @@ func startContainer(t *testing.T, ctx context.Context) string {
 		tcpostgres.WithUsername(dbUser),
 		tcpostgres.WithPassword(dbPass),
 		tc.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
+			tcwait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
 				WithStartupTimeout(60*time.Second),
 		),
@@ -84,19 +83,11 @@ func startContainer(t *testing.T, ctx context.Context) string {
 		}
 	})
 
-	host, err := ctr.Host(ctx)
+	dsn, err := ctr.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("testharness: container host: %v", err)
+		t.Fatalf("testharness: connection string: %v", err)
 	}
-	port, err := ctr.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("testharness: container port: %v", err)
-	}
-
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbUser, dbPass, host, port.Port(), dbName,
-	)
+	return dsn
 }
 
 // TruncateAll removes all rows from application tables so each test starts
