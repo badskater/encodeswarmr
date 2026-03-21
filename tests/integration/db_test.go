@@ -245,7 +245,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("GetAgentByID", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-02", Hostname: "WIN-02", IPAddress: "10.0.0.3",
+			Name: "agent-02", Hostname: "WIN-02", IPAddress: "10.0.0.3", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -261,7 +261,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("GetAgentByName", func(t *testing.T) {
 		_, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-byname", Hostname: "WIN-BN", IPAddress: "10.0.0.4",
+			Name: "agent-byname", Hostname: "WIN-BN", IPAddress: "10.0.0.4", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -287,7 +287,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("UpdateAgentStatus", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-status", Hostname: "WIN-ST", IPAddress: "10.0.0.5",
+			Name: "agent-status", Hostname: "WIN-ST", IPAddress: "10.0.0.5", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -306,7 +306,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("UpdateAgentHeartbeat", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-hb", Hostname: "WIN-HB", IPAddress: "10.0.0.6",
+			Name: "agent-hb", Hostname: "WIN-HB", IPAddress: "10.0.0.6", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -329,7 +329,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("UpdateAgentVNCPort", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-vnc", Hostname: "WIN-VNC", IPAddress: "10.0.0.7",
+			Name: "agent-vnc", Hostname: "WIN-VNC", IPAddress: "10.0.0.7", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -348,7 +348,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("MarkStaleAgents", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-stale", Hostname: "WIN-STALE", IPAddress: "10.0.0.8",
+			Name: "agent-stale", Hostname: "WIN-STALE", IPAddress: "10.0.0.8", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -369,7 +369,7 @@ func TestAgents(t *testing.T) {
 
 	t.Run("SetAgentAPIKey", func(t *testing.T) {
 		a, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "agent-apikey", Hostname: "WIN-AK", IPAddress: "10.0.0.9",
+			Name: "agent-apikey", Hostname: "WIN-AK", IPAddress: "10.0.0.9", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -640,7 +640,7 @@ func TestTasks(t *testing.T) {
 	job := testharness.CreateTestJob(t, store, src.ID)
 
 	agent, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-		Name: "task-test-agent", Hostname: "WIN-T", IPAddress: "10.1.0.1",
+		Name: "task-test-agent", Hostname: "WIN-T", IPAddress: "10.1.0.1", Tags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("UpsertAgent: %v", err)
@@ -1403,7 +1403,7 @@ func TestEnrollmentTokens(t *testing.T) {
 
 	t.Run("Consume", func(t *testing.T) {
 		agent, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-			Name: "enroll-agent", Hostname: "WIN-EN", IPAddress: "10.2.0.1",
+			Name: "enroll-agent", Hostname: "WIN-EN", IPAddress: "10.2.0.1", Tags: []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent: %v", err)
@@ -1582,7 +1582,18 @@ func TestAuditLog(t *testing.T) {
 	store := setupTest(t)
 	ctx := context.Background()
 
-	userID := "00000000-0000-0000-0000-000000000001"
+	// Create a real user so the audit_log.user_id foreign key is satisfied.
+	hash := "bcrypt_placeholder_audit"
+	auditUser, err := store.CreateUser(ctx, db.CreateUserParams{
+		Username:     "audit-admin",
+		Email:        "audit-admin@test.local",
+		Role:         "admin",
+		PasswordHash: &hash,
+	})
+	if err != nil {
+		t.Fatalf("TestAuditLog: create user: %v", err)
+	}
+	userID := auditUser.ID
 
 	t.Run("CreateAuditEntry", func(t *testing.T) {
 		err := store.CreateAuditEntry(ctx, db.CreateAuditEntryParams{
@@ -1626,7 +1637,7 @@ func TestAgentMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	agent, err := store.UpsertAgent(ctx, db.UpsertAgentParams{
-		Name: "metrics-agent", Hostname: "WIN-MET", IPAddress: "10.3.0.1",
+		Name: "metrics-agent", Hostname: "WIN-MET", IPAddress: "10.3.0.1", Tags: []string{},
 	})
 	if err != nil {
 		t.Fatalf("UpsertAgent: %v", err)
@@ -1687,6 +1698,7 @@ func TestConcurrentClaim(t *testing.T) {
 			Name:      fmt.Sprintf("concurrent-agent-%d", i),
 			Hostname:  fmt.Sprintf("WIN-C%d", i),
 			IPAddress: fmt.Sprintf("10.4.0.%d", i+1),
+			Tags:      []string{},
 		})
 		if err != nil {
 			t.Fatalf("UpsertAgent %d: %v", i, err)

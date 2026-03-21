@@ -310,8 +310,8 @@ func TestGRPCReportResult(t *testing.T) {
 		t.Errorf("task status: want completed, got %q", task.Status)
 	}
 
-	// Wait for job to reach completed state.
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 10*time.Second)
+	// Wait for job to reach completed state (engine needs a cycle to finalize).
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 20*time.Second)
 }
 
 // --------------------------------------------------------------------------

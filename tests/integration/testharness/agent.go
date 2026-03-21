@@ -57,7 +57,7 @@ func StartAgentWithOfflineDB(t *testing.T, grpcAddr string, name string, offline
 		GPU: agentcfg.GPUConfig{
 			Enabled: false,
 		},
-		AllowedShares: []string{`\\*`},
+		AllowedShares: []string{}, // empty = allow all paths (no restriction in tests)
 		Logging: agentcfg.LoggingConfig{
 			Level: "debug",
 		},

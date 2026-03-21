@@ -321,6 +321,7 @@ func TestE2E_OfflineSync(t *testing.T) {
 		AgentVersion: "0.1.0",
 		OSVersion:    "linux/amd64",
 		CPUCount:     4,
+		Tags:         []string{},
 	})
 	if err != nil {
 		t.Fatalf("upsert agent: %v", err)

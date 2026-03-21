@@ -119,11 +119,13 @@ func TestSetupWizard(t *testing.T) {
 	}
 	var statusResp map[string]any
 	decodeJSON(t, resp, &statusResp)
-	if statusResp["status"] != "not_done" {
-		t.Errorf("setup status before setup: want not_done, got %v", statusResp["status"])
+	// Response is wrapped: {"data": {"required": true}, "meta": {...}}
+	data, _ := statusResp["data"].(map[string]any)
+	if data["required"] != true {
+		t.Errorf("setup status before setup: want required=true, got %v", data["required"])
 	}
 
-	// POST /setup with admin credentials → 200.
+	// POST /setup with admin credentials → 201 Created.
 	setupBody := jsonBody(t, map[string]string{
 		"username": "admin",
 		"email":    "admin@test.local",
@@ -133,8 +135,8 @@ func TestSetupWizard(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	resp = mustDo(t, client, req)
 	drainClose(resp)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("setup: expected 200, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("setup: expected 201, got %d", resp.StatusCode)
 	}
 
 	// POST /setup again → 409 or 4xx (already done).
@@ -171,7 +173,7 @@ func TestAuthFlow(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	resp := mustDo(t, client, req)
 	drainClose(resp)
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("setup: %d", resp.StatusCode)
 	}
 
@@ -253,7 +255,9 @@ func TestSourcesCRUD(t *testing.T) {
 	}
 	var src map[string]any
 	decodeJSON(t, resp, &src)
-	srcID, _ := src["id"].(string)
+	// Response is wrapped: {"data": {"id": "...", ...}, "meta": {...}}
+	srcData, _ := src["data"].(map[string]any)
+	srcID, _ := srcData["id"].(string)
 	if srcID == "" {
 		t.Fatal("create source: no id returned")
 	}
@@ -266,7 +270,8 @@ func TestSourcesCRUD(t *testing.T) {
 	}
 	var list map[string]any
 	decodeJSON(t, resp, &list)
-	items, _ := list["items"].([]any)
+	// writeCollection wraps as {"data": [...], "meta": {...}}
+	items, _ := list["data"].([]any)
 	if len(items) == 0 {
 		t.Error("list sources: expected at least 1 item")
 	}
@@ -314,7 +319,9 @@ func TestJobLifecycle(t *testing.T) {
 	}
 	var src map[string]any
 	decodeJSON(t, resp, &src)
-	srcID, _ := src["id"].(string)
+	// Response is wrapped: {"data": {"id": "...", ...}, "meta": {...}}
+	srcData2, _ := src["data"].(map[string]any)
+	srcID, _ := srcData2["id"].(string)
 
 	// POST /api/v1/sources/{id}/encode → 201.
 	encBody := jsonBody(t, map[string]any{
@@ -340,7 +347,9 @@ func TestJobLifecycle(t *testing.T) {
 	}
 	var job map[string]any
 	decodeJSON(t, resp, &job)
-	jobID, _ := job["id"].(string)
+	// Response is wrapped: {"data": {"id": "...", ...}, "meta": {...}}
+	jobData, _ := job["data"].(map[string]any)
+	jobID, _ := jobData["id"].(string)
 	if jobID == "" {
 		t.Fatal("create job: no id returned")
 	}
