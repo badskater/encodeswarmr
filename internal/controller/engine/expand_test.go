@@ -254,9 +254,19 @@ func TestExpandJob_AnalysisType_WithAnalysisRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expandJob analysis with runner: unexpected error: %v", err)
 	}
-	// The job should have been set to "running".
-	if len(stub.statusUpdates) == 0 || stub.statusUpdates[0] != "running" {
-		t.Errorf("expected job status set to 'running', got: %v", stub.statusUpdates)
+	// expandControllerAnalysisJob spawns a goroutine that also calls
+	// UpdateJobStatus("completed"). Wait briefly for it to finish to
+	// avoid a data race on statusUpdates.
+	time.Sleep(50 * time.Millisecond)
+
+	stub.mu.Lock()
+	updates := make([]string, len(stub.statusUpdates))
+	copy(updates, stub.statusUpdates)
+	stub.mu.Unlock()
+
+	// The job should have been set to "running" (synchronously).
+	if len(updates) == 0 || updates[0] != "running" {
+		t.Errorf("expected job status set to 'running', got: %v", updates)
 	}
 }
 

@@ -472,13 +472,19 @@ func TestRun_InitialTick(t *testing.T) {
 	// Wait for the initial tick to have fired the schedule.
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if len(stub.createdJobs) >= 1 {
+		stub.mu.Lock()
+		n := len(stub.createdJobs)
+		stub.mu.Unlock()
+		if n >= 1 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if len(stub.createdJobs) == 0 {
+	stub.mu.Lock()
+	n := len(stub.createdJobs)
+	stub.mu.Unlock()
+	if n == 0 {
 		t.Error("expected at least one job created on initial tick")
 	}
 }
