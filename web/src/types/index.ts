@@ -71,6 +71,7 @@ export interface Template {
   id: string
   name: string
   type: 'avs' | 'vpy' | 'bat'
+  extension: string
   content: string
   description: string | null
   created_at: string
