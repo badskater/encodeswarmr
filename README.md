@@ -540,7 +540,7 @@ Tests live alongside the code they cover in `internal/**/...`. Integration tests
 - [ ] Multi-controller HA (active-passive failover)
 - [ ] Cloud storage source support (S3, GCS, Azure Blob)
 - [ ] Job scheduling / cron (recurring encodes)
-- [ ] OpenAPI-generated client SDKs
+- [x] OpenAPI-generated client SDKs
 
 ---
 
@@ -552,6 +552,32 @@ Tests live alongside the code they cover in `internal/**/...`. Integration tests
 | [AGENTS.md](AGENTS.md) | Agent specification, state machine, configuration reference |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step deployment, TLS setup, HA configuration, troubleshooting |
 | [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions - Used to help build commits and documentations |
+
+### API Client SDKs
+
+The machine-readable REST API specification lives at [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.1). A JSON copy is also served at runtime by `GET /api/v1/openapi.json`.
+
+Pre-generated client stubs are committed to `api/generated/` and kept up to date by the [`generate-sdk`](.github/workflows/generate-sdk.yml) CI workflow, which runs automatically when `api/openapi.yaml` changes on `main`.
+
+**Regenerate clients locally:**
+
+```bash
+# TypeScript client (@hey-api/openapi-ts)
+npm install --save-dev @hey-api/openapi-ts @hey-api/client-fetch
+npx @hey-api/openapi-ts --config api/openapi-ts.config.ts
+
+# Go client (oapi-codegen)
+go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest \
+  -config api/oapi-codegen.yaml \
+  api/openapi.yaml
+```
+
+Generated output directories:
+
+| Path | Contents |
+|---|---|
+| `api/generated/ts/` | TypeScript fetch client |
+| `api/generated/go/client.go` | Go typed HTTP client (package `apiclient`) |
 
 ---
 

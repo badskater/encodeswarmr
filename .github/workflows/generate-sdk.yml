@@ -1,0 +1,55 @@
+name: Generate API Client SDKs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "api/openapi.yaml"
+  workflow_dispatch:
+
+jobs:
+  generate:
+    name: Regenerate API clients
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so the commit push does not create a shallow conflict.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install @hey-api/openapi-ts
+        run: npm install --no-save @hey-api/openapi-ts @hey-api/client-fetch
+
+      - name: Generate TypeScript client
+        run: npx @hey-api/openapi-ts --config api/openapi-ts.config.ts
+
+      - name: Generate Go client
+        run: |
+          go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest \
+            -config api/oapi-codegen.yaml \
+            api/openapi.yaml
+
+      - name: Commit generated files if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add api/generated/
+          git diff --quiet --cached || \
+            git commit -m "chore: regenerate API clients"
+          git push
