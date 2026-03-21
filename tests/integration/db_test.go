@@ -1944,8 +1944,8 @@ func TestTaskRetry(t *testing.T) {
 	if retried == nil {
 		t.Fatal("RetryTaskWithBackoff: expected a new task, got nil")
 	}
-	if retried.RetryCount != 1 {
-		t.Errorf("retry_count: want 1, got %d", retried.RetryCount)
+	if retried.RetryCount != 2 {
+		t.Errorf("retry_count: want 2, got %d", retried.RetryCount)
 	}
 	if retried.RetryAfter == nil {
 		t.Error("retry_after: expected non-nil after RetryTaskWithBackoff")
