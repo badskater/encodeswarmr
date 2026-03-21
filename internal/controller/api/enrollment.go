@@ -95,6 +95,21 @@ func (s *Server) handleCreateEnrollmentToken(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Emit audit entry — best-effort, never fail the request.
+	auditParams := db.CreateAuditEntryParams{
+		Action:     "token.create",
+		Resource:   "enrollment_token",
+		ResourceID: tok.ID,
+		IPAddress:  r.RemoteAddr,
+	}
+	if claims, ok := auth.FromContext(r.Context()); ok {
+		auditParams.UserID = &claims.UserID
+		auditParams.Username = claims.Username
+	}
+	if err := s.store.CreateAuditEntry(r.Context(), auditParams); err != nil {
+		s.logger.Warn("audit log: create enrollment token", "err", err, "token_id", tok.ID)
+	}
+
 	resp := enrollmentTokenCreateResponse{
 		enrollmentTokenResponse: toEnrollmentTokenResponse(tok),
 		Token:                   tok.Token,

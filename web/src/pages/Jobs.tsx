@@ -14,6 +14,10 @@ function fmtDate(s: string) {
   return new Date(s).toLocaleString()
 }
 
+function isActiveJob(status: string) {
+  return status !== 'completed' && status !== 'cancelled'
+}
+
 const STATUSES = ['', 'queued', 'assigned', 'running', 'completed', 'failed', 'cancelled']
 
 export default function Jobs() {
@@ -24,6 +28,8 @@ export default function Jobs() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkCancelling, setBulkCancelling] = useState(false)
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
@@ -56,6 +62,43 @@ export default function Jobs() {
     }
   }
 
+  const toggleSelect = (id: string) => {
+    setSelected(s => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  const activeSelected = jobs.filter(j => selected.has(j.id) && isActiveJob(j.status))
+
+  const allChecked = jobs.length > 0 && jobs.every(j => selected.has(j.id))
+  const someChecked = jobs.some(j => selected.has(j.id))
+
+  const toggleAll = () => {
+    if (allChecked) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(jobs.map(j => j.id)))
+    }
+  }
+
+  const handleBulkCancel = async () => {
+    setBulkCancelling(true)
+    setError('')
+    try {
+      for (const j of activeSelected) {
+        await api.cancelJob(j.id)
+      }
+      setSelected(new Set())
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to bulk cancel jobs')
+    } finally {
+      setBulkCancelling(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -78,12 +121,27 @@ export default function Jobs() {
             ))}
           </select>
         </div>
-        <Link
-          to="/jobs/create"
-          className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 whitespace-nowrap"
-        >
-          New Job
-        </Link>
+        <div className="flex items-center gap-2">
+          {activeSelected.length > 0 && (
+            <button
+              onClick={handleBulkCancel}
+              disabled={bulkCancelling}
+              className="text-sm px-3 py-1.5 rounded font-medium disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--th-badge-error-bg)',
+                color: 'var(--th-badge-error-text)',
+              }}
+            >
+              {bulkCancelling ? 'Cancelling…' : `Cancel Selected (${activeSelected.length})`}
+            </button>
+          )}
+          <Link
+            to="/jobs/create"
+            className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 whitespace-nowrap"
+          >
+            New Job
+          </Link>
+        </div>
       </div>
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -94,6 +152,15 @@ export default function Jobs() {
             <table className="min-w-full divide-y divide-th-border text-sm">
               <thead className="bg-th-surface-muted">
                 <tr>
+                  <th className="px-4 py-2 text-left">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked && !allChecked }}
+                      onChange={toggleAll}
+                      className="rounded border-th-input-border"
+                    />
+                  </th>
                   {['ID', 'Source', 'Status', 'Progress', 'Priority', 'Created'].map(h => (
                     <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
                   ))}
@@ -103,22 +170,29 @@ export default function Jobs() {
                 {jobs.map(j => (
                   <tr
                     key={j.id}
-                    onClick={() => navigate(`/jobs/${j.id}`)}
-                    className="hover:bg-th-surface-muted cursor-pointer"
+                    className="hover:bg-th-surface-muted"
                   >
-                    <td className="px-4 py-2 font-mono text-blue-600">{j.id.slice(0, 8)}</td>
-                    <td className="px-4 py-2 max-w-xs truncate text-th-text-secondary">{basename(j.source_path)}</td>
-                    <td className="px-4 py-2"><StatusBadge status={j.status} /></td>
-                    <td className="px-4 py-2 w-36">
+                    <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(j.id)}
+                        onChange={() => toggleSelect(j.id)}
+                        className="rounded border-th-input-border"
+                      />
+                    </td>
+                    <td className="px-4 py-2 font-mono text-blue-600 cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{j.id.slice(0, 8)}</td>
+                    <td className="px-4 py-2 max-w-xs truncate text-th-text-secondary cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{basename(j.source_path)}</td>
+                    <td className="px-4 py-2 cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}><StatusBadge status={j.status} /></td>
+                    <td className="px-4 py-2 w-36 cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>
                       <ProgressBar value={j.tasks_completed} max={j.tasks_total} />
                       <span className="text-xs text-th-text-subtle">{j.tasks_completed}/{j.tasks_total}</span>
                     </td>
-                    <td className="px-4 py-2 text-th-text-secondary">{j.priority}</td>
-                    <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(j.created_at)}</td>
+                    <td className="px-4 py-2 text-th-text-secondary cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{j.priority}</td>
+                    <td className="px-4 py-2 text-th-text-muted whitespace-nowrap cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{fmtDate(j.created_at)}</td>
                   </tr>
                 ))}
                 {jobs.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-4 text-center text-th-text-subtle">No jobs found</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-4 text-center text-th-text-subtle">No jobs found</td></tr>
                 )}
               </tbody>
             </table>

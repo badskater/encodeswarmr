@@ -234,3 +234,31 @@ export const createEnrollmentToken = (body?: { expires_at?: string }) =>
 
 export const deleteEnrollmentToken = (id: string) =>
   request<void>(`/agent-tokens/${id}`, { method: 'DELETE' })
+
+// Agent Metrics
+export interface AgentMetric {
+  id: number
+  agent_id: string
+  cpu_pct: number
+  gpu_pct: number
+  mem_pct: number
+  recorded_at: string
+}
+
+export const listAgentMetrics = (agentId: string, window = '1h') =>
+  request<AgentMetric[]>(`/agents/${agentId}/metrics${buildQuery({ window })}`)
+
+// Audit Log
+export interface AuditEntry {
+  id: number
+  user_id: string | null
+  username: string
+  action: string
+  resource: string
+  resource_id: string
+  ip_address: string
+  logged_at: string
+}
+
+export const listAuditLog = (limit = 100, offset = 0) =>
+  requestCollection<AuditEntry>(`/audit-log${buildQuery({ limit, offset })}`)

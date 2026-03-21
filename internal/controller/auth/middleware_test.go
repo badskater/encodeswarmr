@@ -204,7 +204,11 @@ func (s *authStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *authStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *authStubStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *authStubStore) DeletePathMapping(context.Context, string) error                        { return nil }
+func (s *authStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error          { return nil }
+func (s *authStubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error        { return nil }
+func (s *authStubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
+func (s *authStubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)              { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // Test helpers

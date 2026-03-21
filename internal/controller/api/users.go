@@ -86,6 +86,22 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
 	}
+
+	// Emit audit entry — best-effort, never fail the request.
+	auditParams := db.CreateAuditEntryParams{
+		Action:     "user.create",
+		Resource:   "user",
+		ResourceID: user.ID,
+		IPAddress:  r.RemoteAddr,
+	}
+	if claims, ok := auth.FromContext(r.Context()); ok {
+		auditParams.UserID = &claims.UserID
+		auditParams.Username = claims.Username
+	}
+	if err := s.store.CreateAuditEntry(r.Context(), auditParams); err != nil {
+		s.logger.Warn("audit log: create user", "err", err, "user_id", user.ID)
+	}
+
 	writeJSON(w, r, http.StatusCreated, toUserResponse(user))
 }
 
@@ -100,6 +116,22 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
 	}
+
+	// Emit audit entry — best-effort, never fail the request.
+	auditParams := db.CreateAuditEntryParams{
+		Action:     "user.delete",
+		Resource:   "user",
+		ResourceID: id,
+		IPAddress:  r.RemoteAddr,
+	}
+	if claims, ok := auth.FromContext(r.Context()); ok {
+		auditParams.UserID = &claims.UserID
+		auditParams.Username = claims.Username
+	}
+	if err := s.store.CreateAuditEntry(r.Context(), auditParams); err != nil {
+		s.logger.Warn("audit log: delete user", "err", err, "user_id", id)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

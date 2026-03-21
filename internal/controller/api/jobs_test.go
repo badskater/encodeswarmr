@@ -201,7 +201,13 @@ func (s *stubStore) ListPathMappings(context.Context) ([]*db.PathMapping, error)
 func (s *stubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *stubStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *stubStore) DeletePathMapping(context.Context, string) error                        { return nil }
+func (s *stubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error  { return nil }
+func (s *stubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
+func (s *stubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) {
+	return nil, nil
+}
+func (s *stubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -308,7 +314,11 @@ func (s *listJobsStore) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *listJobsStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *listJobsStore) DeletePathMapping(context.Context, string) error { return nil }
+func (s *listJobsStore) DeletePathMapping(context.Context, string) error                        { return nil }
+func (s *listJobsStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error          { return nil }
+func (s *listJobsStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error        { return nil }
+func (s *listJobsStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
+func (s *listJobsStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)              { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // TestHandleGetJob

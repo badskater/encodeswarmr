@@ -117,8 +117,12 @@ func (s *scriptGenStub) ListPathMappings(context.Context) ([]*db.PathMapping, er
 func (s *scriptGenStub) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
 	return nil, nil
 }
-func (s *scriptGenStub) DeletePathMapping(context.Context, string) error              { return nil }
-func (s *scriptGenStub) DeleteTasksByJobID(_ context.Context, _ string) error         { return nil }
+func (s *scriptGenStub) DeletePathMapping(context.Context, string) error                         { return nil }
+func (s *scriptGenStub) DeleteTasksByJobID(_ context.Context, _ string) error                    { return nil }
+func (s *scriptGenStub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error   { return nil }
+func (s *scriptGenStub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
+func (s *scriptGenStub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
+func (s *scriptGenStub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // RenderSingle tests
