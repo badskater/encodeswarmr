@@ -17,6 +17,7 @@ import (
 	"time"
 
 	agentcfg "github.com/badskater/distributed-encoder/internal/agent/config"
+	"github.com/badskater/distributed-encoder/internal/cloudstorage"
 	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -189,6 +190,31 @@ func buildTLSConfig(cfg agentcfg.TLSConfig) (*tls.Config, error) {
 // register calls the controller Register RPC with exponential backoff until
 // the agent is registered AND approved. Implements the PENDING_APPROVAL state
 // from the agent state machine (AGENTS.md §3).
+//
+// HA reconnection behaviour
+//
+// In an active-passive HA deployment two controller replicas sit behind a
+// load balancer (or DNS round-robin). Only the leader processes gRPC requests;
+// the standby does not accept agent connections (it will return
+// codes.Unavailable or close the connection).
+//
+// When the primary controller fails:
+//  1. The PostgreSQL advisory lock is released (either explicitly via Stop()
+//     or implicitly when the connection drops).
+//  2. The standby acquires the lock within one heartbeat interval (≤5 s) and
+//     starts processing jobs.
+//  3. The load balancer (or DNS TTL expiry) routes new connections to the
+//     newly promoted leader.
+//  4. The agent's Register call returns codes.Unavailable (or a network
+//     error).  The existing exponential-backoff loop below handles this
+//     transparently: it retries indefinitely with up to maxDelay between
+//     attempts.  No agent-side code change is needed.
+//
+// Agents do not need to know which controller is the leader; they simply
+// retry the Register RPC until it succeeds.  The heartbeat loop and poll loop
+// also log errors on transient failures and continue retrying, so in-flight
+// tasks survive brief failovers (results are buffered in the offline journal
+// if the reporting RPC fails — see §8 in AGENTS.md).
 func (r *runner) register(ctx context.Context) error {
 	hostname := r.cfg.Agent.Hostname
 	if hostname == "" {
@@ -488,6 +514,25 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 		return -1, fmt.Errorf("creating work dir: %w", err)
 	}
 
+	// §5.2 Cloud source download — if source_path is a cloud URI (s3://, gs://,
+	// az://) download the file to a local temp path and replace the source_path
+	// in the task variables so the generated scripts see a local file.
+	localSourcePath, cloudTempPath, cloudErr := r.downloadCloudSource(ctx, task, workDir)
+	if cloudErr != nil {
+		r.log.Error("cloud source download failed", "task_id", task.GetTaskId(), "error", cloudErr)
+		r.streamAgentLog(ctx, task, "error", cloudErr.Error())
+		return -1, cloudErr
+	}
+	if cloudTempPath != "" {
+		defer func() {
+			if err := os.Remove(cloudTempPath); err != nil && !os.IsNotExist(err) {
+				r.log.Warn("failed to remove cloud temp file", "path", cloudTempPath, "error", err)
+			}
+		}()
+		r.log.Info("cloud source downloaded", "task_id", task.GetTaskId(),
+			"uri", task.GetSourcePath(), "local_path", localSourcePath)
+	}
+
 	// Select the platform-appropriate script entrypoint extension.
 	entryExt := ".sh"
 	if runtime.GOOS == "windows" {
@@ -549,6 +594,11 @@ func (r *runner) executeTask(ctx context.Context, task *pb.TaskAssignment) (int,
 	// Task variables are appended last so they can override the above.
 	for k, v := range task.GetVariables() {
 		env = append(env, k+"="+v)
+	}
+	// If the source was downloaded from cloud storage, expose the local path
+	// so scripts can reference it via DE_SOURCE_PATH.
+	if localSourcePath != "" {
+		env = append(env, "DE_SOURCE_PATH="+localSourcePath)
 	}
 	cmd.Env = env
 
@@ -799,6 +849,43 @@ func (r *runner) setState(state pb.AgentState, taskID string) {
 	r.state = state
 	r.currentTaskID = taskID
 	r.mu.Unlock()
+}
+
+// isCloudURI reports whether uri uses a recognised cloud storage scheme.
+func isCloudURI(uri string) bool {
+	lower := strings.ToLower(uri)
+	return strings.HasPrefix(lower, "s3://") ||
+		strings.HasPrefix(lower, "gs://") ||
+		strings.HasPrefix(lower, "az://")
+}
+
+// downloadCloudSource checks whether the task's source_path is a cloud URI.
+// If it is, it creates a temp file inside workDir and downloads the object
+// into it, returning (localPath, tempPath, nil).
+// If source_path is not a cloud URI it returns ("", "", nil) — no-op.
+// On download error it returns ("", "", err).
+func (r *runner) downloadCloudSource(ctx context.Context, task *pb.TaskAssignment, workDir string) (localPath, tempPath string, err error) {
+	uri := task.GetSourcePath()
+	if !isCloudURI(uri) {
+		return "", "", nil
+	}
+
+	store, err := cloudstorage.NewStore(uri)
+	if err != nil {
+		return "", "", fmt.Errorf("cloud store init: %w", err)
+	}
+
+	// Derive a stable temp filename from the URI's last path component.
+	base := filepath.Base(strings.ReplaceAll(uri, "/", string(filepath.Separator)))
+	if base == "." || base == "" {
+		base = "source"
+	}
+	dest := filepath.Join(workDir, "cloud_src_"+base)
+
+	if err := store.Download(ctx, uri, dest); err != nil {
+		return "", "", fmt.Errorf("cloud download %q: %w", uri, err)
+	}
+	return dest, dest, nil
 }
 
 // localIP returns the first non-loopback IPv4 address found on the host.

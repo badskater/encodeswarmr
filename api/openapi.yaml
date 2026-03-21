@@ -1,0 +1,3084 @@
+openapi: "3.1.0"
+
+info:
+  title: Distributed Encoder API
+  version: "1.0.0"
+  description: >
+    REST API for the Distributed Encoder controller. Manages encoding jobs,
+    agents, sources, templates, variables, webhooks, users, and audit logs.
+    All versioned endpoints are prefixed with /api/v1.
+
+servers:
+  - url: /api/v1
+    description: Versioned API base path
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+
+tags:
+  - name: system
+    description: Health, metrics, and setup
+  - name: auth
+    description: Authentication (login, logout, OIDC)
+  - name: jobs
+    description: Encoding and analysis jobs
+  - name: tasks
+    description: Individual tasks within a job
+  - name: agents
+    description: Encoding agents
+  - name: agent-tokens
+    description: One-time agent enrollment tokens
+  - name: sources
+    description: Source video files
+  - name: analysis
+    description: Video analysis results
+  - name: templates
+    description: Script templates (AviSynth, VapourSynth, batch)
+  - name: variables
+    description: Global script variables
+  - name: path-mappings
+    description: UNC to Linux NFS path translation mappings
+  - name: webhooks
+    description: Webhook notification targets
+  - name: users
+    description: User management
+  - name: audit
+    description: Audit log
+
+paths:
+
+  # ─── System ────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      tags: [system]
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "503":
+          description: Database unreachable
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics
+      description: Returns job and agent counts in Prometheus text format.
+      tags: [system]
+      security: []
+      responses:
+        "200":
+          description: Prometheus text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/openapi.json:
+    get:
+      operationId: getOpenAPISpec
+      summary: OpenAPI specification (JSON)
+      tags: [system]
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.1 JSON spec
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ─── Setup wizard ──────────────────────────────────────────────────────────
+
+  /setup/status:
+    get:
+      operationId: getSetupStatus
+      summary: Setup status
+      description: Reports whether initial admin setup is still required.
+      tags: [system]
+      security: []
+      responses:
+        "200":
+          description: Setup status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          required:
+                            type: boolean
+
+  /setup:
+    post:
+      operationId: setup
+      summary: Create first admin user
+      description: Only callable once, before any admin users exist.
+      tags: [system]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "201":
+          description: Admin user created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+        "409":
+          description: Setup already completed
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ─── Auth ──────────────────────────────────────────────────────────────────
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Log in with username and password
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful; session cookie set
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          expires_at:
+                            type: string
+                            format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Log out and invalidate session
+      tags: [auth]
+      security: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKResponse"
+
+  /auth/oidc:
+    get:
+      operationId: oidcRedirect
+      summary: Initiate OIDC login flow
+      description: Redirects to the OIDC provider. Returns 404 if OIDC is not configured.
+      tags: [auth]
+      security: []
+      responses:
+        "302":
+          description: Redirect to OIDC provider
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC callback
+      description: Handles the authorization code callback from the OIDC provider.
+      tags: [auth]
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to UI after successful login
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Agent enrollment ──────────────────────────────────────────────────────
+
+  /agent/enroll:
+    post:
+      operationId: agentEnroll
+      summary: Enroll a new agent
+      description: >
+        Validates a one-time enrollment token, signs the agent's CSR, and
+        returns a signed mTLS certificate. No session required.
+      tags: [agents]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentEnrollRequest"
+      responses:
+        "200":
+          description: CSR signed; certificate returned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          cert_pem:
+                            type: string
+                            description: PEM-encoded signed certificate
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ─── Agent upgrade ─────────────────────────────────────────────────────────
+
+  /agent/upgrade/check:
+    get:
+      operationId: agentUpgradeCheck
+      summary: Check available agent upgrade
+      description: Returns the current agent version and list of available binaries.
+      tags: [agents]
+      security: []
+      responses:
+        "200":
+          description: Upgrade info
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          version:
+                            type: string
+                            example: "1.0.3"
+                          available:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AgentBinary"
+
+  /agent/upgrade/{os}/{arch}:
+    get:
+      operationId: agentUpgradeDownload
+      summary: Download agent binary
+      description: Streams the agent binary for the specified OS and architecture.
+      tags: [agents]
+      security: []
+      parameters:
+        - name: os
+          in: path
+          required: true
+          schema:
+            type: string
+            example: windows
+        - name: arch
+          in: path
+          required: true
+          schema:
+            type: string
+            example: amd64
+      responses:
+        "200":
+          description: Binary stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── WebSocket live events ──────────────────────────────────────────────────
+
+  /ws:
+    get:
+      operationId: websocketConnect
+      summary: WebSocket live event stream
+      description: >
+        Upgrades to a WebSocket connection. Broadcasts real-time events
+        (job status changes, agent status changes, log lines) to connected clients.
+        Requires viewer role or higher.
+      tags: [system]
+      security:
+        - cookieAuth: []
+      responses:
+        "101":
+          description: WebSocket upgrade successful
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Jobs ──────────────────────────────────────────────────────────────────
+
+  /jobs:
+    get:
+      operationId: listJobs
+      summary: List jobs
+      description: Returns a cursor-paginated list of jobs, optionally filtered by status.
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [queued, running, completed, failed, cancelled]
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Paginated job list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createJob
+      summary: Create a job
+      description: >
+        Creates an encode, analysis, or audio job.
+        Encode jobs require encode_config with run_script_template_id and chunk_boundaries.
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      summary: Get a job with its tasks
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Job with tasks
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          job:
+                            $ref: "#/components/schemas/Job"
+                          tasks:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{id}/cancel:
+    post:
+      operationId: cancelJob
+      summary: Cancel a job
+      description: Cancels the job and all its pending tasks.
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /jobs/{id}/retry:
+    post:
+      operationId: retryJob
+      summary: Retry a failed job
+      description: Resets failed tasks to queued and sets job status back to queued.
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Job retried
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /jobs/{id}/logs:
+    get:
+      operationId: listJobLogs
+      summary: List logs for all tasks in a job
+      tags: [jobs]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: stream
+          in: query
+          description: Filter by log stream (stdout or stderr)
+          schema:
+            type: string
+            enum: [stdout, stderr]
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/IntCursor"
+      responses:
+        "200":
+          description: Paginated log entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/LogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Tasks ─────────────────────────────────────────────────────────────────
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      summary: Get a task by ID
+      tags: [tasks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{id}/logs:
+    get:
+      operationId: listTaskLogs
+      summary: List logs for a task
+      tags: [tasks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: stream
+          in: query
+          schema:
+            type: string
+            enum: [stdout, stderr]
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/IntCursor"
+      responses:
+        "200":
+          description: Paginated log entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/LogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tasks/{id}/logs/tail:
+    get:
+      operationId: tailTaskLogs
+      summary: Tail task logs as Server-Sent Events
+      description: Streams new log entries as SSE until the client disconnects.
+      tags: [tasks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: after_id
+          in: query
+          description: Only emit log entries with ID greater than this value
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: SSE stream of log entries
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tasks/{id}/logs/download:
+    get:
+      operationId: downloadTaskLogs
+      summary: Download all task logs as plain text
+      tags: [tasks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Plain text log file download
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─── Agents ────────────────────────────────────────────────────────────────
+
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List all agents
+      tags: [agents]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      summary: Get an agent by ID
+      tags: [agents]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Agent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agents/{id}/metrics:
+    get:
+      operationId: getAgentMetrics
+      summary: Get agent time-series metrics
+      description: Returns CPU/GPU/memory samples for the agent within the specified time window.
+      tags: [agents]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: window
+          in: query
+          description: Duration string (e.g. 1h, 30m). Defaults to 1h.
+          schema:
+            type: string
+            default: "1h"
+            example: "30m"
+      responses:
+        "200":
+          description: Metric samples
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AgentMetric"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agents/{id}/drain:
+    post:
+      operationId: drainAgent
+      summary: Drain an agent
+      description: Sets agent status to draining so it completes its current task and accepts no new work.
+      tags: [agents]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Agent draining
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agents/{id}/approve:
+    post:
+      operationId: approveAgent
+      summary: Approve a pending agent
+      description: Moves an agent from pending_approval to idle, allowing it to accept tasks.
+      tags: [agents]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Agent approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Agent is not pending approval
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /agents/{id}/vnc:
+    get:
+      operationId: agentVNCProxy
+      summary: WebSocket VNC proxy for agent remote desktop
+      description: >
+        Upgrades to WebSocket and proxies noVNC binary frames to the agent's
+        VNC TCP port. The agent must have a VNC port configured.
+        Requires operator role or higher.
+      tags: [agents]
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "101":
+          description: WebSocket upgrade — VNC proxy started
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Agent has no VNC port configured
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "502":
+          description: Cannot connect to agent VNC port
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  # ─── Agent enrollment tokens ───────────────────────────────────────────────
+
+  /agent-tokens:
+    get:
+      operationId: listEnrollmentTokens
+      summary: List enrollment tokens
+      description: Returns all tokens (without the token value). Requires admin role.
+      tags: [agent-tokens]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enrollment token list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/EnrollmentToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      operationId: createEnrollmentToken
+      summary: Create an enrollment token
+      description: >
+        Creates a one-time token for enrolling a new agent. The token value is
+        only returned in this response and cannot be retrieved again.
+        Requires admin role.
+      tags: [agent-tokens]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_in:
+                  type: string
+                  description: Go duration string (e.g. 24h, 72h). Defaults to 24h.
+                  example: "48h"
+      responses:
+        "201":
+          description: Token created (token value shown once)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/EnrollmentTokenCreate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /agent-tokens/{id}:
+    delete:
+      operationId: deleteEnrollmentToken
+      summary: Delete an enrollment token
+      description: Requires admin role.
+      tags: [agent-tokens]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Token deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Sources ───────────────────────────────────────────────────────────────
+
+  /sources:
+    get:
+      operationId: listSources
+      summary: List sources
+      description: Returns a cursor-paginated list of source files, optionally filtered by state.
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Paginated source list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Source"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createSource
+      summary: Create a source
+      description: >
+        Registers a new source file. Automatically queues analysis and hdr_detect jobs.
+        If the UNC path already exists, the existing source record is returned.
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSourceRequest"
+      responses:
+        "201":
+          description: Source created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Source"
+        "200":
+          description: Source already exists (idempotent)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Source"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /sources/{id}:
+    get:
+      operationId: getSource
+      summary: Get a source with its analysis results
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Source with analysis results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          source:
+                            $ref: "#/components/schemas/Source"
+                          analysis_results:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AnalysisResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteSource
+      summary: Delete a source
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Source deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/{id}/scenes:
+    get:
+      operationId: getSourceScenes
+      summary: Get scene boundaries for a source
+      description: Returns scene cut boundaries derived from the most recent scene analysis job.
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Scene boundaries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SceneBoundaries"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/{id}/encode:
+    post:
+      operationId: encodeSource
+      summary: Submit an encode job for a source
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EncodeSourceRequest"
+      responses:
+        "201":
+          description: Encode job created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/{id}/analyze:
+    post:
+      operationId: analyzeSource
+      summary: Queue an analysis job for a source
+      description: Creates an analysis job (VMAF + scene detection).
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "201":
+          description: Analysis job created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/{id}/hdr-detect:
+    post:
+      operationId: hdrDetectSource
+      summary: Queue an HDR detection job for a source
+      description: Creates an hdr_detect job that detects HDR10, HDR10+, Dolby Vision, and HLG.
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "201":
+          description: HDR detect job created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          job_id:
+                            type: string
+                          source_id:
+                            type: string
+                          status:
+                            type: string
+                            example: queued
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sources/{id}/hdr:
+    patch:
+      operationId: updateSourceHDR
+      summary: Update HDR metadata for a source
+      description: >
+        Manually sets hdr_type and dv_profile on the source.
+        Valid hdr_type values: hdr10, hdr10+, dolby_vision, hlg, or empty string for SDR.
+      tags: [sources]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSourceHDRRequest"
+      responses:
+        "200":
+          description: Updated source
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Source"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Analysis ──────────────────────────────────────────────────────────────
+
+  /analysis/scan:
+    post:
+      operationId: scanAnalysis
+      summary: Queue an analysis scan job
+      description: Creates an analysis job for a source. Accepted immediately.
+      tags: [analysis]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanAnalysisRequest"
+      responses:
+        "202":
+          description: Analysis job queued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          job_id:
+                            type: string
+                          source_id:
+                            type: string
+                          status:
+                            type: string
+                            example: queued
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /analysis/{source_id}:
+    get:
+      operationId: getAnalysisResult
+      summary: Get the latest analysis result for a source
+      tags: [analysis]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: source_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Analysis type. Defaults to vmaf.
+          schema:
+            type: string
+            enum: [vmaf, scene, histogram]
+            default: vmaf
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AnalysisResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /analysis/{source_id}/all:
+    get:
+      operationId: listAnalysisResults
+      summary: List all analysis results for a source
+      tags: [analysis]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: source_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All analysis results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AnalysisResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Templates ─────────────────────────────────────────────────────────────
+
+  /templates:
+    get:
+      operationId: listTemplates
+      summary: List script templates
+      tags: [templates]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          description: Filter by template type (e.g. avs, vpy, bat)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createTemplate
+      summary: Create a script template
+      description: Requires admin role.
+      tags: [templates]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateRequest"
+      responses:
+        "201":
+          description: Template created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Template"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      summary: Get a template by ID
+      tags: [templates]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateTemplate
+      summary: Update a template
+      description: Requires admin role.
+      tags: [templates]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTemplateRequest"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Template"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteTemplate
+      summary: Delete a template
+      description: Requires admin role.
+      tags: [templates]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Template deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Variables ─────────────────────────────────────────────────────────────
+
+  /variables:
+    get:
+      operationId: listVariables
+      summary: List global variables
+      tags: [variables]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Variable list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Variable"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /variables/{name}:
+    get:
+      operationId: getVariable
+      summary: Get a variable by name
+      tags: [variables]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Variable
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Variable"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: upsertVariable
+      summary: Create or update a variable
+      description: Requires admin role.
+      tags: [variables]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertVariableRequest"
+      responses:
+        "200":
+          description: Variable upserted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Variable"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /variables/{id}:
+    delete:
+      operationId: deleteVariable
+      summary: Delete a variable by ID
+      description: Requires admin role.
+      tags: [variables]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Variable deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Path Mappings ─────────────────────────────────────────────────────────
+
+  /path-mappings:
+    get:
+      operationId: listPathMappings
+      summary: List path mappings
+      description: Returns all UNC to Linux NFS path translation mappings.
+      tags: [path-mappings]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Path mapping list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PathMapping"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createPathMapping
+      summary: Create a path mapping
+      description: Requires admin role.
+      tags: [path-mappings]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePathMappingRequest"
+      responses:
+        "201":
+          description: Path mapping created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PathMapping"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /path-mappings/{id}:
+    get:
+      operationId: getPathMapping
+      summary: Get a path mapping by ID
+      tags: [path-mappings]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Path mapping
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PathMapping"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updatePathMapping
+      summary: Update a path mapping
+      description: Requires admin role.
+      tags: [path-mappings]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePathMappingRequest"
+      responses:
+        "200":
+          description: Updated path mapping
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PathMapping"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deletePathMapping
+      summary: Delete a path mapping
+      description: Requires admin role.
+      tags: [path-mappings]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Path mapping deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Webhooks ──────────────────────────────────────────────────────────────
+
+  /webhooks:
+    get:
+      operationId: listWebhooks
+      summary: List webhooks
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Webhook list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Webhook"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      operationId: createWebhook
+      summary: Create a webhook
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /webhooks/{id}:
+    get:
+      operationId: getWebhook
+      summary: Get a webhook by ID
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Webhook
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Webhook"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateWebhook
+      summary: Update a webhook
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWebhookRequest"
+      responses:
+        "200":
+          description: Updated webhook
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteWebhook
+      summary: Delete a webhook
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Webhook deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /webhooks/{id}/test:
+    post:
+      operationId: testWebhook
+      summary: Send a test delivery to a webhook
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Test delivery succeeded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ok:
+                            type: boolean
+                          status_code:
+                            type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Webhook delivery failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /webhooks/{id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List delivery history for a webhook
+      description: Requires admin role.
+      tags: [webhooks]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Delivery list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WebhookDelivery"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─── Users ─────────────────────────────────────────────────────────────────
+
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      description: Requires admin role.
+      tags: [users]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      operationId: createUser
+      summary: Create a user
+      description: Requires admin role.
+      tags: [users]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /users/me:
+    get:
+      operationId: getMe
+      summary: Get the current user profile
+      tags: [users]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/{id}:
+    delete:
+      operationId: deleteUser
+      summary: Delete a user
+      description: Requires admin role.
+      tags: [users]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/{id}/role:
+    put:
+      operationId: updateUserRole
+      summary: Update a user role
+      description: Requires admin role.
+      tags: [users]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [viewer, operator, admin]
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OKEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  # ─── Audit Log ─────────────────────────────────────────────────────────────
+
+  /audit-log:
+    get:
+      operationId: listAuditLog
+      summary: List audit log entries
+      description: Requires admin role.
+      tags: [audit]
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated audit log
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/CollectionEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AuditEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+
+  # ─── Security Schemes ──────────────────────────────────────────────────────
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: HTTP-only session cookie set by POST /auth/login or OIDC callback.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: API key sent as a Bearer token in the Authorization header.
+
+  # ─── Reusable Parameters ───────────────────────────────────────────────────
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    PageSize:
+      name: page_size
+      in: query
+      description: Number of items per page. Defaults to 50, maximum 200.
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      description: Base64-encoded opaque cursor for the next page.
+      schema:
+        type: string
+    IntCursor:
+      name: cursor
+      in: query
+      description: Integer log-entry ID cursor for the next page.
+      schema:
+        type: integer
+        format: int64
+
+  # ─── Reusable Responses ────────────────────────────────────────────────────
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Insufficient role
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ValidationError:
+      description: Validation error (unprocessable entity)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  # ─── Schemas ───────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # Envelope / response wrappers
+
+    Envelope:
+      type: object
+      properties:
+        data:
+          description: The primary response payload.
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    CollectionEnvelope:
+      type: object
+      properties:
+        data:
+          type: array
+          description: The paginated resource list.
+        meta:
+          $ref: "#/components/schemas/CollectionMeta"
+
+    Meta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          description: Correlation identifier echoed from X-Request-ID.
+
+    CollectionMeta:
+      allOf:
+        - $ref: "#/components/schemas/Meta"
+        - type: object
+          properties:
+            total_count:
+              type: integer
+              format: int64
+            next_cursor:
+              type: string
+              description: Present when more pages are available.
+
+    OKResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    OKEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/OKResponse"
+
+    Problem:
+      description: RFC 9457 Problem Details
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        request_id:
+          type: string
+
+    # Domain schemas
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+        source_id:
+          type: string
+        job_type:
+          type: string
+          enum: [encode, analysis, audio, hdr_detect]
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        priority:
+          type: integer
+          default: 0
+        target_tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        encode_config:
+          $ref: "#/components/schemas/EncodeConfig"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EncodeConfig:
+      type: object
+      description: Configuration for encode-type jobs.
+      properties:
+        run_script_template_id:
+          type: string
+          description: ID of the script template used to generate the run script.
+        chunk_boundaries:
+          type: array
+          description: Frame or time boundaries for chunked encoding.
+          items:
+            type: integer
+        extra_params:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional key-value parameters injected into the script.
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        job_id:
+          type: string
+        agent_id:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        chunk_index:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        progress:
+          type: number
+          format: float
+          description: Encoding progress 0–100.
+          nullable: true
+        error_msg:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        hostname:
+          type: string
+        ip_address:
+          type: string
+        status:
+          type: string
+          enum: [idle, running, offline, draining, pending_approval]
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        vnc_port:
+          type: integer
+          nullable: true
+        current_task_id:
+          type: string
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AgentMetric:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        agent_id:
+          type: string
+        cpu_pct:
+          type: number
+          format: float
+          nullable: true
+        gpu_pct:
+          type: number
+          format: float
+          nullable: true
+        memory_pct:
+          type: number
+          format: float
+          nullable: true
+        recorded_at:
+          type: string
+          format: date-time
+
+    AgentBinary:
+      type: object
+      properties:
+        os:
+          type: string
+          example: windows
+        arch:
+          type: string
+          example: amd64
+        url:
+          type: string
+          example: /api/v1/agent/upgrade/windows/amd64
+        sha256:
+          type: string
+          description: Hex-encoded SHA-256 digest of the binary.
+
+    Source:
+      type: object
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        unc_path:
+          type: string
+          description: UNC path (\\server\share\...) or NFS mount path (/mnt/nas/...).
+        state:
+          type: string
+          nullable: true
+        hdr_type:
+          type: string
+          enum: ["", hdr10, "hdr10+", dolby_vision, hlg]
+          nullable: true
+        dv_profile:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AnalysisResult:
+      type: object
+      properties:
+        id:
+          type: string
+        source_id:
+          type: string
+        type:
+          type: string
+          enum: [vmaf, scene, histogram]
+        frame_data:
+          description: Raw JSONB frame-level data. Shape varies by analysis type.
+          nullable: true
+        summary:
+          description: Raw JSONB summary. Shape varies by analysis type.
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    SceneBoundaries:
+      type: object
+      properties:
+        source_id:
+          type: string
+        fps:
+          type: number
+          format: double
+        total_frames:
+          type: integer
+        duration_sec:
+          type: number
+          format: double
+        scenes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SceneBoundary"
+
+    SceneBoundary:
+      type: object
+      properties:
+        frame:
+          type: integer
+        pts:
+          type: number
+          format: double
+        timecode:
+          type: string
+          example: "00:01:23.12"
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          description: Template file type (e.g. avs, vpy, bat).
+        extension:
+          type: string
+          example: avs
+        content:
+          type: string
+          description: Go template body with {{.Variable}} placeholders.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Variable:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        value:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PathMapping:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        windows_prefix:
+          type: string
+          description: UNC path prefix on Windows agents (e.g. \\\\nas\\media).
+        linux_prefix:
+          type: string
+          description: NFS mount prefix on the Linux controller (e.g. /mnt/nas/media).
+        enabled:
+          type: boolean
+          default: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [discord, teams, slack]
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+          example: [job.completed, job.failed]
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        webhook_id:
+          type: string
+        event:
+          type: string
+        payload:
+          description: Raw JSON payload that was sent.
+          nullable: true
+        success:
+          type: boolean
+        response_code:
+          type: integer
+          nullable: true
+        error_msg:
+          type: string
+          nullable: true
+        attempt:
+          type: integer
+        delivered_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EnrollmentToken:
+      type: object
+      description: Enrollment token record (token value omitted).
+      properties:
+        id:
+          type: string
+        used_by:
+          type: string
+          nullable: true
+          description: Agent ID that consumed this token.
+        used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    EnrollmentTokenCreate:
+      allOf:
+        - $ref: "#/components/schemas/EnrollmentToken"
+        - type: object
+          properties:
+            token:
+              type: string
+              description: The one-time token value. Only returned at creation time.
+
+    LogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        task_id:
+          type: string
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        level:
+          type: string
+          enum: [info, warn, error, debug]
+        message:
+          type: string
+        logged_at:
+          type: string
+          format: date-time
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        user_id:
+          type: string
+          nullable: true
+        username:
+          type: string
+        action:
+          type: string
+          example: agent.approve
+        resource:
+          type: string
+          example: agent
+        resource_id:
+          type: string
+        ip_address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # Request bodies
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    SetupRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    AgentEnrollRequest:
+      type: object
+      required: [token, csr_pem]
+      properties:
+        token:
+          type: string
+          description: One-time enrollment token.
+        csr_pem:
+          type: string
+          description: PEM-encoded certificate signing request.
+
+    CreateJobRequest:
+      type: object
+      required: [source_id, job_type]
+      properties:
+        source_id:
+          type: string
+        job_type:
+          type: string
+          enum: [encode, analysis, audio]
+        priority:
+          type: integer
+          default: 0
+        target_tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        encode_config:
+          $ref: "#/components/schemas/EncodeConfig"
+
+    CreateSourceRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: UNC path (\\\\server\\share\\...) or NFS mount path (/mnt/nas/...).
+        name:
+          type: string
+          description: Optional display name. Defaults to the filename component of path.
+
+    EncodeSourceRequest:
+      type: object
+      properties:
+        priority:
+          type: integer
+          default: 0
+        target_tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        job_type:
+          type: string
+          enum: [encode, audio]
+          default: encode
+
+    UpdateSourceHDRRequest:
+      type: object
+      required: [hdr_type]
+      properties:
+        hdr_type:
+          type: string
+          enum: ["", hdr10, "hdr10+", dolby_vision, hlg]
+          description: Empty string means SDR.
+        dv_profile:
+          type: integer
+          default: 0
+          description: Dolby Vision profile number (0 if not applicable).
+
+    ScanAnalysisRequest:
+      type: object
+      required: [source_id]
+      properties:
+        source_id:
+          type: string
+        analysis_type:
+          type: string
+          enum: [vmaf, scene, histogram]
+          default: vmaf
+
+    CreateTemplateRequest:
+      type: object
+      required: [name, type, extension, content]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          description: Template type (avs, vpy, bat).
+        extension:
+          type: string
+          example: avs
+        content:
+          type: string
+          description: Go template body.
+
+    UpdateTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        content:
+          type: string
+
+    UpsertVariableRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+
+    CreatePathMappingRequest:
+      type: object
+      required: [name, windows_prefix, linux_prefix]
+      properties:
+        name:
+          type: string
+        windows_prefix:
+          type: string
+        linux_prefix:
+          type: string
+
+    UpdatePathMappingRequest:
+      type: object
+      required: [name, windows_prefix, linux_prefix]
+      properties:
+        name:
+          type: string
+        windows_prefix:
+          type: string
+        linux_prefix:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+
+    CreateWebhookRequest:
+      type: object
+      required: [name, provider, url, events]
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+          enum: [discord, teams, slack]
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+          example: [job.completed, job.failed]
+        secret:
+          type: string
+          description: Optional HMAC signing secret.
+
+    UpdateWebhookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+
+    CreateUserRequest:
+      type: object
+      required: [username, email, role]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+        password:
+          type: string
+          format: password
+          description: Optional for OIDC-only users.

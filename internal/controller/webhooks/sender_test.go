@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/distributed-encoder/internal/db/teststore"
 )
 
 func discardLogger() *slog.Logger {
@@ -22,6 +23,7 @@ func discardLogger() *slog.Logger {
 // ---------------------------------------------------------------------------
 
 type senderStubStore struct {
+	teststore.Stub
 	deliveries []db.InsertWebhookDeliveryParams
 }
 
@@ -29,188 +31,6 @@ func (s *senderStubStore) InsertWebhookDelivery(_ context.Context, p db.InsertWe
 	s.deliveries = append(s.deliveries, p)
 	return nil
 }
-
-// Satisfy the full db.Store interface with no-ops.
-func (s *senderStubStore) CreateUser(context.Context, db.CreateUserParams) (*db.User, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetUserByUsername(context.Context, string) (*db.User, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetUserByOIDCSub(context.Context, string) (*db.User, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetUserByID(context.Context, string) (*db.User, error) { return nil, nil }
-func (s *senderStubStore) ListUsers(context.Context) ([]*db.User, error)          { return nil, nil }
-func (s *senderStubStore) UpdateUserRole(context.Context, string, string) error   { return nil }
-func (s *senderStubStore) DeleteUser(context.Context, string) error               { return nil }
-func (s *senderStubStore) CountAdminUsers(context.Context) (int64, error)         { return 1, nil }
-
-func (s *senderStubStore) UpsertAgent(context.Context, db.UpsertAgentParams) (*db.Agent, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetAgentByID(context.Context, string) (*db.Agent, error)   { return nil, nil }
-func (s *senderStubStore) GetAgentByName(context.Context, string) (*db.Agent, error) { return nil, nil }
-func (s *senderStubStore) ListAgents(context.Context) ([]*db.Agent, error)           { return nil, nil }
-func (s *senderStubStore) UpdateAgentStatus(context.Context, string, string) error   { return nil }
-func (s *senderStubStore) UpdateAgentHeartbeat(context.Context, db.UpdateAgentHeartbeatParams) error {
-	return nil
-}
-func (s *senderStubStore) UpdateAgentVNCPort(context.Context, string, int) error { return nil }
-func (s *senderStubStore) SetAgentAPIKey(context.Context, string, string) error  { return nil }
-func (s *senderStubStore) MarkStaleAgents(context.Context, time.Duration) (int64, error) {
-	return 0, nil
-}
-
-func (s *senderStubStore) CreateSource(context.Context, db.CreateSourceParams) (*db.Source, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetSourceByID(context.Context, string) (*db.Source, error)      { return nil, nil }
-func (s *senderStubStore) GetSourceByUNCPath(context.Context, string) (*db.Source, error) { return nil, nil }
-func (s *senderStubStore) ListSources(context.Context, db.ListSourcesFilter) ([]*db.Source, int64, error) {
-	return nil, 0, nil
-}
-func (s *senderStubStore) UpdateSourceState(context.Context, string, string) error         { return nil }
-func (s *senderStubStore) UpdateSourceVMAF(context.Context, string, float64) error         { return nil }
-func (s *senderStubStore) UpdateSourceHDR(context.Context, db.UpdateSourceHDRParams) error { return nil }
-func (s *senderStubStore) DeleteSource(context.Context, string) error                      { return nil }
-
-func (s *senderStubStore) CreateJob(context.Context, db.CreateJobParams) (*db.Job, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetJobByID(context.Context, string) (*db.Job, error) { return nil, nil }
-func (s *senderStubStore) ListJobs(context.Context, db.ListJobsFilter) ([]*db.Job, int64, error) {
-	return nil, 0, nil
-}
-func (s *senderStubStore) UpdateJobStatus(context.Context, string, string) error { return nil }
-func (s *senderStubStore) UpdateJobTaskCounts(context.Context, string) error     { return nil }
-func (s *senderStubStore) GetJobsNeedingExpansion(context.Context) ([]*db.Job, error) {
-	return nil, nil
-}
-
-func (s *senderStubStore) CreateTask(context.Context, db.CreateTaskParams) (*db.Task, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetTaskByID(context.Context, string) (*db.Task, error) { return nil, nil }
-func (s *senderStubStore) ListTasksByJob(context.Context, string) ([]*db.Task, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ClaimNextTask(context.Context, string, []string) (*db.Task, error) {
-	return nil, nil
-}
-func (s *senderStubStore) UpdateTaskStatus(context.Context, string, string) error { return nil }
-func (s *senderStubStore) SetTaskScriptDir(context.Context, string, string) error { return nil }
-func (s *senderStubStore) CompleteTask(context.Context, db.CompleteTaskParams) error {
-	return nil
-}
-func (s *senderStubStore) FailTask(context.Context, string, int, string) error    { return nil }
-func (s *senderStubStore) CancelPendingTasksForJob(context.Context, string) error { return nil }
-
-func (s *senderStubStore) InsertTaskLog(context.Context, db.InsertTaskLogParams) error { return nil }
-func (s *senderStubStore) ListTaskLogs(context.Context, db.ListTaskLogsParams) ([]*db.TaskLog, error) {
-	return nil, nil
-}
-func (s *senderStubStore) TailTaskLogs(context.Context, string, int64) ([]*db.TaskLog, error) {
-	return nil, nil
-}
-
-func (s *senderStubStore) CreateTemplate(context.Context, db.CreateTemplateParams) (*db.Template, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetTemplateByID(context.Context, string) (*db.Template, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListTemplates(context.Context, string) ([]*db.Template, error) {
-	return nil, nil
-}
-func (s *senderStubStore) UpdateTemplate(context.Context, db.UpdateTemplateParams) error { return nil }
-func (s *senderStubStore) DeleteTemplate(context.Context, string) error                  { return nil }
-
-func (s *senderStubStore) UpsertVariable(context.Context, db.UpsertVariableParams) (*db.Variable, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetVariableByName(context.Context, string) (*db.Variable, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListVariables(context.Context, string) ([]*db.Variable, error) {
-	return nil, nil
-}
-func (s *senderStubStore) DeleteVariable(context.Context, string) error { return nil }
-
-func (s *senderStubStore) CreateWebhook(context.Context, db.CreateWebhookParams) (*db.Webhook, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetWebhookByID(context.Context, string) (*db.Webhook, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListWebhooksByEvent(context.Context, string) ([]*db.Webhook, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListWebhooks(context.Context) ([]*db.Webhook, error) { return nil, nil }
-func (s *senderStubStore) UpdateWebhook(context.Context, db.UpdateWebhookParams) error {
-	return nil
-}
-func (s *senderStubStore) DeleteWebhook(context.Context, string) error { return nil }
-func (s *senderStubStore) ListWebhookDeliveries(context.Context, string, int, int) ([]*db.WebhookDelivery, error) {
-	return nil, nil
-}
-func (s *senderStubStore) Ping(context.Context) error { return nil }
-
-func (s *senderStubStore) UpsertAnalysisResult(context.Context, db.UpsertAnalysisResultParams) (*db.AnalysisResult, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetAnalysisResult(context.Context, string, string) (*db.AnalysisResult, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListAnalysisResults(context.Context, string) ([]*db.AnalysisResult, error) {
-	return nil, nil
-}
-
-func (s *senderStubStore) CreateSession(context.Context, db.CreateSessionParams) (*db.Session, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetSessionByToken(context.Context, string) (*db.Session, error) {
-	return nil, nil
-}
-func (s *senderStubStore) DeleteSession(context.Context, string) error  { return nil }
-func (s *senderStubStore) PruneExpiredSessions(context.Context) error   { return nil }
-
-func (s *senderStubStore) CreateEnrollmentToken(context.Context, db.CreateEnrollmentTokenParams) (*db.EnrollmentToken, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetEnrollmentToken(context.Context, string) (*db.EnrollmentToken, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ConsumeEnrollmentToken(context.Context, db.ConsumeEnrollmentTokenParams) error {
-	return nil
-}
-func (s *senderStubStore) ListEnrollmentTokens(context.Context) ([]*db.EnrollmentToken, error) {
-	return nil, nil
-}
-func (s *senderStubStore) DeleteEnrollmentToken(context.Context, string) error      { return nil }
-func (s *senderStubStore) PruneExpiredEnrollmentTokens(context.Context) error       { return nil }
-
-func (s *senderStubStore) RetryFailedTasksForJob(context.Context, string) error { return nil }
-func (s *senderStubStore) ListJobLogs(context.Context, db.ListJobLogsParams) ([]*db.TaskLog, error) {
-	return nil, nil
-}
-func (s *senderStubStore) PruneOldTaskLogs(context.Context, time.Time) error { return nil }
-func (s *senderStubStore) CreatePathMapping(context.Context, db.CreatePathMappingParams) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *senderStubStore) GetPathMappingByID(context.Context, string) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *senderStubStore) ListPathMappings(context.Context) ([]*db.PathMapping, error) { return nil, nil }
-func (s *senderStubStore) UpdatePathMapping(context.Context, db.UpdatePathMappingParams) (*db.PathMapping, error) {
-	return nil, nil
-}
-func (s *senderStubStore) DeletePathMapping(context.Context, string) error                         { return nil }
-func (s *senderStubStore) DeleteTasksByJobID(_ context.Context, _ string) error                    { return nil }
-func (s *senderStubStore) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error   { return nil }
-func (s *senderStubStore) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error { return nil }
-func (s *senderStubStore) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error) { return nil, nil }
-func (s *senderStubStore) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
 
 // ---------------------------------------------------------------------------
 // TestSenderSend_success — delivers on first attempt to a real HTTP server

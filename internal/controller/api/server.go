@@ -11,6 +11,7 @@ import (
 
 	"github.com/badskater/distributed-encoder/internal/controller/auth"
 	"github.com/badskater/distributed-encoder/internal/controller/config"
+	"github.com/badskater/distributed-encoder/internal/controller/ha"
 	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
 	"github.com/badskater/distributed-encoder/internal/db"
 )
@@ -24,10 +25,11 @@ type Server struct {
 	logger   *slog.Logger
 	webhooks *webhooks.Service
 	hub      *Hub
+	leader   *ha.Leader
 }
 
 // New creates and configures a new HTTP API server.
-func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service) (*Server, error) {
+func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog.Logger, wh *webhooks.Service, ldr *ha.Leader) (*Server, error) {
 	s := &Server{
 		store:    store,
 		auth:     authSvc,
@@ -35,6 +37,7 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		logger:   logger,
 		webhooks: wh,
 		hub:      NewHub(logger),
+		leader:   ldr,
 	}
 
 	mux := http.NewServeMux()
@@ -88,6 +91,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPISpec)
+	mux.HandleFunc("GET /api/v1/ha/status", s.handleHAStatus)
 
 	// Setup wizard — unauthenticated, functional only before first admin exists
 	mux.HandleFunc("GET /setup/status", s.handleSetupStatus)
@@ -205,6 +209,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
+
+	// --- Schedules ---
+	mux.Handle("GET /api/v1/schedules", viewer(s.handleListSchedules))
+	mux.Handle("POST /api/v1/schedules", admin(s.handleCreateSchedule))
+	mux.Handle("GET /api/v1/schedules/{id}", viewer(s.handleGetSchedule))
+	mux.Handle("PUT /api/v1/schedules/{id}", admin(s.handleUpdateSchedule))
+	mux.Handle("DELETE /api/v1/schedules/{id}", admin(s.handleDeleteSchedule))
 
 	// Static UI — must be last so API routes take precedence.
 	staticH, err := s.staticHandler()

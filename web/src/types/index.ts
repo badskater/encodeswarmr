@@ -61,6 +61,7 @@ export interface Source {
   duration_sec: number | null
   state: 'new' | 'analysing' | 'ready' | 'encoding' | 'done' | 'error'
   vmaf_score: number | null
+  cloud_uri: string | null
   hdr_type: string
   dv_profile: number
   created_at: string
@@ -195,4 +196,19 @@ export interface ChunkingConfig {
   enable_chunking: boolean
   chunk_size_frames: number
   overlap_frames: number
+}
+
+// Schedule is a row from the schedules table.
+// job_template is the raw JSON object that will be decoded into a CreateJobParams
+// when the schedule fires.
+export interface Schedule {
+  id: string
+  name: string
+  cron_expr: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  job_template: Record<string, any>
+  enabled: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
 }
