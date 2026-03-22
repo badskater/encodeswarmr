@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "encodeswarmr.fullname" . }}-controller
+  labels:
+    {{- include "encodeswarmr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "encodeswarmr.controllerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "encodeswarmr.controllerSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "encodeswarmr.serviceAccountName" . }}
+      containers:
+        - name: controller
+          image: {{ include "encodeswarmr.controllerImage" . }}
+          imagePullPolicy: {{ .Values.image.controller.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.controller.httpPort }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.controller.grpcPort }}
+              protocol: TCP
+          env:
+            - name: ENCODESWARMR_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "encodeswarmr.fullname" . }}-secrets
+                  key: ENCODESWARMR_DB_URL
+            - name: ENCODESWARMR_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "encodeswarmr.fullname" . }}-secrets
+                  key: ENCODESWARMR_SESSION_SECRET
+            {{- with .Values.controller.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/encodeswarmr
+              readOnly: true
+            - name: media
+              mountPath: /data/media
+          livenessProbe:
+            {{- toYaml .Values.controller.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.controller.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "encodeswarmr.fullname" . }}-config
+        - name: media
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-media" (include "encodeswarmr.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

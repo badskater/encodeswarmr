@@ -104,6 +104,12 @@ func (Stub) ListTemplates(_ context.Context, _ string) ([]*db.Template, error)  
 func (Stub) UpdateTemplate(_ context.Context, _ db.UpdateTemplateParams) error                 { return nil }
 func (Stub) DeleteTemplate(_ context.Context, _ string) error                                  { return nil }
 
+// --- Template Versions ---
+func (Stub) CreateTemplateVersion(_ context.Context, _ db.CreateTemplateVersionParams) (*db.TemplateVersion, error) { return nil, nil }
+func (Stub) ListTemplateVersions(_ context.Context, _ string) ([]*db.TemplateVersion, error)                        { return nil, nil }
+func (Stub) GetTemplateVersion(_ context.Context, _ string, _ int) (*db.TemplateVersion, error)                     { return nil, nil }
+func (Stub) GetLatestTemplateVersion(_ context.Context, _ string) (int, error)                                      { return 0, nil }
+
 // --- Variables ---
 func (Stub) UpsertVariable(_ context.Context, _ db.UpsertVariableParams) (*db.Variable, error) { return nil, nil }
 func (Stub) GetVariableByName(_ context.Context, _ string) (*db.Variable, error)               { return nil, nil }
@@ -180,8 +186,18 @@ func (Stub) DeleteSchedule(_ context.Context, _ string) error                   
 func (Stub) ListDueSchedules(_ context.Context) ([]*db.Schedule, error)                           { return nil, nil }
 func (Stub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error                  { return nil }
 
+// --- Task Preemption ---
+func (Stub) PreemptTask(_ context.Context, _ string) error { return nil }
+
 // --- Estimation ---
 func (Stub) GetAvgFPSStats(_ context.Context, _ string) (float64, int64, error) { return 0, 0, nil }
+
+// --- Encoding Stats ---
+func (Stub) UpsertEncodingStats(_ context.Context, _ db.UpsertEncodingStatsParams) error              { return nil }
+func (Stub) GetEncodingStats(_ context.Context, _, _, _ string) (*db.EncodingStats, error)            { return nil, nil }
+
+// --- Agent FPS ---
+func (Stub) GetAgentAvgFPS(_ context.Context, _ string) (float64, error) { return 0, nil }
 
 // --- Dashboard metrics ---
 func (Stub) GetThroughputStats(_ context.Context, _ int) ([]*db.ThroughputPoint, error) { return nil, nil }

@@ -140,6 +140,7 @@ func taskCols() []string {
 		"exit_code", "frames_encoded", "avg_fps", "output_size", "duration_sec",
 		"vmaf_score", "psnr", "ssim", "error_msg",
 		"retry_count", "retry_after",
+		"preemptible", "preempted_at",
 		"started_at", "completed_at", "created_at", "updated_at",
 	}
 }
@@ -152,6 +153,7 @@ func taskRow(id, jobID string) *pgxmock.Rows {
 			nil, nil, nil, nil, nil,
 			nil, nil, nil, nil,
 			0, nil,
+			true, nil,
 			nil, nil, now, now)
 }
 

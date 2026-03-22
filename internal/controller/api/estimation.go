@@ -25,8 +25,15 @@ type estimateResponse struct {
 	EstimatedDurationHuman   string `json:"estimated_duration_human"`
 	// Confidence is "high" (30+ samples), "medium" (5–29), "low" (1–4), or
 	// "none" when no historical data is available and defaults are used.
-	Confidence      string `json:"confidence"`
-	BasedOnSamples  int64  `json:"based_on_samples"`
+	Confidence     string `json:"confidence"`
+	BasedOnSamples int64  `json:"based_on_samples"`
+	// AvgFPS is the average encoding FPS used for the estimate.
+	AvgFPS float64 `json:"avg_fps"`
+	// FPSStddev is the standard deviation of avg_fps across historical samples.
+	// A 95% CI for the estimate can be computed as ±1.96 * fps_stddev / sqrt(sample_count).
+	FPSStddev float64 `json:"fps_stddev,omitempty"`
+	// EstimatedStorageMB is the predicted output file size in megabytes.
+	EstimatedStorageMB float64 `json:"estimated_storage_mb,omitempty"`
 }
 
 // handleEstimate computes a rough time estimate for an encode job.
@@ -136,11 +143,40 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		estimatedSeconds = int64(math.Ceil(float64(totalFrames) / avgFPS / float64(chunkCount)))
 	}
 
+	// Augment with EncodingStats (learning) for confidence intervals and
+	// storage estimate.  Use codec+empty resolution+empty preset as the
+	// broadest match; callers may supply resolution/preset in future.
+	var fpsStddev float64
+	var estimatedStorageMB float64
+	if es, err := s.store.GetEncodingStats(r.Context(), codec, "", ""); err == nil && es != nil {
+		fpsStddev = es.FPSStddev
+		// Use the per-stat sample count if it's larger (cross-source stats).
+		if int64(es.SampleCount) > sampleCount {
+			sampleCount = int64(es.SampleCount)
+			avgFPS = es.AvgFPS
+			switch {
+			case sampleCount >= 30:
+				confidence = "high"
+			case sampleCount >= 5:
+				confidence = "medium"
+			default:
+				confidence = "low"
+			}
+		}
+		// Estimated storage: avg_size_per_min * estimated_minutes.
+		if es.AvgSizePerMin > 0 && estimatedSeconds > 0 {
+			estimatedStorageMB = es.AvgSizePerMin * float64(estimatedSeconds) / 60.0 / (1024 * 1024)
+		}
+	}
+
 	resp := estimateResponse{
 		EstimatedDurationSeconds: estimatedSeconds,
 		EstimatedDurationHuman:   formatDuration(estimatedSeconds),
 		Confidence:               confidence,
 		BasedOnSamples:           sampleCount,
+		AvgFPS:                   avgFPS,
+		FPSStddev:                fpsStddev,
+		EstimatedStorageMB:       estimatedStorageMB,
 	}
 	writeJSON(w, r, http.StatusOK, resp)
 }

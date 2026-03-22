@@ -1,0 +1,13 @@
+apiVersion: v2
+name: encodeswarmr
+description: Distributed video encoding controller and agent for EncodeSwarmr.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: EncodeSwarmr Contributors
+keywords:
+  - encoding
+  - video
+  - distributed
+  - ffmpeg

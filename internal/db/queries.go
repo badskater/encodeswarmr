@@ -723,6 +723,7 @@ func (s *pgStore) CreateTask(ctx context.Context, p CreateTaskParams) (*Task, er
 		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 		          vmaf_score, psnr, ssim, error_msg,
 		          retry_count, retry_after,
+		          preemptible, preempted_at,
 		          started_at, completed_at, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.JobID, p.ChunkIndex, p.TaskType, p.SourcePath, p.OutputPath, varsJSON,
@@ -736,6 +737,7 @@ func (s *pgStore) GetTaskByID(ctx context.Context, id string) (*Task, error) {
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
 	                  retry_count, retry_after,
+	                  preemptible, preempted_at,
 	                  started_at, completed_at, created_at, updated_at
 	           FROM tasks WHERE id = $1`
 	return scanTask(s.pool.QueryRow(ctx, q, id))
@@ -747,6 +749,7 @@ func (s *pgStore) ListTasksByJob(ctx context.Context, jobID string) ([]*Task, er
 	                  exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 	                  vmaf_score, psnr, ssim, error_msg,
 	                  retry_count, retry_after,
+	                  preemptible, preempted_at,
 	                  started_at, completed_at, created_at, updated_at
 	           FROM tasks WHERE job_id = $1 ORDER BY chunk_index`
 	rows, err := s.pool.Query(ctx, q, jobID)
@@ -803,6 +806,7 @@ func (s *pgStore) ClaimNextTask(ctx context.Context, agentID string, tags []stri
 		          tasks.exit_code, tasks.frames_encoded, tasks.avg_fps, tasks.output_size,
 		          tasks.duration_sec, tasks.vmaf_score, tasks.psnr, tasks.ssim, tasks.error_msg,
 		          tasks.retry_count, tasks.retry_after,
+		          tasks.preemptible, tasks.preempted_at,
 		          tasks.started_at, tasks.completed_at, tasks.created_at, tasks.updated_at`
 	row := s.pool.QueryRow(ctx, q, agentID, tags)
 	t, err := scanTask(row)
@@ -908,6 +912,7 @@ func scanTask(row pgx.Row) (*Task, error) {
 		&t.ExitCode, &t.FramesEncoded, &t.AvgFPS, &t.OutputSize, &t.DurationSec,
 		&t.VMafScore, &t.PSNR, &t.SSIM, &t.ErrorMsg,
 		&t.RetryCount, &t.RetryAfter,
+		&t.Preemptible, &t.PreemptedAt,
 		&t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -2178,6 +2183,7 @@ func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retry
 		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
 		          vmaf_score, psnr, ssim, error_msg,
 		          retry_count, retry_after,
+		          preemptible, preempted_at,
 		          started_at, completed_at, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, taskID, retryCount+1, backoffSeconds)
 	t, err := scanTask(row)
@@ -2583,4 +2589,165 @@ func exportJobsFromTable(ctx context.Context, pool poolIface, table, sourcesTabl
 		out = append(out, j)
 	}
 	return out, rows.Err()
+}
+// Template Versions
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateTemplateVersion(ctx context.Context, p CreateTemplateVersionParams) (*TemplateVersion, error) {
+	const q = `
+		INSERT INTO template_versions (template_id, version, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, template_id, version, content, created_at, created_by`
+	row := s.pool.QueryRow(ctx, q, p.TemplateID, p.Version, p.Content, p.CreatedBy)
+	return scanTemplateVersion(row)
+}
+
+func (s *pgStore) ListTemplateVersions(ctx context.Context, templateID string) ([]*TemplateVersion, error) {
+	const q = `SELECT id, template_id, version, content, created_at, created_by
+	           FROM template_versions WHERE template_id = $1 ORDER BY version DESC`
+	rows, err := s.pool.Query(ctx, q, templateID)
+	if err != nil {
+		return nil, fmt.Errorf("db: list template versions: %w", err)
+	}
+	defer rows.Close()
+	var out []*TemplateVersion
+	for rows.Next() {
+		v, err := scanTemplateVersion(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) GetTemplateVersion(ctx context.Context, templateID string, version int) (*TemplateVersion, error) {
+	const q = `SELECT id, template_id, version, content, created_at, created_by
+	           FROM template_versions WHERE template_id = $1 AND version = $2`
+	return scanTemplateVersion(s.pool.QueryRow(ctx, q, templateID, version))
+}
+
+// GetLatestTemplateVersion returns the highest version number for the given
+// template, or 0 if no versions exist yet.
+func (s *pgStore) GetLatestTemplateVersion(ctx context.Context, templateID string) (int, error) {
+	const q = `SELECT COALESCE(MAX(version), 0) FROM template_versions WHERE template_id = $1`
+	var v int
+	if err := s.pool.QueryRow(ctx, q, templateID).Scan(&v); err != nil {
+		return 0, fmt.Errorf("db: get latest template version: %w", err)
+	}
+	return v, nil
+}
+
+func scanTemplateVersion(row pgx.Row) (*TemplateVersion, error) {
+	var v TemplateVersion
+	err := row.Scan(&v.ID, &v.TemplateID, &v.Version, &v.Content, &v.CreatedAt, &v.CreatedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan template version: %w", err)
+	}
+	return &v, nil
+}
+
+// ---------------------------------------------------------------------------
+// Task Preemption
+// ---------------------------------------------------------------------------
+
+// PreemptTask marks a running or assigned task as "preempted": it records the
+// current time, resets the task to "pending" so it can be picked up again, and
+// clears the agent assignment.
+func (s *pgStore) PreemptTask(ctx context.Context, taskID string) error {
+	const q = `
+		UPDATE tasks
+		SET status       = 'pending',
+		    preempted_at = now(),
+		    agent_id     = NULL,
+		    started_at   = NULL,
+		    updated_at   = now()
+		WHERE id = $1
+		  AND status IN ('assigned', 'running')`
+	ct, err := s.pool.Exec(ctx, q, taskID)
+	if err != nil {
+		return fmt.Errorf("db: preempt task: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Encoding Stats (cost estimation learning)
+// ---------------------------------------------------------------------------
+
+// UpsertEncodingStats updates the running average FPS, size-per-minute, and
+// standard deviation for a (codec, resolution, preset) combination using an
+// incremental mean / Welford's online variance algorithm.
+func (s *pgStore) UpsertEncodingStats(ctx context.Context, p UpsertEncodingStatsParams) error {
+	// Incremental Welford update expressed in SQL:
+	//   new_mean = old_mean + (new_val - old_mean) / new_count
+	//   We approximate stddev via (running sum-of-sq-diffs) stored as fps_stddev * sample_count.
+	const q = `
+		INSERT INTO encoding_stats (codec, resolution, preset, avg_fps, avg_size_per_min, sample_count, fps_stddev)
+		VALUES ($1, $2, $3, $4, $5, 1, 0)
+		ON CONFLICT (codec, resolution, preset) DO UPDATE SET
+		    sample_count    = encoding_stats.sample_count + 1,
+		    avg_fps         = encoding_stats.avg_fps + ($4 - encoding_stats.avg_fps) / (encoding_stats.sample_count + 1),
+		    avg_size_per_min = encoding_stats.avg_size_per_min + ($5 - encoding_stats.avg_size_per_min) / (encoding_stats.sample_count + 1),
+		    fps_stddev      = SQRT(GREATEST(0,
+		                        (encoding_stats.fps_stddev * encoding_stats.fps_stddev * encoding_stats.sample_count
+		                         + ($4 - encoding_stats.avg_fps) * ($4 - (encoding_stats.avg_fps + ($4 - encoding_stats.avg_fps) / (encoding_stats.sample_count + 1))))
+		                        / (encoding_stats.sample_count + 1)
+		                     )),
+		    updated_at      = now()`
+	_, err := s.pool.Exec(ctx, q, p.Codec, p.Resolution, p.Preset, p.NewFPS, p.NewSizePerMin)
+	if err != nil {
+		return fmt.Errorf("db: upsert encoding stats: %w", err)
+	}
+	return nil
+}
+
+func (s *pgStore) GetEncodingStats(ctx context.Context, codec, resolution, preset string) (*EncodingStats, error) {
+	const q = `SELECT id, codec, resolution, preset, avg_fps, avg_size_per_min,
+	                  sample_count, fps_stddev, updated_at
+	           FROM encoding_stats WHERE codec = $1 AND resolution = $2 AND preset = $3`
+	row := s.pool.QueryRow(ctx, q, codec, resolution, preset)
+	var es EncodingStats
+	err := row.Scan(&es.ID, &es.Codec, &es.Resolution, &es.Preset,
+		&es.AvgFPS, &es.AvgSizePerMin, &es.SampleCount, &es.FPSStddev, &es.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: get encoding stats: %w", err)
+	}
+	return &es, nil
+}
+
+// ---------------------------------------------------------------------------
+// Agent FPS (adaptive chunking)
+// ---------------------------------------------------------------------------
+
+// GetAgentAvgFPS returns the average encoding FPS of the most-recent 20
+// completed encode tasks executed by the given agent.  Returns 0 when no
+// history is available.
+func (s *pgStore) GetAgentAvgFPS(ctx context.Context, agentID string) (float64, error) {
+	const q = `
+		SELECT COALESCE(AVG(avg_fps), 0)
+		FROM (
+		    SELECT avg_fps
+		    FROM tasks
+		    WHERE agent_id = $1
+		      AND status = 'completed'
+		      AND avg_fps IS NOT NULL
+		      AND avg_fps > 0
+		    ORDER BY completed_at DESC
+		    LIMIT 20
+		) sub`
+	var fps float64
+	if err := s.pool.QueryRow(ctx, q, agentID).Scan(&fps); err != nil {
+		return 0, fmt.Errorf("db: get agent avg fps: %w", err)
+	}
+	return fps, nil
 }

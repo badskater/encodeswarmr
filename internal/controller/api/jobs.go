@@ -506,3 +506,25 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, r, http.StatusOK, task)
 }
+
+// handlePreemptTask interrupts a running or assigned task, resetting it to
+// pending so a higher-priority task can be dispatched instead.
+//
+//	POST /api/v1/tasks/{id}/preempt
+func (s *Server) handlePreemptTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "missing task id")
+		return
+	}
+	if err := s.store.PreemptTask(r.Context(), id); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "task not found or not in a preemptible state")
+			return
+		}
+		s.logger.Error("preempt task", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -97,6 +97,12 @@ type Store interface {
 	UpdateTemplate(ctx context.Context, p UpdateTemplateParams) error
 	DeleteTemplate(ctx context.Context, id string) error
 
+	// --- Template Versions ---
+	CreateTemplateVersion(ctx context.Context, p CreateTemplateVersionParams) (*TemplateVersion, error)
+	ListTemplateVersions(ctx context.Context, templateID string) ([]*TemplateVersion, error)
+	GetTemplateVersion(ctx context.Context, templateID string, version int) (*TemplateVersion, error)
+	GetLatestTemplateVersion(ctx context.Context, templateID string) (int, error)
+
 	// --- Variables ---
 	UpsertVariable(ctx context.Context, p UpsertVariableParams) (*Variable, error)
 	GetVariableByName(ctx context.Context, name string) (*Variable, error)
@@ -192,12 +198,21 @@ type Store interface {
 	ExportJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error)
 	// ExportArchivedJobs returns archived jobs matching the export filter.
 	ExportArchivedJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error)
+	// --- Task preemption ---
+	PreemptTask(ctx context.Context, taskID string) error
 
 	// --- Estimation ---
 	// GetAvgFPSStats returns the average encoding FPS and sample count from
 	// completed encode tasks for the given source.  Returns (0, 0, nil) when
 	// there is no historical data.
 	GetAvgFPSStats(ctx context.Context, sourceID string) (avgFPS float64, sampleCount int64, err error)
+
+	// --- Encoding Stats (learning) ---
+	UpsertEncodingStats(ctx context.Context, p UpsertEncodingStatsParams) error
+	GetEncodingStats(ctx context.Context, codec, resolution, preset string) (*EncodingStats, error)
+
+	// --- Agent FPS for adaptive chunking ---
+	GetAgentAvgFPS(ctx context.Context, agentID string) (float64, error)
 
 	// --- Dashboard metrics ---
 	GetThroughputStats(ctx context.Context, hours int) ([]*ThroughputPoint, error)

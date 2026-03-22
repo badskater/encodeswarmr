@@ -25,6 +25,7 @@ type Config struct {
 	Validation   ValidationConfig    `mapstructure:"validation"`
 	Archive      ArchiveConfig       `mapstructure:"archive"`
 	MediaServers []MediaServerConfig `mapstructure:"media_servers"`
+	Tracing      TracingConfig       `mapstructure:"tracing"`
 }
 
 // MediaServerConfig holds connection details for a single media server integration.
@@ -217,6 +218,17 @@ type ArchiveConfig struct {
 	RetentionDays int `mapstructure:"retention_days"`
 }
 
+// TracingConfig controls OpenTelemetry distributed tracing.
+type TracingConfig struct {
+	// Enabled controls whether tracing is active.  Defaults to false.
+	Enabled bool `mapstructure:"enabled"`
+	// Endpoint is the OTLP receiver endpoint, e.g. "localhost:4317".
+	// Ignored when Enabled is false.
+	Endpoint string `mapstructure:"endpoint"`
+	// SampleRate is a fraction in [0,1].  Defaults to 0.1 (10 % sampling).
+	SampleRate float64 `mapstructure:"sample_rate"`
+}
+
 // VNCConfig controls the web-based VNC remote desktop feature.
 type VNCConfig struct {
 	// NoVNCBaseURL is the base URL from which the noVNC JavaScript client
@@ -272,6 +284,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("validation.min_duration_ratio", 0.9)
 	v.SetDefault("archive.enabled", true)
 	v.SetDefault("archive.retention_days", 30)
+	v.SetDefault("tracing.enabled", false)
+	v.SetDefault("tracing.endpoint", "localhost:4317")
+	v.SetDefault("tracing.sample_rate", 0.1)
 
 	v.AutomaticEnv()
 
