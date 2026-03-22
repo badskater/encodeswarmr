@@ -67,6 +67,8 @@ export default function NavBar({ role, onLogout }: Props) {
                   <NavLink to="/admin/schedules" className={linkCls}>Schedules</NavLink>
                   <NavLink to="/admin/plugins" className={linkCls}>Plugins</NavLink>
                   <NavLink to="/admin/theme" className={linkCls}>Theme</NavLink>
+                  <NavLink to="/admin/notifications" className={linkCls}>Notifications</NavLink>
+                  <NavLink to="/admin/auto-scaling" className={linkCls}>Auto-Scaling</NavLink>
                 </>
               )}
             </div>
@@ -128,6 +130,8 @@ export default function NavBar({ role, onLogout }: Props) {
                 <NavLink to="/admin/schedules" className={mobileLinkCls} onClick={closeMenu}>Schedules</NavLink>
                 <NavLink to="/admin/plugins" className={mobileLinkCls} onClick={closeMenu}>Plugins</NavLink>
                 <NavLink to="/admin/theme" className={mobileLinkCls} onClick={closeMenu}>Theme</NavLink>
+                <NavLink to="/admin/notifications" className={mobileLinkCls} onClick={closeMenu}>Notifications</NavLink>
+                <NavLink to="/admin/auto-scaling" className={mobileLinkCls} onClick={closeMenu}>Auto-Scaling</NavLink>
               </>
             )}
             <div className="border-t border-th-nav-hover mt-1 pt-1">

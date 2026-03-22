@@ -164,8 +164,9 @@ func (Stub) DeleteAPIKey(_ context.Context, _ string) error                     
 func (Stub) UpdateAPIKeyLastUsed(_ context.Context, _ string) error                       { return nil }
 
 // --- Notification Preferences ---
-func (Stub) GetNotificationPrefs(_ context.Context, _ string) (*db.NotificationPrefs, error)        { return nil, nil }
-func (Stub) UpsertNotificationPrefs(_ context.Context, _ db.UpsertNotificationPrefsParams) error    { return nil }
+func (Stub) GetNotificationPrefs(_ context.Context, _ string) (*db.NotificationPrefs, error)             { return nil, nil }
+func (Stub) UpsertNotificationPrefs(_ context.Context, _ db.UpsertNotificationPrefsParams) error         { return nil }
+func (Stub) ListUsersWithEmailNotifications(_ context.Context) ([]*db.NotificationPrefs, error)           { return nil, nil }
 
 // --- Schedules ---
 func (Stub) CreateSchedule(_ context.Context, _ db.CreateScheduleParams) (*db.Schedule, error)    { return nil, nil }

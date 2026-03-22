@@ -1,6 +1,8 @@
 // Package webhooks provides an asynchronous webhook delivery service.
 // Events are published via Emit and delivered to all matching webhook
-// subscribers by a pool of background workers.
+// subscribers by a pool of background workers.  When an EmailSender is
+// configured, Emit also dispatches email notifications to users whose
+// notification preferences request them.
 package webhooks
 
 import (
@@ -8,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/badskater/encodeswarmr/internal/controller/notifications"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
@@ -36,6 +39,7 @@ type Service struct {
 	cfg    Config
 	logger *slog.Logger
 	queue  chan delivery
+	email  *notifications.EmailSender // nil when email is not configured
 }
 
 // New creates a new Service. Call Start to begin background workers.
@@ -50,6 +54,13 @@ func New(store db.Store, cfg Config, logger *slog.Logger) *Service {
 		logger: logger,
 		queue:  make(chan delivery, workers*10),
 	}
+}
+
+// SetEmailSender attaches an EmailSender. When set, Emit will also send
+// email notifications to users whose notification preferences are enabled.
+// Call this before Start.
+func (s *Service) SetEmailSender(e *notifications.EmailSender) {
+	s.email = e
 }
 
 // Start launches WorkerCount background delivery workers.
@@ -72,6 +83,8 @@ func (s *Service) Start(ctx context.Context) {
 // Emit publishes an event. It queries enabled webhooks subscribed to the
 // event type from the DB and enqueues them for delivery. Safe to call
 // concurrently. Drops events if the queue is full (warns via logger).
+// When an EmailSender is configured, email notifications are also dispatched
+// asynchronously for users whose preferences request them.
 func (s *Service) Emit(ctx context.Context, event Event) {
 	hooks, err := s.store.ListWebhooksByEvent(ctx, event.Type)
 	if err != nil {
@@ -89,6 +102,79 @@ func (s *Service) Emit(ctx context.Context, event Event) {
 			s.logger.Warn("webhooks: queue full, dropping delivery",
 				slog.String("event", event.Type),
 				slog.String("webhook_id", wh.ID),
+			)
+		}
+	}
+
+	// Dispatch email notifications asynchronously if email is configured.
+	if s.email != nil {
+		go s.dispatchEmails(ctx, event)
+	}
+}
+
+// dispatchEmails sends email notifications for event to all users whose
+// notification preferences opt them in.
+func (s *Service) dispatchEmails(ctx context.Context, event Event) {
+	prefs, err := s.store.ListUsersWithEmailNotifications(ctx)
+	if err != nil {
+		s.logger.Warn("webhooks: list email notification prefs",
+			slog.String("event", event.Type),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
+	for _, p := range prefs {
+		if p.EmailAddress == "" {
+			continue
+		}
+		var (
+			subject string
+			body    string
+			renderErr error
+		)
+
+		jobID, _ := event.Payload["job_id"].(string)
+		sourcePath, _ := event.Payload["source_path"].(string)
+		agentName, _ := event.Payload["agent_name"].(string)
+
+		switch event.Type {
+		case "job.completed":
+			if !p.NotifyOnJobComplete {
+				continue
+			}
+			subject = "Job Completed — EncodeSwarmr"
+			body, renderErr = notifications.RenderJobCompleted(jobID, sourcePath)
+		case "job.failed":
+			if !p.NotifyOnJobFailed {
+				continue
+			}
+			subject = "Job Failed — EncodeSwarmr"
+			detail, _ := event.Payload["error"].(string)
+			body, renderErr = notifications.RenderJobFailed(jobID, sourcePath, detail)
+		case "agent.stale":
+			if !p.NotifyOnAgentStale {
+				continue
+			}
+			subject = "Agent Offline — EncodeSwarmr"
+			body, renderErr = notifications.RenderAgentStale(agentName)
+		default:
+			continue
+		}
+
+		if renderErr != nil {
+			s.logger.Warn("webhooks: render email template",
+				slog.String("event", event.Type),
+				slog.String("error", renderErr.Error()),
+			)
+			continue
+		}
+
+		if err := s.email.Send(p.EmailAddress, subject, body); err != nil {
+			s.logger.Warn("webhooks: send email notification",
+				slog.String("event", event.Type),
+				slog.String("to", p.EmailAddress),
+				slog.String("error", err.Error()),
 			)
 		}
 	}

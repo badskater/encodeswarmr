@@ -9,17 +9,19 @@ import (
 
 // Config is the root controller configuration.
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	GRPC     GRPCConfig     `mapstructure:"grpc"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Logging  LoggingConfig  `mapstructure:"logging"`
-	Agent    AgentConfig    `mapstructure:"agent"`
-	Webhooks WebhooksConfig `mapstructure:"webhooks"`
-	TLS      TLSConfig      `mapstructure:"tls"`
-	Upgrade  UpgradeConfig  `mapstructure:"upgrade"`
-	VNC      VNCConfig      `mapstructure:"vnc"`
-	Analysis AnalysisConfig `mapstructure:"analysis"`
+	Server      ServerConfig      `mapstructure:"server"`
+	Database    DatabaseConfig    `mapstructure:"database"`
+	GRPC        GRPCConfig        `mapstructure:"grpc"`
+	Auth        AuthConfig        `mapstructure:"auth"`
+	Logging     LoggingConfig     `mapstructure:"logging"`
+	Agent       AgentConfig       `mapstructure:"agent"`
+	Webhooks    WebhooksConfig    `mapstructure:"webhooks"`
+	TLS         TLSConfig         `mapstructure:"tls"`
+	Upgrade     UpgradeConfig     `mapstructure:"upgrade"`
+	VNC         VNCConfig         `mapstructure:"vnc"`
+	Analysis    AnalysisConfig    `mapstructure:"analysis"`
+	SMTP        SMTPConfig        `mapstructure:"smtp"`
+	AutoScaling AutoScalingConfig `mapstructure:"auto_scaling"`
 }
 
 type ServerConfig struct {
@@ -135,6 +137,45 @@ type PathMappingConfig struct {
 	Linux string `mapstructure:"linux"`
 }
 
+// SMTPConfig holds outbound email delivery settings.
+// Password is sensitive and should be provided via environment variable or
+// a secrets manager — never hardcoded in config files.
+type SMTPConfig struct {
+	// Host is the SMTP server hostname, e.g. "smtp.example.com".
+	Host string `mapstructure:"host"`
+	// Port is the SMTP server port. Common values: 25, 465 (SMTPS), 587 (STARTTLS).
+	Port int `mapstructure:"port"`
+	// Username is the SMTP authentication username.
+	Username string `mapstructure:"username"`
+	// Password is the SMTP authentication password.
+	// Use the SMTP_PASSWORD environment variable to avoid storing it in the config file.
+	Password string `mapstructure:"password"`
+	// FromAddress is the RFC 5321 envelope sender address, e.g. "encodeswarmr@example.com".
+	FromAddress string `mapstructure:"from_address"`
+	// TLSEnabled controls whether the connection uses implicit TLS (port 465).
+	TLSEnabled bool `mapstructure:"tls_enabled"`
+	// STARTTLS controls whether the connection upgrades to TLS via STARTTLS (port 587).
+	STARTTLS bool `mapstructure:"starttls"`
+}
+
+// AutoScalingConfig holds settings for the agent auto-scaling webhook hooks.
+type AutoScalingConfig struct {
+	// Enabled activates the auto-scaling checks in the engine loop.
+	Enabled bool `mapstructure:"enabled"`
+	// WebhookURL is the URL that receives scale_up / scale_down JSON payloads.
+	WebhookURL string `mapstructure:"webhook_url"`
+	// ScaleUpThreshold is the pending task count that triggers a scale-up call.
+	// When pending tasks exceed this value and no agents are idle, a scale_up
+	// event is fired.
+	ScaleUpThreshold int `mapstructure:"scale_up_threshold"`
+	// ScaleDownThreshold is the number of idle agents above which a scale_down
+	// event is fired (subject to CooldownSeconds).
+	ScaleDownThreshold int `mapstructure:"scale_down_threshold"`
+	// CooldownSeconds is the minimum number of seconds between successive
+	// scale events of the same type to avoid thrashing.
+	CooldownSeconds int `mapstructure:"cooldown_seconds"`
+}
+
 // VNCConfig controls the web-based VNC remote desktop feature.
 type VNCConfig struct {
 	// NoVNCBaseURL is the base URL from which the noVNC JavaScript client
@@ -179,6 +220,13 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("analysis.ffprobe_bin", "")
 	v.SetDefault("analysis.dovi_tool_bin", "")
 	v.SetDefault("analysis.concurrency", 2)
+	v.SetDefault("smtp.port", 587)
+	v.SetDefault("smtp.tls_enabled", false)
+	v.SetDefault("smtp.starttls", true)
+	v.SetDefault("auto_scaling.enabled", false)
+	v.SetDefault("auto_scaling.scale_up_threshold", 10)
+	v.SetDefault("auto_scaling.scale_down_threshold", 2)
+	v.SetDefault("auto_scaling.cooldown_seconds", 300)
 
 	v.AutomaticEnv()
 

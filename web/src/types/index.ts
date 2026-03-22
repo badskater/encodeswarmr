@@ -244,3 +244,26 @@ export interface Plugin {
   enabled: boolean
   author: string | null
 }
+
+// NotificationPrefs holds per-user notification preferences.
+export interface NotificationPrefs {
+  id: string
+  user_id: string
+  notify_on_job_complete: boolean
+  notify_on_job_failed: boolean
+  notify_on_agent_stale: boolean
+  webhook_filter_user_only: boolean
+  email_address: string
+  notify_email: boolean
+  created_at: string
+  updated_at: string
+}
+
+// AutoScalingSettings holds the auto-scaling configuration.
+export interface AutoScalingSettings {
+  enabled: boolean
+  webhook_url: string
+  scale_up_threshold: number
+  scale_down_threshold: number
+  cooldown_seconds: number
+}

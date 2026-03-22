@@ -11,7 +11,9 @@ import (
 
 	"github.com/badskater/encodeswarmr/internal/controller/auth"
 	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/notifications"
 	"github.com/badskater/encodeswarmr/internal/controller/plugins"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
@@ -19,15 +21,17 @@ import (
 
 // Server is the HTTP API server.
 type Server struct {
-	httpSrv  *http.Server
-	store    db.Store
-	auth     *auth.Service
-	cfg      *config.Config
-	logger   *slog.Logger
-	webhooks *webhooks.Service
-	hub      *Hub
-	leader   *ha.Leader
-	plugins  *plugins.Registry
+	httpSrv     *http.Server
+	store       db.Store
+	auth        *auth.Service
+	cfg         *config.Config
+	logger      *slog.Logger
+	webhooks    *webhooks.Service
+	hub         *Hub
+	leader      *ha.Leader
+	plugins     *plugins.Registry
+	email       *notifications.EmailSender  // nil when SMTP is not configured
+	autoScaling *engine.AutoScalingHook     // nil when auto-scaling is disabled
 }
 
 // New creates and configures a new HTTP API server.
@@ -39,14 +43,16 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	s := &Server{
-		store:    store,
-		auth:     authSvc,
-		cfg:      cfg,
-		logger:   logger,
-		webhooks: wh,
-		hub:      NewHub(logger),
-		leader:   ldr,
-		plugins:  pluginReg,
+		store:       store,
+		auth:        authSvc,
+		cfg:         cfg,
+		logger:      logger,
+		webhooks:    wh,
+		hub:         NewHub(logger),
+		leader:      ldr,
+		plugins:     pluginReg,
+		email:       notifications.NewEmailSender(cfg.SMTP, logger),
+		autoScaling: engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
 	}
 
 	mux := http.NewServeMux()
@@ -229,6 +235,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Notification Preferences (per-user) ---
 	mux.Handle("GET /api/v1/me/notifications", viewer(s.handleGetNotificationPrefs))
 	mux.Handle("PUT /api/v1/me/notifications", viewer(s.handleUpdateNotificationPrefs))
+	mux.Handle("POST /api/v1/notifications/test-email", admin(s.handleTestEmail))
+
+	// --- Auto-Scaling Settings ---
+	mux.Handle("GET /api/v1/settings/auto-scaling", admin(s.handleGetAutoScaling))
+	mux.Handle("PUT /api/v1/settings/auto-scaling", admin(s.handleUpdateAutoScaling))
+	mux.Handle("POST /api/v1/settings/auto-scaling/test", admin(s.handleTestAutoScalingWebhook))
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))

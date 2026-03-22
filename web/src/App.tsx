@@ -23,6 +23,8 @@ import EnrollmentTokens from './pages/admin/EnrollmentTokens'
 import Schedules from './pages/admin/Schedules'
 import Plugins from './pages/admin/Plugins'
 import ThemeSettings from './pages/admin/ThemeSettings'
+import NotificationSettings from './pages/admin/NotificationSettings'
+import AutoScaling from './pages/admin/AutoScaling'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
 
@@ -107,6 +109,8 @@ function App() {
             <Route path="/admin/schedules" element={<Schedules />} />
             <Route path="/admin/plugins" element={<Plugins />} />
             <Route path="/admin/theme" element={<ThemeSettings />} />
+            <Route path="/admin/notifications" element={<NotificationSettings />} />
+            <Route path="/admin/auto-scaling" element={<AutoScaling />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

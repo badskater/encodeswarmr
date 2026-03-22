@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/controller/notifications"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
@@ -17,6 +18,8 @@ func defaultNotificationPrefs(userID string) *db.NotificationPrefs {
 		NotifyOnJobComplete: true,
 		NotifyOnJobFailed:   true,
 		NotifyOnAgentStale:  false,
+		NotifyEmail:         false,
+		EmailAddress:        "",
 	}
 }
 
@@ -55,10 +58,12 @@ func (s *Server) handleUpdateNotificationPrefs(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		NotifyOnJobComplete   bool `json:"notify_on_job_complete"`
-		NotifyOnJobFailed     bool `json:"notify_on_job_failed"`
-		NotifyOnAgentStale    bool `json:"notify_on_agent_stale"`
-		WebhookFilterUserOnly bool `json:"webhook_filter_user_only"`
+		NotifyOnJobComplete   bool   `json:"notify_on_job_complete"`
+		NotifyOnJobFailed     bool   `json:"notify_on_job_failed"`
+		NotifyOnAgentStale    bool   `json:"notify_on_agent_stale"`
+		WebhookFilterUserOnly bool   `json:"webhook_filter_user_only"`
+		EmailAddress          string `json:"email_address"`
+		NotifyEmail           bool   `json:"notify_email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
@@ -71,6 +76,8 @@ func (s *Server) handleUpdateNotificationPrefs(w http.ResponseWriter, r *http.Re
 		NotifyOnJobFailed:     req.NotifyOnJobFailed,
 		NotifyOnAgentStale:    req.NotifyOnAgentStale,
 		WebhookFilterUserOnly: req.WebhookFilterUserOnly,
+		EmailAddress:          req.EmailAddress,
+		NotifyEmail:           req.NotifyEmail,
 	}); err != nil {
 		s.logger.Error("upsert notification prefs", "err", err, "user_id", claims.UserID)
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
@@ -85,4 +92,41 @@ func (s *Server) handleUpdateNotificationPrefs(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, r, http.StatusOK, prefs)
+}
+
+// handleTestEmail sends a test email to verify SMTP configuration.
+// POST /api/v1/notifications/test-email  (admin only)
+func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		To string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if req.To == "" {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "to address is required")
+		return
+	}
+
+	if s.email == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "SMTP Not Configured",
+			"no SMTP host configured; set smtp.host in the controller config")
+		return
+	}
+
+	body, err := notifications.RenderJobCompleted("test-job-id", "/path/to/test-source.mkv")
+	if err != nil {
+		s.logger.Error("test-email: render template", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	if err := s.email.Send(req.To, "Test Email — EncodeSwarmr", body); err != nil {
+		s.logger.Warn("test-email: send failed", "to", req.To, "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "Email Delivery Failed", err.Error())
+		return
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "to": req.To})
 }
