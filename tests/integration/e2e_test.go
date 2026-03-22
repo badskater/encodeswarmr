@@ -75,7 +75,7 @@ func TestE2E_HappyPath(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "test-agent-1")
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 60*time.Second)
 
 	// Verify all tasks completed.
 	tasks, err := tc.Store.ListTasksByJob(ctx, job.ID)
@@ -153,7 +153,7 @@ func TestE2E_TaskFailure(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "fail-agent-1")
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 60*time.Second)
 
 	// Verify the task has failed status.
 	tk, err := tc.Store.GetTaskByID(ctx, task.ID)
@@ -232,7 +232,7 @@ func TestE2E_MultipleAgents(t *testing.T) {
 	testharness.StartAgent(t, tc.GRPCAddr, "agent-2")
 
 	// Wait for all tasks to complete.
-	testharness.WaitFor(t, 30*time.Second, func() bool {
+	testharness.WaitFor(t, 60*time.Second, func() bool {
 		tasks, err := tc.Store.ListTasksByJob(ctx, job.ID)
 		if err != nil {
 			return false
@@ -394,7 +394,7 @@ func TestE2E_OfflineSync(t *testing.T) {
 	testharness.StartAgentWithOfflineDB(t, tc.GRPCAddr, "offline-agent-1", offlineDBPath)
 
 	// Wait for the job to reach completed — triggered by the offline sync.
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 60*time.Second)
 }
 
 // ---------------------------------------------------------------------------

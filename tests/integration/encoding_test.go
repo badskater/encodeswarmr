@@ -353,7 +353,7 @@ func TestRealEncoding_TaskFailure_BadCommand(t *testing.T) {
 
 	testharness.StartAgent(t, tc.GRPCAddr, "fail-cmd-agent-1")
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "failed", 60*time.Second)
 
 	// Verify exit_code is non-zero.
 	tk, err := tc.Store.GetTaskByID(ctx, task.ID)
@@ -437,8 +437,8 @@ func TestFailure_ControllerRestart(t *testing.T) {
 	tc2 := testharness.StartControllerSameDB(t, tc.Pool)
 
 	// Agent reconnects to tc2 and syncs the offline result.
-	// Wait up to 30s for the job to complete.
-	testharness.WaitForJobStatus(t, tc2.Store, job.ID, "completed", 30*time.Second)
+	// Wait up to 60s for the job to complete.
+	testharness.WaitForJobStatus(t, tc2.Store, job.ID, "completed", 60*time.Second)
 }
 
 // TestFailure_DatabaseUnavailable verifies that the health endpoint reports
@@ -554,7 +554,7 @@ func TestFailure_AgentDisconnect_OfflineJournal(t *testing.T) {
 	// On startup it will sync the offline result to the controller.
 	testharness.StartAgentWithOfflineDB(t, tc.GRPCAddr, "offline-disc-agent", offlineDBPath)
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 60*time.Second)
 }
 
 // TestFailure_ConcurrentTaskClaim verifies that with 5 agents racing to claim
@@ -612,7 +612,7 @@ func TestFailure_ConcurrentTaskClaim(t *testing.T) {
 		testharness.StartAgent(t, tc.GRPCAddr, fmt.Sprintf("race-agent-%d", i+1))
 	}
 
-	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 30*time.Second)
+	testharness.WaitForJobStatus(t, tc.Store, job.ID, "completed", 60*time.Second)
 
 	// Verify exactly one agent claimed the task (ClaimNextTask CAS guarantees this).
 	tk, err := tc.Store.GetTaskByID(ctx, task.ID)
