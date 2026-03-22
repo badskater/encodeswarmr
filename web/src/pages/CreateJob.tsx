@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
-import type { Source, Template } from '../types'
+import type { Source, Template, Job } from '../types'
 import type { Flow } from '../types/flow'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
+
+// Supported audio codecs displayed in the audio job config panel.
+const AUDIO_CODECS = [
+  { value: 'flac',       label: 'FLAC (lossless)' },
+  { value: 'libopus',    label: 'Opus' },
+  { value: 'libfdk_aac', label: 'AAC-LC (libfdk_aac)' },
+  { value: 'aac',        label: 'AAC-LC (native)' },
+  { value: 'ac3',        label: 'Dolby Digital (AC3)' },
+  { value: 'eac3',       label: 'Dolby Digital Plus (E-AC3)' },
+  { value: 'dca',        label: 'DTS' },
+  { value: 'truehd',     label: 'Dolby TrueHD' },
+  { value: 'pcm_s16le',  label: 'PCM 16-bit' },
+  { value: 'pcm_s24le',  label: 'PCM 24-bit' },
+  { value: 'libmp3lame', label: 'MP3' },
+  { value: 'libvorbis',  label: 'Vorbis' },
+]
 
 export default function CreateJob() {
   const navigate = useNavigate()
   const [sources, setSources] = useState<Source[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
+  const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -36,12 +53,23 @@ export default function CreateJob() {
   const [chunkSizeFrames, setChunkSizeFrames] = useState(1000)
   const [overlapFrames, setOverlapFrames] = useState(0)
 
+  // Job chaining
+  const [dependsOnJobId, setDependsOnJobId] = useState('')
+
+  // Audio config (for audio job type)
+  const [audioCodec, setAudioCodec] = useState('flac')
+  const [audioBitrate, setAudioBitrate] = useState('')
+  const [audioChannels, setAudioChannels] = useState(0)
+  const [audioSampleRate, setAudioSampleRate] = useState(0)
+
   useEffect(() => {
-    Promise.all([api.listSources(), api.listTemplates(), api.listFlows()])
-      .then(([s, t, fl]) => {
+    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listJobs()])
+      .then(([s, t, fl, j]) => {
         setSources(s)
         setTemplates(t)
         setFlows(fl)
+        // Only show active jobs for "chain after" selection
+        setJobs(j.filter((j: Job) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'cancelled'))
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
@@ -131,9 +159,15 @@ export default function CreateJob() {
           chunking_config: jobType === 'encode' && enableChunking
             ? { enable_chunking: true, chunk_size_frames: chunkSizeFrames, overlap_frames: overlapFrames }
             : undefined,
-          // @ts-expect-error flow_id is a future field not yet in the Go type
-          flow_id: (useFlow && selectedFlowId) ? selectedFlowId : undefined,
         },
+        flow_id: (useFlow && selectedFlowId) ? selectedFlowId : undefined,
+        audio_config: jobType === 'audio' ? {
+          codec: audioCodec,
+          bitrate: audioBitrate || undefined,
+          channels: audioChannels || undefined,
+          sample_rate: audioSampleRate || undefined,
+        } : undefined,
+        depends_on: dependsOnJobId || undefined,
       })
 
       navigate(`/jobs/${job.id}`)
@@ -260,6 +294,8 @@ export default function CreateJob() {
               <option value="encode">Encode</option>
               <option value="analysis">Analysis</option>
               <option value="audio">Audio</option>
+              <option value="merge">Merge A/V</option>
+              <option value="hdr_detect">HDR Detect</option>
             </select>
           </div>
           <div>
@@ -268,6 +304,69 @@ export default function CreateJob() {
               className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" />
           </div>
         </div>
+
+        {/* Chain after another job */}
+        {jobs.length > 0 && (
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">Chain After Job (optional)</label>
+            <select value={dependsOnJobId} onChange={e => setDependsOnJobId(e.target.value)}
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
+              <option value="">— No dependency —</option>
+              {jobs.map(j => (
+                <option key={j.id} value={j.id}>
+                  {j.job_type} · {j.status} · {j.id.slice(0, 8)}…
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-th-text-muted mt-0.5">
+              This job will stay in <em>waiting</em> status until the selected job completes.
+            </p>
+          </div>
+        )}
+
+        {/* Audio codec config */}
+        {jobType === 'audio' && (
+          <div className="rounded border border-th-border-subtle bg-th-surface-muted px-3 py-3 space-y-3">
+            <p className="text-sm font-medium text-th-text">Audio Configuration</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-th-text-muted mb-1">Codec *</label>
+                <select value={audioCodec} onChange={e => setAudioCodec(e.target.value)}
+                  className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
+                  {AUDIO_CODECS.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-th-text-muted mb-1">Bitrate (lossy)</label>
+                <input value={audioBitrate} onChange={e => setAudioBitrate(e.target.value)}
+                  placeholder="320k"
+                  className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" />
+              </div>
+              <div>
+                <label className="block text-xs text-th-text-muted mb-1">Channels</label>
+                <select value={audioChannels} onChange={e => setAudioChannels(parseInt(e.target.value))}
+                  className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
+                  <option value={0}>Default</option>
+                  <option value={2}>2 (stereo)</option>
+                  <option value={6}>6 (5.1)</option>
+                  <option value={8}>8 (7.1)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-th-text-muted mb-1">Sample Rate (Hz)</label>
+                <select value={audioSampleRate} onChange={e => setAudioSampleRate(parseInt(e.target.value))}
+                  className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text">
+                  <option value={0}>Default</option>
+                  <option value={44100}>44100</option>
+                  <option value={48000}>48000</option>
+                  <option value={96000}>96000</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-th-text-muted mb-1">Target Tags (comma-separated)</label>

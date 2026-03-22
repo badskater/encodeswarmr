@@ -137,6 +137,12 @@ export default function Jobs() {
             </button>
           )}
           <Link
+            to="/jobs/create-chain"
+            className="border border-th-border text-th-text px-3 py-1.5 rounded text-sm font-medium hover:bg-th-surface-muted whitespace-nowrap"
+          >
+            New Chain
+          </Link>
+          <Link
             to="/jobs/create"
             className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 whitespace-nowrap"
           >

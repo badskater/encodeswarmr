@@ -48,6 +48,8 @@ func (e *Engine) expandJob(ctx context.Context, job *db.Job) error {
 		return e.expandSingleTaskJob(ctx, job)
 	case "hdr_detect":
 		return e.expandHDRDetectJob(ctx, job)
+	case "merge":
+		return e.expandMergeJob(ctx, job)
 	default:
 		e.logger.Error("engine: unknown job type, skipping", "job_id", job.ID, "job_type", job.JobType)
 		return nil
@@ -172,9 +174,15 @@ func (e *Engine) expandControllerAnalysisJob(ctx context.Context, job *db.Job) e
 
 		if err := e.store.UpdateJobStatus(ctx, job.ID, "completed"); err != nil {
 			e.logger.Error("engine: set job completed", "job_id", job.ID, "error", err)
-		} else {
-			e.logger.Info("engine: controller analysis job completed",
-				"job_id", job.ID, "job_type", job.JobType)
+			return
+		}
+		e.logger.Info("engine: controller analysis job completed",
+			"job_id", job.ID, "job_type", job.JobType)
+
+		// Unblock any dependent jobs that were waiting for this one.
+		if unblockErr := e.store.UnblockDependentJobs(ctx, job.ID); unblockErr != nil {
+			e.logger.Warn("engine: unblock dependent jobs failed",
+				"job_id", job.ID, "error", unblockErr)
 		}
 	}()
 
@@ -291,6 +299,67 @@ func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
 	}
 	if err := e.store.UpdateJobStatus(ctx, job.ID, "queued"); err != nil {
 		return fmt.Errorf("engine: update job status for job %s: %w", job.ID, err)
+	}
+	return nil
+}
+
+// expandMergeJob creates a single merge task that combines a video file from
+// a completed encode job with an audio file from a completed audio job.
+// The video and audio output paths are passed via encode_config.extra_vars
+// (keys: "video_path" and "audio_path"). The merged output goes to
+// encode_config.output_root + "/" + job.ID + "/merged.mkv".
+func (e *Engine) expandMergeJob(ctx context.Context, job *db.Job) error {
+	source, err := e.store.GetSourceByID(ctx, job.SourceID)
+	if err != nil {
+		return fmt.Errorf("engine: merge job get source %s: %w", job.SourceID, err)
+	}
+
+	ext := job.EncodeConfig.OutputExtension
+	if ext == "" {
+		ext = "mkv"
+	}
+	outputPath := job.EncodeConfig.OutputRoot + `\` + job.ID + fmt.Sprintf(`\merged.%s`, ext)
+
+	vars := make(map[string]string)
+	for k, v := range job.EncodeConfig.ExtraVars {
+		vars[k] = v
+	}
+	vars["merge_output"] = outputPath
+
+	failJob := func(cause error) error {
+		if delErr := e.store.DeleteTasksByJobID(ctx, job.ID); delErr != nil {
+			e.logger.Error("engine: cleanup orphan tasks (merge)",
+				"job_id", job.ID, "error", delErr)
+		}
+		_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
+		return cause
+	}
+
+	task, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+		JobID:      job.ID,
+		ChunkIndex: 0,
+		SourcePath: source.UNCPath,
+		OutputPath: outputPath,
+		Variables:  vars,
+	})
+	if err != nil {
+		return failJob(fmt.Errorf("engine: create merge task: %w", err))
+	}
+
+	scriptDir, err := e.gen.RenderSingle(ctx, job, task, source)
+	if err != nil {
+		return failJob(fmt.Errorf("engine: render merge task scripts: %w", err))
+	}
+
+	if err := e.store.SetTaskScriptDir(ctx, task.ID, scriptDir); err != nil {
+		return failJob(fmt.Errorf("engine: set script dir for merge task: %w", err))
+	}
+
+	if err := e.store.UpdateJobTaskCounts(ctx, job.ID); err != nil {
+		return fmt.Errorf("engine: update task counts for merge job %s: %w", job.ID, err)
+	}
+	if err := e.store.UpdateJobStatus(ctx, job.ID, "queued"); err != nil {
+		return fmt.Errorf("engine: update job status for merge job %s: %w", job.ID, err)
 	}
 	return nil
 }

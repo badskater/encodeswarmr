@@ -1,15 +1,25 @@
+export interface AudioConfig {
+  codec: string
+  bitrate?: string
+  channels?: number
+  sample_rate?: number
+}
+
 export interface Job {
   id: string
   source_id: string
   source_path: string
   job_type: string
-  status: 'queued' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: 'queued' | 'waiting' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled'
   priority: number
   tasks_total: number
   tasks_completed: number
   tasks_failed: number
   tasks_pending: number
   tasks_running: number
+  depends_on?: string | null
+  chain_group?: string | null
+  audio_config?: AudioConfig | null
   created_at: string
   updated_at: string
 }

@@ -74,6 +74,8 @@ func (Stub) ListJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, 
 func (Stub) UpdateJobStatus(_ context.Context, _, _ string) error                         { return nil }
 func (Stub) UpdateJobTaskCounts(_ context.Context, _ string) error                        { return nil }
 func (Stub) GetJobsNeedingExpansion(_ context.Context) ([]*db.Job, error)                 { return nil, nil }
+func (Stub) UnblockDependentJobs(_ context.Context, _ string) error                       { return nil }
+func (Stub) ListJobsByChainGroup(_ context.Context, _ string) ([]*db.Job, error)          { return nil, nil }
 
 // --- Tasks ---
 func (Stub) CreateTask(_ context.Context, _ db.CreateTaskParams) (*db.Task, error)       { return nil, nil }

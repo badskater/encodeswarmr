@@ -61,6 +61,12 @@ type Store interface {
 	UpdateJobStatus(ctx context.Context, id, status string) error
 	UpdateJobTaskCounts(ctx context.Context, id string) error
 	GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error)
+	// UnblockDependentJobs transitions jobs from "waiting" to "queued" whose
+	// depends_on predecessor has just reached "completed".
+	UnblockDependentJobs(ctx context.Context, completedJobID string) error
+	// ListJobsByChainGroup returns all jobs belonging to the given chain group,
+	// ordered by creation time.
+	ListJobsByChainGroup(ctx context.Context, chainGroup string) ([]*Job, error)
 
 	// --- Tasks ---
 	CreateTask(ctx context.Context, p CreateTaskParams) (*Task, error)

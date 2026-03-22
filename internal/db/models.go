@@ -105,6 +105,19 @@ type Source struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
+// AudioConfig holds the codec parameters for an audio encoding job.
+type AudioConfig struct {
+	// Codec is the ffmpeg codec name: flac, libopus, libfdk_aac, aac (aac-lc),
+	// ac3, eac3, dca (dts), truehd, pcm_s16le, pcm_s24le, libmp3lame, libvorbis.
+	Codec      string `json:"codec"`
+	// Bitrate for lossy codecs, e.g. "320k", "640k". Ignored for lossless.
+	Bitrate    string `json:"bitrate,omitempty"`
+	// Channels: 2 (stereo), 6 (5.1), 8 (7.1).
+	Channels   int    `json:"channels,omitempty"`
+	// SampleRate in Hz: 44100, 48000, 96000.
+	SampleRate int    `json:"sample_rate,omitempty"`
+}
+
 // Job is a row from the jobs table, enriched with source path via JOIN.
 type Job struct {
 	ID             string       `json:"id"`
@@ -120,9 +133,16 @@ type Job struct {
 	TasksCompleted int          `json:"tasks_completed"`
 	TasksFailed    int          `json:"tasks_failed"`
 	EncodeConfig   EncodeConfig `json:"encode_config"`
+	// AudioConfig holds codec parameters for audio jobs (job_type="audio").
+	AudioConfig *AudioConfig `json:"audio_config,omitempty"`
 	// MaxRetries is the maximum number of automatic retries for failed tasks
 	// within this job. 0 means no automatic retry.
 	MaxRetries  int        `json:"max_retries"`
+	// DependsOn is the UUID of a predecessor job.  This job stays in "waiting"
+	// status until the predecessor reaches "completed".
+	DependsOn   *string    `json:"depends_on,omitempty"`
+	// ChainGroup groups all jobs that belong to the same A/V pipeline chain.
+	ChainGroup  *string    `json:"chain_group,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	FailedAt    *time.Time `json:"failed_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -347,7 +367,10 @@ type CreateJobParams struct {
 	Priority     int
 	TargetTags   []string
 	EncodeConfig EncodeConfig
+	AudioConfig  *AudioConfig
 	MaxRetries   int
+	DependsOn    *string
+	ChainGroup   *string
 }
 
 type ListJobsFilter struct {

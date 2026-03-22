@@ -117,7 +117,8 @@ func jobCols() []string {
 	return []string{
 		"id", "source_id", "status", "job_type", "priority", "target_tags",
 		"tasks_total", "tasks_pending", "tasks_running", "tasks_completed", "tasks_failed",
-		"encode_config", "max_retries", "completed_at", "failed_at", "created_at", "updated_at",
+		"encode_config", "audio_config", "max_retries", "depends_on", "chain_group",
+		"completed_at", "failed_at", "created_at", "updated_at",
 		"source_path",
 	}
 }
@@ -127,7 +128,8 @@ func jobRow(id, sourceID string) *pgxmock.Rows {
 	return pgxmock.NewRows(jobCols()).
 		AddRow(id, sourceID, "queued", "encode", 0, []string{},
 			0, 0, 0, 0, 0,
-			cfg, 0, nil, nil, now, now,
+			cfg, nil, 0, nil, nil,
+			nil, nil, now, now,
 			`\\nas\share\video.mkv`)
 }
 
@@ -824,7 +826,7 @@ func TestDeleteSource_NotFound(t *testing.T) {
 func TestCreateJob_Success(t *testing.T) {
 	s, mock := newMock(t)
 	mock.ExpectQuery(`WITH ins AS`).
-		WithArgs(anyArg, anyArg, anyArg, anyArg, anyArg, anyArg).
+		WithArgs(anyArg, anyArg, anyArg, anyArg, anyArg, anyArg, anyArg, anyArg, anyArg, anyArg).
 		WillReturnRows(jobRow("jid1", "src1"))
 	job, err := s.CreateJob(context.Background(), CreateJobParams{
 		SourceID: "src1", JobType: "encode", Priority: 0, TargetTags: []string{},
