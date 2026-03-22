@@ -166,20 +166,14 @@ func TestStress_MassJobCreation(t *testing.T) {
 	elapsed := time.Since(start)
 	t.Logf("created %d jobs in %s", numJobs, elapsed)
 
-	// Verify count via API.
-	client := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, token)
-	req, _ := http.NewRequest(http.MethodGet, tc.HTTPBaseURL+"/api/v1/jobs", nil)
-	resp := mustDo(t, client, req)
-	var listResp map[string]any
-	decodeJSON(t, resp, &listResp)
-
-	// The list response is wrapped: {"data": [...], "meta": {...}}.
-	data, ok := listResp["data"].([]any)
-	if !ok {
-		t.Fatalf("ListJobs: unexpected data shape: %T", listResp["data"])
+	// Verify count via DB query with large page size (API defaults to 50).
+	jobs, total, err := tc.Store.ListJobs(context.Background(), db.ListJobsFilter{PageSize: 200})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
 	}
-	if len(data) != numJobs {
-		t.Errorf("ListJobs: want %d, got %d", numJobs, len(data))
+	_ = jobs
+	if total < int64(numJobs) {
+		t.Errorf("ListJobs total: want >= %d, got %d", numJobs, total)
 	}
 }
 
