@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Source, Template, Job } from '../types'
-import type { Source, Template, AudioPreset } from '../types'
 import type { Flow } from '../types/flow'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
@@ -36,8 +35,6 @@ export default function CreateJob() {
   const [flows, setFlows] = useState<Flow[]>([])
   const [useFlow, setUseFlow] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState('')
-  const [audioPresets, setAudioPresets] = useState<AudioPreset[]>([])
-  const [audioPresetName, setAudioPresetName] = useState('')
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
@@ -73,12 +70,6 @@ export default function CreateJob() {
         setFlows(fl)
         // Only show active jobs for "chain after" selection
         setJobs(j.filter((j: Job) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'cancelled'))
-    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listAudioPresets()])
-      .then(([s, t, fl, ap]) => {
-        setSources(s)
-        setTemplates(t)
-        setFlows(fl)
-        setAudioPresets(ap)
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
@@ -374,27 +365,6 @@ export default function CreateJob() {
                 </select>
               </div>
             </div>
-        {/* Audio codec selector — shown for audio job type */}
-        {jobType === 'audio' && audioPresets.length > 0 && (
-          <div>
-            <label className="block text-xs text-th-text-muted mb-1">Audio Codec Preset</label>
-            <select
-              value={audioPresetName}
-              onChange={e => setAudioPresetName(e.target.value)}
-              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
-            >
-              <option value="">Select audio preset…</option>
-              {audioPresets.map(ap => (
-                <option key={ap.name} value={ap.name}>
-                  {ap.name}{ap.bitrate ? ` (${ap.bitrate})` : ''}
-                </option>
-              ))}
-            </select>
-            {audioPresets.find(ap => ap.name === audioPresetName)?.description && (
-              <p className="text-xs text-th-text-muted mt-0.5">
-                {audioPresets.find(ap => ap.name === audioPresetName)!.description}
-              </p>
-            )}
           </div>
         )}
 
@@ -550,7 +520,6 @@ export default function CreateJob() {
             </div>
           </>
         )}
-        </div>
 
         <button type="submit" disabled={saving}
           className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
