@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as api from '../api/client'
-import type { Job, Task } from '../types'
+import type { Job, Task, ComparisonResponse } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import ProgressBar from '../components/ProgressBar'
+import ComparisonCard from '../components/ComparisonCard'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
 function fmtBytes(n: number) {
@@ -31,6 +32,7 @@ export default function JobDetail() {
   const navigate = useNavigate()
   const [job, setJob] = useState<Job | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [comparison, setComparison] = useState<ComparisonResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
@@ -42,6 +44,15 @@ export default function JobDetail() {
       setJob(j)
       setTasks(t)
       setError('')
+      // Fetch comparison data for completed encode jobs.
+      if (j.status === 'completed' && j.job_type === 'encode') {
+        try {
+          const cmp = await api.getJobComparison(id)
+          setComparison(cmp)
+        } catch {
+          // Non-fatal — comparison data may not be available yet.
+        }
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -116,6 +127,11 @@ export default function JobDetail() {
             </div>
           ))}
         </div>
+        {job.eta_human && (
+          <p className="mt-3 text-sm text-th-text-muted">
+            ETA: <span className="font-medium text-th-text">~{job.eta_human} remaining</span>
+          </p>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -151,6 +167,8 @@ export default function JobDetail() {
           <p className="text-th-text-subtle">Adjust filenames to match your output extension and paths.</p>
         </div>
       )}
+
+      {comparison && <ComparisonCard data={comparison} />}
 
       <div className="bg-th-surface rounded-lg shadow overflow-hidden">
         <div className="px-4 py-3 border-b border-th-border">

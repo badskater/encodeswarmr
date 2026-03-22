@@ -333,6 +333,19 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		},
 	})
 
+	// Trigger async media server library refresh for completed encode jobs.
+	if newStatus == "completed" && s.mediaManager != nil && job.JobType == "encode" {
+		var autoRefreshNames []string
+		for _, c := range s.mediaServerCfg {
+			if c.AutoRefresh {
+				autoRefreshNames = append(autoRefreshNames, c.Name)
+			}
+		}
+		if len(autoRefreshNames) > 0 {
+			s.mediaManager.TriggerAutoRefresh(context.Background(), autoRefreshNames)
+		}
+	}
+
 	return nil
 }
 

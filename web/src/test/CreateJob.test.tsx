@@ -36,6 +36,7 @@ vi.mock('../api/client', () => ({
   listFlows: vi.fn().mockResolvedValue([]),
   listJobs: vi.fn().mockResolvedValue([]),
   listAnalysisResults: vi.fn().mockResolvedValue([]),
+  listAudioPresets: vi.fn().mockResolvedValue([]),
   createJob: vi.fn().mockResolvedValue({ id: 'new-job-id' }),
 }))
 

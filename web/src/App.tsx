@@ -26,6 +26,7 @@ import Plugins from './pages/admin/Plugins'
 import ThemeSettings from './pages/admin/ThemeSettings'
 import NotificationSettings from './pages/admin/NotificationSettings'
 import AutoScaling from './pages/admin/AutoScaling'
+import MediaServers from './pages/admin/MediaServers'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
 
@@ -113,6 +114,7 @@ function App() {
             <Route path="/admin/theme" element={<ThemeSettings />} />
             <Route path="/admin/notifications" element={<NotificationSettings />} />
             <Route path="/admin/auto-scaling" element={<AutoScaling />} />
+            <Route path="/admin/media-servers" element={<MediaServers />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

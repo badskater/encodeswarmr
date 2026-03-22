@@ -14,6 +14,7 @@ import (
 	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
 	"github.com/badskater/encodeswarmr/internal/controller/notifications"
+	"github.com/badskater/encodeswarmr/internal/controller/mediaserver"
 	"github.com/badskater/encodeswarmr/internal/controller/plugins"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
@@ -21,17 +22,18 @@ import (
 
 // Server is the HTTP API server.
 type Server struct {
-	httpSrv     *http.Server
-	store       db.Store
-	auth        *auth.Service
-	cfg         *config.Config
-	logger      *slog.Logger
-	webhooks    *webhooks.Service
-	hub         *Hub
-	leader      *ha.Leader
-	plugins     *plugins.Registry
-	email       *notifications.EmailSender  // nil when SMTP is not configured
-	autoScaling *engine.AutoScalingHook     // nil when auto-scaling is disabled
+	httpSrv      *http.Server
+	store        db.Store
+	auth         *auth.Service
+	cfg          *config.Config
+	logger       *slog.Logger
+	webhooks     *webhooks.Service
+	hub          *Hub
+	leader       *ha.Leader
+	plugins      *plugins.Registry
+	email        *notifications.EmailSender // nil when SMTP is not configured
+	autoScaling  *engine.AutoScalingHook    // nil when auto-scaling is disabled
+	mediaManager *mediaserver.Manager
 }
 
 // New creates and configures a new HTTP API server.
@@ -43,16 +45,17 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	s := &Server{
-		store:       store,
-		auth:        authSvc,
-		cfg:         cfg,
-		logger:      logger,
-		webhooks:    wh,
-		hub:         NewHub(logger),
-		leader:      ldr,
-		plugins:     pluginReg,
-		email:       notifications.NewEmailSender(cfg.SMTP, logger),
-		autoScaling: engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
+		store:        store,
+		auth:         authSvc,
+		cfg:          cfg,
+		logger:       logger,
+		webhooks:     wh,
+		hub:          NewHub(logger),
+		leader:       ldr,
+		plugins:      pluginReg,
+		email:        notifications.NewEmailSender(cfg.SMTP, logger),
+		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
+		mediaManager: mediaserver.New(cfg.MediaServers, logger),
 	}
 
 	mux := http.NewServeMux()
@@ -150,6 +153,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/jobs/{id}/cancel", operator(s.handleCancelJob))
 	mux.Handle("POST /api/v1/jobs/{id}/retry", operator(s.handleRetryJob))
 	mux.Handle("GET /api/v1/jobs/{id}/logs", viewer(s.handleListJobLogs))
+	mux.Handle("GET /api/v1/jobs/{id}/comparison", viewer(s.handleGetJobComparison))
 
 	// --- Job Chains ---
 	mux.Handle("POST /api/v1/job-chains", operator(s.handleCreateJobChain))
@@ -260,6 +264,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Encoding Presets ---
 	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))
 	mux.Handle("GET /api/v1/presets/{name}", viewer(s.handleGetPreset))
+	mux.Handle("GET /api/v1/presets/audio", viewer(s.handleListAudioPresets))
+
+	// --- Media Servers ---
+	mux.Handle("GET /api/v1/media-servers", admin(s.handleListMediaServers))
+	mux.Handle("POST /api/v1/media-servers/{name}/refresh", admin(s.handleRefreshMediaServer))
 
 	// --- Cost Estimation ---
 	mux.Handle("POST /api/v1/estimate", viewer(s.handleEstimate))

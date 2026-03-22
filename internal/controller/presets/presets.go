@@ -40,3 +40,27 @@ var DefaultFPSByCodec = map[string]float64{
 	"svt-av1": 10.0,
 	"av1":     8.0,
 }
+
+// AudioPreset describes an audio encoding configuration for use in jobs
+// that include audio track processing.
+type AudioPreset struct {
+	// Name is the unique human-readable identifier.
+	Name string `json:"name"`
+	// Description explains when to use this preset.
+	Description string `json:"description"`
+	// Category groups related presets: "lossless", "surround", "stereo", "legacy".
+	Category string `json:"category"`
+	// Codec is the ffmpeg codec name, e.g. "libopus", "aac", "ac3".
+	Codec string `json:"codec"`
+	// Bitrate is the target bitrate string as passed to ffmpeg, e.g. "128k".
+	// Empty for lossless presets.
+	Bitrate string `json:"bitrate,omitempty"`
+	// Channels is the optional channel count override (0 = pass-through).
+	Channels int `json:"channels,omitempty"`
+	// SampleRate is the optional sample rate in Hz (0 = pass-through).
+	SampleRate int `json:"sample_rate,omitempty"`
+	// Params is the full set of ffmpeg audio codec flags.
+	Params string `json:"params"`
+	// Tags are optional labels for filtering in the UI.
+	Tags []string `json:"tags"`
+}
