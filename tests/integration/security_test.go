@@ -375,10 +375,11 @@ func TestSecurity_XSSInJobName(t *testing.T) {
 
 	createReq, _ := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/jobs",
 		jsonBody(t, map[string]any{
-			"source_id": src.ID,
-			"job_type":  "encode",
-			"priority":  5,
-			"name":      xssPayload,
+			"source_id":   src.ID,
+			"job_type":    "analysis",
+			"priority":    5,
+			"target_tags": []string{},
+			"name":        xssPayload,
 		}),
 	)
 	createReq.Header.Set("Content-Type", "application/json")

@@ -136,9 +136,10 @@ func TestStress_MassJobCreation(t *testing.T) {
 			client := testharness.AuthenticatedClient(t, tc.HTTPBaseURL, token)
 			req, err := http.NewRequest(http.MethodPost, tc.HTTPBaseURL+"/api/v1/jobs",
 				jsonBody(t, map[string]any{
-					"source_id": src.ID,
-					"job_type":  "encode",
-					"priority":  5,
+					"source_id":    src.ID,
+					"job_type":     "analysis",
+					"priority":     5,
+					"target_tags":  []string{},
 				}),
 			)
 			if err != nil {
