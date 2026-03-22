@@ -20,8 +20,52 @@ export interface Job {
   depends_on?: string | null
   chain_group?: string | null
   audio_config?: AudioConfig | null
+  // eta_seconds and eta_human are present when the job is running
+  eta_seconds?: number | null
+  eta_human?: string | null
   created_at: string
   updated_at: string
+}
+
+// AudioPreset describes a built-in audio encoding configuration.
+export interface AudioPreset {
+  name: string
+  description: string
+  category: string
+  codec: string
+  bitrate?: string
+  channels?: number
+  sample_rate?: number
+  params: string
+  tags: string[]
+}
+
+// MediaServer is a configured media server integration.
+export interface MediaServer {
+  name: string
+  type: 'plex' | 'jellyfin' | 'emby'
+  auto_refresh: boolean
+}
+
+// ComparisonResponse holds source vs output metrics for a completed job.
+export interface ComparisonResponse {
+  source: {
+    duration_sec: number
+    file_size_mb: number
+    codec?: string
+    resolution?: string
+  }
+  output: {
+    duration_sec: number
+    file_size_mb: number
+    codec?: string
+    resolution?: string
+  }
+  compression_ratio: number
+  size_reduction_pct: number
+  vmaf_score?: number | null
+  psnr?: number | null
+  ssim?: number | null
 }
 
 export interface Task {

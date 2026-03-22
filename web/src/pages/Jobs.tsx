@@ -241,7 +241,7 @@ export default function Jobs() {
                       className="rounded border-th-input-border"
                     />
                   </th>
-                  {['ID', 'Source', 'Status', 'Progress', 'Priority', 'Created'].map(h => (
+                  {['ID', 'Source', 'Status', 'Progress', 'ETA', 'Priority', 'Created'].map(h => (
                     <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
                   ))}
                 </tr>
@@ -264,12 +264,15 @@ export default function Jobs() {
                       <ProgressBar value={j.tasks_completed} max={j.tasks_total} />
                       <span className="text-xs text-th-text-subtle">{j.tasks_completed}/{j.tasks_total}</span>
                     </td>
+                    <td className="px-4 py-2 text-th-text-muted text-xs whitespace-nowrap cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>
+                      {j.eta_human ? `~${j.eta_human}` : '—'}
+                    </td>
                     <td className="px-4 py-2 text-th-text-secondary cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{j.priority}</td>
                     <td className="px-4 py-2 text-th-text-muted whitespace-nowrap cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{fmtDate(j.created_at)}</td>
                   </tr>
                 ))}
                 {jobs.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-4 text-center text-th-text-subtle">No jobs found</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-4 text-center text-th-text-subtle">No jobs found</td></tr>
                 )}
               </tbody>
             </table>

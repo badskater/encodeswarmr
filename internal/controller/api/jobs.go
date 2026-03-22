@@ -13,6 +13,13 @@ import (
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
+// jobWithETA wraps a Job and includes a computed ETA when the job is running.
+type jobWithETA struct {
+	*db.Job
+	ETASeconds *int64  `json:"eta_seconds,omitempty"`
+	ETAHuman   *string `json:"eta_human,omitempty"`
+}
+
 // handleListJobs returns a paginated list of jobs, optionally filtered by status.
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
@@ -291,6 +298,7 @@ func (s *Server) handleGetJobChain(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetJob returns a single job with its tasks.
+// When the job is running, eta_seconds and eta_human are included in the response.
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -316,10 +324,71 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	enriched := &jobWithETA{Job: job}
+	// Compute ETA for running jobs using rolling avg FPS from completed tasks.
+	if job.Status == "running" || job.Status == "assigned" {
+		etaSec := computeJobETA(tasks)
+		if etaSec > 0 {
+			enriched.ETASeconds = &etaSec
+			h := formatDuration(etaSec)
+			enriched.ETAHuman = &h
+		}
+	}
+
 	writeJSON(w, r, http.StatusOK, map[string]any{
-		"job":   job,
+		"job":   enriched,
 		"tasks": tasks,
 	})
+}
+
+// computeJobETA estimates the remaining seconds for a job based on the rolling
+// average FPS of currently running tasks and the remaining frame counts.
+// Returns 0 when insufficient data is available.
+func computeJobETA(tasks []*db.Task) int64 {
+	// Compute rolling average FPS from completed and running tasks.
+	var fpsSum float64
+	var fpsCount int
+	var remainingFrames int64
+
+	for _, t := range tasks {
+		if t.AvgFPS != nil && *t.AvgFPS > 0 {
+			fpsSum += *t.AvgFPS
+			fpsCount++
+		}
+	}
+	if fpsCount == 0 {
+		return 0
+	}
+	avgFPS := fpsSum / float64(fpsCount)
+
+	// Sum remaining frames across pending and running tasks.
+	for _, t := range tasks {
+		if t.Status != "pending" && t.Status != "running" {
+			continue
+		}
+		// For running tasks, subtract already-encoded frames.
+		if t.FramesEncoded != nil && *t.FramesEncoded > 0 {
+			// We don't know total frames per task here, so treat running tasks
+			// as having no remaining frames — the avg FPS still accounts for
+			// their expected throughput via the pool average.
+			continue
+		}
+		// Pending tasks contribute an unknown frame count; we skip them in
+		// frame-based ETA but their count influences the FPS average timing.
+		// Use duration_sec as proxy for frame count if available.
+		if t.DurationSec != nil && *t.DurationSec > 0 {
+			remainingFrames += int64(float64(*t.DurationSec) * avgFPS)
+		}
+	}
+
+	if remainingFrames == 0 {
+		return 0
+	}
+	if avgFPS <= 0 {
+		return 0
+	}
+	etaSec := int64(float64(remainingFrames) / avgFPS)
+	return etaSec
 }
 
 // handleCancelJob cancels a job and its pending tasks.

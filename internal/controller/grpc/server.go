@@ -15,6 +15,7 @@ import (
 	"github.com/badskater/encodeswarmr/internal/controller/api"
 	"github.com/badskater/encodeswarmr/internal/controller/config"
 	"github.com/badskater/encodeswarmr/internal/controller/engine"
+	"github.com/badskater/encodeswarmr/internal/controller/mediaserver"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
 	"google.golang.org/grpc"
@@ -25,13 +26,15 @@ import (
 // Server implements the AgentService gRPC server.
 type Server struct {
 	pb.UnimplementedAgentServiceServer
-	store        db.Store
-	cfg          *config.GRPCConfig
-	agentCfg     *config.AgentConfig
-	validationCfg engine.ValidationConfig
-	logger       *slog.Logger
-	webhooks     *webhooks.Service
-	concatRunner engine.ConcatRunner // optional; triggers controller-side concat
+	store          db.Store
+	cfg            *config.GRPCConfig
+	agentCfg       *config.AgentConfig
+	validationCfg  engine.ValidationConfig
+	logger         *slog.Logger
+	webhooks       *webhooks.Service
+	concatRunner   engine.ConcatRunner       // optional; triggers controller-side concat
+	mediaManager   *mediaserver.Manager      // optional; triggers library refresh on job completion
+	mediaServerCfg []config.MediaServerConfig // held to check auto_refresh flags
 }
 
 // New creates a new gRPC Server.
@@ -53,6 +56,14 @@ func (s *Server) SetValidationConfig(cfg engine.ValidationConfig) { s.validation
 // the final ffmpeg concat step runs on the controller after all chunk tasks
 // complete instead of being dispatched to an agent.
 func (s *Server) SetConcatRunner(r engine.ConcatRunner) { s.concatRunner = r }
+
+// SetMediaManager attaches a media server manager. When set, all servers
+// configured with auto_refresh = true will receive a library refresh
+// notification after each job completes successfully.
+func (s *Server) SetMediaManager(m *mediaserver.Manager, cfgs []config.MediaServerConfig) {
+	s.mediaManager = m
+	s.mediaServerCfg = cfgs
+}
 
 // Serve starts the gRPC server and blocks until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context) error {

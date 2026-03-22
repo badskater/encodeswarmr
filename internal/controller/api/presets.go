@@ -22,3 +22,11 @@ func (s *Server) handleGetPreset(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, r, http.StatusOK, p)
 }
+
+// handleListAudioPresets returns all built-in audio encoding presets.
+//
+// GET /api/v1/presets/audio
+func (s *Server) handleListAudioPresets(w http.ResponseWriter, r *http.Request) {
+	all := presets.AllAudio()
+	writeCollection(w, r, all, int64(len(all)), "")
+}
