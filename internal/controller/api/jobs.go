@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -58,18 +59,28 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	writeCollection(w, r, jobs, total, nextCursor)
 }
 
+// validJobTypes is the set of job types accepted by handleCreateJob.
+var validJobTypes = map[string]bool{
+	"encode":     true,
+	"analysis":   true,
+	"audio":      true,
+	"hdr_detect": true,
+	"merge":      true,
+}
+
 // handleCreateJob creates a new encoding or analysis job.
 func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SourceID     string          `json:"source_id"`
-		JobType      string          `json:"job_type"`
-		Priority     int             `json:"priority"`
-		TargetTags   []string        `json:"target_tags"`
-		EncodeConfig db.EncodeConfig `json:"encode_config"`
+		SourceID     string           `json:"source_id"`
+		JobType      string           `json:"job_type"`
+		Priority     int              `json:"priority"`
+		TargetTags   []string         `json:"target_tags"`
+		EncodeConfig db.EncodeConfig  `json:"encode_config"`
+		AudioConfig  *db.AudioConfig  `json:"audio_config,omitempty"`
 		// FlowID is an optional flow pipeline to use for job expansion.
-		// When set it is stored in EncodeConfig.FlowID and the engine will
-		// call the FlowEngine instead of the default template-based path.
-		FlowID string `json:"flow_id,omitempty"`
+		FlowID    string  `json:"flow_id,omitempty"`
+		DependsOn *string `json:"depends_on,omitempty"`
+		ChainGroup *string `json:"chain_group,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
@@ -80,9 +91,18 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "source_id is required")
 		return
 	}
-	if req.JobType != "encode" && req.JobType != "analysis" && req.JobType != "audio" {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "job_type must be \"encode\", \"analysis\", or \"audio\"")
+	if !validJobTypes[req.JobType] {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error",
+			`job_type must be "encode", "analysis", "audio", "hdr_detect", or "merge"`)
 		return
+	}
+
+	// Validate audio_config codec when job_type is audio.
+	if req.JobType == "audio" && req.AudioConfig != nil {
+		if err := validateAudioConfig(req.AudioConfig); err != nil {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", err.Error())
+			return
+		}
 	}
 
 	// When a flow_id is provided, skip the template-based validation — the
@@ -109,6 +129,9 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		Priority:     req.Priority,
 		TargetTags:   req.TargetTags,
 		EncodeConfig: req.EncodeConfig,
+		AudioConfig:  req.AudioConfig,
+		DependsOn:    req.DependsOn,
+		ChainGroup:   req.ChainGroup,
 	})
 	if err != nil {
 		s.logger.Error("create job", "err", err)
@@ -116,6 +139,154 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusCreated, job)
+}
+
+// validAudioCodecs is the set of ffmpeg codec names accepted for audio jobs.
+var validAudioCodecs = map[string]bool{
+	"flac":        true,
+	"libopus":     true,
+	"libfdk_aac":  true,
+	"aac":         true, // aac-lc (native ffmpeg encoder)
+	"ac3":         true,
+	"eac3":        true,
+	"dca":         true, // DTS
+	"truehd":      true,
+	"pcm_s16le":   true,
+	"pcm_s24le":   true,
+	"libmp3lame":  true,
+	"libvorbis":   true,
+}
+
+func validateAudioConfig(cfg *db.AudioConfig) error {
+	if cfg.Codec == "" {
+		return fmt.Errorf("audio_config.codec is required")
+	}
+	if !validAudioCodecs[cfg.Codec] {
+		return fmt.Errorf("audio_config.codec %q is not supported; valid: flac, libopus, libfdk_aac, aac, ac3, eac3, dca, truehd, pcm_s16le, pcm_s24le, libmp3lame, libvorbis", cfg.Codec)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Job chain creation
+// ---------------------------------------------------------------------------
+
+// chainStep describes one step in a job chain request.
+type chainStep struct {
+	JobType      string           `json:"job_type"`
+	Name         string           `json:"name"`
+	Priority     int              `json:"priority"`
+	TargetTags   []string         `json:"target_tags"`
+	EncodeConfig *db.EncodeConfig `json:"encode_config,omitempty"`
+	AudioConfig  *db.AudioConfig  `json:"audio_config,omitempty"`
+}
+
+// handleCreateJobChain creates multiple jobs with sequential depends_on links
+// and a shared chain_group UUID.
+//
+// POST /api/v1/job-chains
+// Body: { "source_id": "uuid", "steps": [ { "job_type": "...", ...}, ... ] }
+func (s *Server) handleCreateJobChain(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SourceID string      `json:"source_id"`
+		Steps    []chainStep `json:"steps"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+
+	if req.SourceID == "" {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "source_id is required")
+		return
+	}
+	if len(req.Steps) == 0 {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "steps must not be empty")
+		return
+	}
+
+	// Validate each step.
+	for i, step := range req.Steps {
+		if !validJobTypes[step.JobType] {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error",
+				fmt.Sprintf("steps[%d]: unsupported job_type %q", i, step.JobType))
+			return
+		}
+		if step.JobType == "audio" && step.AudioConfig != nil {
+			if err := validateAudioConfig(step.AudioConfig); err != nil {
+				writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error",
+					fmt.Sprintf("steps[%d]: %s", i, err.Error()))
+				return
+			}
+		}
+	}
+
+	// Generate a shared chain_group UUID using crypto/rand.
+	chainGroupID := newUUID()
+
+	ctx := r.Context()
+	created := make([]*db.Job, 0, len(req.Steps))
+	var prevJobID *string
+
+	for _, step := range req.Steps {
+		cfg := db.EncodeConfig{}
+		if step.EncodeConfig != nil {
+			cfg = *step.EncodeConfig
+		}
+
+		tags := step.TargetTags
+		if tags == nil {
+			tags = []string{}
+		}
+
+		job, err := s.store.CreateJob(ctx, db.CreateJobParams{
+			SourceID:     req.SourceID,
+			JobType:      step.JobType,
+			Priority:     step.Priority,
+			TargetTags:   tags,
+			EncodeConfig: cfg,
+			AudioConfig:  step.AudioConfig,
+			DependsOn:    prevJobID,
+			ChainGroup:   &chainGroupID,
+		})
+		if err != nil {
+			s.logger.Error("create chain job", "err", err, "job_type", step.JobType)
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+			return
+		}
+
+		created = append(created, job)
+		id := job.ID
+		prevJobID = &id
+	}
+
+	writeJSON(w, r, http.StatusCreated, map[string]any{
+		"chain_group": chainGroupID,
+		"jobs":        created,
+	})
+}
+
+// handleGetJobChain returns all jobs in a chain group.
+//
+// GET /api/v1/job-chains/{chain_group}
+func (s *Server) handleGetJobChain(w http.ResponseWriter, r *http.Request) {
+	chainGroup := r.PathValue("chain_group")
+	if chainGroup == "" {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "missing chain_group")
+		return
+	}
+
+	jobs, err := s.store.ListJobsByChainGroup(r.Context(), chainGroup)
+	if err != nil {
+		s.logger.Error("list jobs by chain group", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"chain_group": chainGroup,
+		"jobs":        jobs,
+	})
 }
 
 // handleGetJob returns a single job with its tasks.

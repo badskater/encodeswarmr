@@ -424,27 +424,53 @@ func (s *pgStore) CreateJob(ctx context.Context, p CreateJobParams) (*Job, error
 	if err != nil {
 		return nil, fmt.Errorf("db: marshal encode_config: %w", err)
 	}
+	var audioCfgJSON []byte
+	if p.AudioConfig != nil {
+		audioCfgJSON, err = json.Marshal(p.AudioConfig)
+		if err != nil {
+			return nil, fmt.Errorf("db: marshal audio_config: %w", err)
+		}
+	}
+
+	// Jobs with an unmet dependency start in "waiting"; all others start in
+	// "queued" (the default set by the DB column).
+	initialStatus := "queued"
+	if p.DependsOn != nil {
+		// Check whether the dependency is already completed — if so, skip waiting.
+		var depStatus string
+		chkQ := `SELECT status FROM jobs WHERE id = $1`
+		if err := s.pool.QueryRow(ctx, chkQ, *p.DependsOn).Scan(&depStatus); err == nil && depStatus != "completed" {
+			initialStatus = "waiting"
+		}
+	}
+
 	const q = `
 		WITH ins AS (
-		    INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config, max_retries)
-		    VALUES ($1, $2, $3, $4, $5, $6)
+		    INSERT INTO jobs (source_id, job_type, priority, target_tags, encode_config, audio_config, max_retries, depends_on, chain_group, status)
+		    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		    RETURNING id, source_id, status, job_type, priority, target_tags,
 		              tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
-		              encode_config, max_retries, completed_at, failed_at, created_at, updated_at
+		              encode_config, audio_config, max_retries, depends_on, chain_group,
+		              completed_at, failed_at, created_at, updated_at
 		)
 		SELECT ins.id, ins.source_id, ins.status, ins.job_type, ins.priority, ins.target_tags,
 		       ins.tasks_total, ins.tasks_pending, ins.tasks_running, ins.tasks_completed, ins.tasks_failed,
-		       ins.encode_config, ins.max_retries, ins.completed_at, ins.failed_at, ins.created_at, ins.updated_at,
+		       ins.encode_config, ins.audio_config, ins.max_retries, ins.depends_on, ins.chain_group,
+		       ins.completed_at, ins.failed_at, ins.created_at, ins.updated_at,
 		       COALESCE(s.unc_path, '') AS source_path
 		FROM ins LEFT JOIN sources s ON ins.source_id = s.id`
-	row := s.pool.QueryRow(ctx, q, p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON, p.MaxRetries)
+	row := s.pool.QueryRow(ctx, q,
+		p.SourceID, p.JobType, p.Priority, p.TargetTags, cfgJSON, audioCfgJSON,
+		p.MaxRetries, p.DependsOn, p.ChainGroup, initialStatus,
+	)
 	return scanJob(row)
 }
 
 func (s *pgStore) GetJobByID(ctx context.Context, id string) (*Job, error) {
 	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	                  j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  j.encode_config, j.audio_config, j.max_retries, j.depends_on, j.chain_group,
+	                  j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	                  COALESCE(s.unc_path, '') AS source_path
 	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
 	           WHERE j.id = $1`
@@ -508,7 +534,8 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 
 	q := `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	             j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	             j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	             j.encode_config, j.audio_config, j.max_retries, j.depends_on, j.chain_group,
+	             j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	             COALESCE(s.unc_path, '') AS source_path
 	      FROM jobs j LEFT JOIN sources s ON j.source_id = s.id`
 	if len(whereConds) > 0 {
@@ -534,11 +561,13 @@ func (s *pgStore) ListJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64
 }
 
 // GetJobsNeedingExpansion returns queued jobs that have not yet been expanded
-// into tasks (tasks_total = 0) and have a non-empty encode_config.
+// into tasks (tasks_total = 0).  Jobs in "waiting" status (unmet dependency)
+// are excluded — they become eligible once UnblockDependentJobs promotes them.
 func (s *pgStore) GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error) {
 	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
 	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
-	                  j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  j.encode_config, j.audio_config, j.max_retries, j.depends_on, j.chain_group,
+	                  j.completed_at, j.failed_at, j.created_at, j.updated_at,
 	                  COALESCE(s.unc_path, '') AS source_path
 	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
 	           WHERE j.status = 'queued' AND j.tasks_total = 0
@@ -598,10 +627,12 @@ func (s *pgStore) UpdateJobTaskCounts(ctx context.Context, id string) error {
 func scanJob(row pgx.Row) (*Job, error) {
 	var j Job
 	var rawCfg []byte
+	var rawAudioCfg []byte
 	err := row.Scan(
 		&j.ID, &j.SourceID, &j.Status, &j.JobType, &j.Priority, &j.TargetTags,
 		&j.TasksTotal, &j.TasksPending, &j.TasksRunning, &j.TasksCompleted, &j.TasksFailed,
-		&rawCfg, &j.MaxRetries, &j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
+		&rawCfg, &rawAudioCfg, &j.MaxRetries, &j.DependsOn, &j.ChainGroup,
+		&j.CompletedAt, &j.FailedAt, &j.CreatedAt, &j.UpdatedAt,
 		&j.SourcePath,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -615,7 +646,52 @@ func scanJob(row pgx.Row) (*Job, error) {
 			return nil, fmt.Errorf("db: unmarshal encode_config: %w", err)
 		}
 	}
+	if len(rawAudioCfg) > 0 {
+		j.AudioConfig = &AudioConfig{}
+		if err := json.Unmarshal(rawAudioCfg, j.AudioConfig); err != nil {
+			return nil, fmt.Errorf("db: unmarshal audio_config: %w", err)
+		}
+	}
 	return &j, nil
+}
+
+// UnblockDependentJobs transitions jobs whose depends_on predecessor is now
+// "completed" from "waiting" to "queued" so the engine can expand them.
+// This is called atomically after UpdateJobStatus("completed").
+func (s *pgStore) UnblockDependentJobs(ctx context.Context, completedJobID string) error {
+	const q = `UPDATE jobs SET status = 'queued', updated_at = now()
+	           WHERE depends_on = $1 AND status = 'waiting'`
+	_, err := s.pool.Exec(ctx, q, completedJobID)
+	if err != nil {
+		return fmt.Errorf("db: unblock dependent jobs: %w", err)
+	}
+	return nil
+}
+
+// ListJobsByChainGroup returns all jobs in a chain group ordered by creation time.
+func (s *pgStore) ListJobsByChainGroup(ctx context.Context, chainGroup string) ([]*Job, error) {
+	const q = `SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+	                  j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+	                  j.encode_config, j.audio_config, j.max_retries, j.depends_on, j.chain_group,
+	                  j.completed_at, j.failed_at, j.created_at, j.updated_at,
+	                  COALESCE(s.unc_path, '') AS source_path
+	           FROM jobs j LEFT JOIN sources s ON j.source_id = s.id
+	           WHERE j.chain_group = $1
+	           ORDER BY j.created_at ASC`
+	rows, err := s.pool.Query(ctx, q, chainGroup)
+	if err != nil {
+		return nil, fmt.Errorf("db: list jobs by chain group: %w", err)
+	}
+	defer rows.Close()
+	var out []*Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
 }
 
 // joinConditions joins WHERE clause conditions with AND.

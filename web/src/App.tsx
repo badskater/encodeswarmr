@@ -10,6 +10,7 @@ import Sources from './pages/Sources'
 import SourceDetail from './pages/SourceDetail'
 import Jobs from './pages/Jobs'
 import CreateJob from './pages/CreateJob'
+import CreateJobChain from './pages/CreateJobChain'
 import JobDetail from './pages/JobDetail'
 import TaskDetail from './pages/TaskDetail'
 import Agents from './pages/Agents'
@@ -91,6 +92,7 @@ function App() {
         <Route path="/sources/:id" element={<SourceDetail />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/create" element={<CreateJob />} />
+        <Route path="/jobs/create-chain" element={<CreateJobChain />} />
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />

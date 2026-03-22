@@ -150,6 +150,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/jobs/{id}/retry", operator(s.handleRetryJob))
 	mux.Handle("GET /api/v1/jobs/{id}/logs", viewer(s.handleListJobLogs))
 
+	// --- Job Chains ---
+	mux.Handle("POST /api/v1/job-chains", operator(s.handleCreateJobChain))
+	mux.Handle("GET /api/v1/job-chains/{chain_group}", viewer(s.handleGetJobChain))
+
+	// --- Batch Import ---
+	mux.Handle("POST /api/v1/sources/batch-import", operator(s.handleBatchImport))
+
 	// --- Tasks ---
 	mux.Handle("GET /api/v1/tasks/{id}", viewer(s.handleGetTask))
 	mux.Handle("GET /api/v1/tasks/{id}/logs", viewer(s.handleListTaskLogs))
@@ -303,4 +310,15 @@ func genID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// newUUID returns a random UUID v4 (RFC 4122).
+func newUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	// Set version 4 and variant bits.
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

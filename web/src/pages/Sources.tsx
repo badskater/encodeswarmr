@@ -37,6 +37,12 @@ export default function Sources() {
   const [formSaving, setFormSaving] = useState(false)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const [detectingHDRId, setDetectingHDRId] = useState<string | null>(null)
+  const [showBatchImport, setShowBatchImport] = useState(false)
+  const [batchPattern, setBatchPattern] = useState('')
+  const [batchRecursive, setBatchRecursive] = useState(false)
+  const [batchAutoAnalyze, setBatchAutoAnalyze] = useState(true)
+  const [batchSaving, setBatchSaving] = useState(false)
+  const [batchResult, setBatchResult] = useState<{ imported: number } | null>(null)
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
@@ -119,6 +125,25 @@ export default function Sources() {
     }
   }
 
+  const handleBatchImport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBatchSaving(true)
+    setBatchResult(null)
+    try {
+      const result = await api.batchImportSources({
+        path_pattern: batchPattern,
+        recursive: batchRecursive,
+        auto_analyze: batchAutoAnalyze,
+      })
+      setBatchResult({ imported: result.imported })
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Batch import failed')
+    } finally {
+      setBatchSaving(false)
+    }
+  }
+
   function hdrLabel(hdrType: string, dvProfile: number): string {
     if (hdrType === 'dolby_vision') return dvProfile > 0 ? `DV P${dvProfile}` : 'Dolby Vision'
     if (hdrType === 'hdr10plus') return 'HDR10+'
@@ -133,13 +158,60 @@ export default function Sources() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-th-text">Sources</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 shrink-0"
-        >
-          {showForm ? 'Cancel' : 'Register Source'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowBatchImport(!showBatchImport)}
+            className="border border-th-border text-th-text px-3 py-1.5 rounded text-sm font-medium hover:bg-th-surface-muted shrink-0"
+          >
+            {showBatchImport ? 'Cancel Batch' : 'Batch Import'}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 shrink-0"
+          >
+            {showForm ? 'Cancel' : 'Register Source'}
+          </button>
+        </div>
       </div>
+
+      {showBatchImport && (
+        <form onSubmit={handleBatchImport} className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">Batch Import Sources</h2>
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">Path Pattern *</label>
+            <input
+              value={batchPattern}
+              onChange={e => setBatchPattern(e.target.value)}
+              required
+              placeholder="\\NAS\media\*.mkv"
+              className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+            />
+            <p className="text-xs text-th-text-muted mt-0.5">
+              Glob pattern resolved on the controller (UNC paths are translated via path mappings).
+            </p>
+          </div>
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={batchRecursive} onChange={e => setBatchRecursive(e.target.checked)} className="accent-blue-600" />
+              Recursive
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={batchAutoAnalyze} onChange={e => setBatchAutoAnalyze(e.target.checked)} className="accent-blue-600" />
+              Auto-analyze
+            </label>
+          </div>
+          {batchResult && (
+            <p className="text-green-600 text-sm">Imported {batchResult.imported} source(s).</p>
+          )}
+          <button
+            type="submit"
+            disabled={batchSaving}
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {batchSaving ? 'Importing…' : 'Import'}
+          </button>
+        </form>
+      )}
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 

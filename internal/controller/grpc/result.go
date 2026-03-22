@@ -224,6 +224,18 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		slog.String("status", newStatus),
 	)
 
+	// When a job completes, transition any dependent jobs from "waiting" to
+	// "queued" so the engine can pick them up on the next tick.
+	if newStatus == "completed" {
+		if unblockErr := s.store.UnblockDependentJobs(ctx, jobID); unblockErr != nil {
+			s.logger.LogAttrs(ctx, slog.LevelWarn, "unblock dependent jobs failed",
+				slog.String("job_id", jobID),
+				slog.String("error", unblockErr.Error()),
+			)
+			// Non-fatal: log and continue; the operator can manually re-queue.
+		}
+	}
+
 	// For completed hdr_detect jobs, scan task stdout for the sentinel line
 	// and write the result back to the source.
 	if job.JobType == "hdr_detect" && newStatus == "completed" {

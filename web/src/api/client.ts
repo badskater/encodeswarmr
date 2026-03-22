@@ -1,4 +1,5 @@
 import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, AudioConfig } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -106,6 +107,10 @@ export interface CreateJobRequest {
       overlap_frames: number
     }
   }
+  audio_config?: AudioConfig
+  depends_on?: string
+  chain_group?: string
+  flow_id?: string
 }
 
 export const createJob = (body: CreateJobRequest) =>
@@ -114,6 +119,60 @@ export const createJob = (body: CreateJobRequest) =>
 export const cancelJob = (id: string) => request<void>(`/jobs/${id}/cancel`, { method: 'POST' })
 
 export const retryJob = (id: string) => request<void>(`/jobs/${id}/retry`, { method: 'POST' })
+
+// Job Chains
+
+export interface ChainStep {
+  job_type: string
+  name?: string
+  priority?: number
+  target_tags?: string[]
+  encode_config?: CreateJobRequest['encode_config']
+  audio_config?: AudioConfig
+}
+
+export interface CreateJobChainRequest {
+  source_id: string
+  steps: ChainStep[]
+}
+
+export interface JobChainResponse {
+  chain_group: string
+  jobs: Job[]
+}
+
+export const createJobChain = (body: CreateJobChainRequest) =>
+  request<JobChainResponse>('/job-chains', { method: 'POST', body: JSON.stringify(body) })
+
+export const getJobChain = (chainGroup: string) =>
+  request<JobChainResponse>(`/job-chains/${chainGroup}`)
+
+// Batch Import
+
+export interface BatchImportRequest {
+  path_pattern: string
+  recursive?: boolean
+  auto_analyze?: boolean
+  auto_encode?: boolean
+  encode_template_id?: string
+}
+
+export interface BatchImportResult {
+  path: string
+  source_id?: string
+  job_id?: string
+  skipped?: boolean
+  skip_reason?: string
+  error?: string
+}
+
+export interface BatchImportResponse {
+  imported: number
+  results: BatchImportResult[]
+}
+
+export const batchImportSources = (body: BatchImportRequest) =>
+  request<BatchImportResponse>('/sources/batch-import', { method: 'POST', body: JSON.stringify(body) })
 
 // Tasks
 export const getTask = (id: string) => request<Task>(`/tasks/${id}`)
