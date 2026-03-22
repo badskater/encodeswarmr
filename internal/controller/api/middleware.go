@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -83,7 +84,7 @@ func corsMiddleware(origins []string, next http.Handler) http.Handler {
 func rateLimitMiddleware(next http.Handler) http.Handler {
 	type entry struct {
 		limiter  *rate.Limiter
-		lastSeen time.Time
+		lastSeen atomic.Int64 // UnixNano
 	}
 
 	var clients sync.Map // map[string]*entry
@@ -93,9 +94,9 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			cutoff := time.Now().Add(-10 * time.Minute)
+			cutoff := time.Now().Add(-10 * time.Minute).UnixNano()
 			clients.Range(func(k, v any) bool {
-				if v.(*entry).lastSeen.Before(cutoff) {
+				if v.(*entry).lastSeen.Load() < cutoff {
 					clients.Delete(k)
 				}
 				return true
@@ -111,7 +112,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 
 		val, _ := clients.LoadOrStore(ip, &entry{limiter: rate.NewLimiter(200, 400)})
 		e := val.(*entry)
-		e.lastSeen = time.Now()
+		e.lastSeen.Store(time.Now().UnixNano())
 
 		if !e.limiter.Allow() {
 			w.Header().Set("Content-Type", "application/problem+json")
