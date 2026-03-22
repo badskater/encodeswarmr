@@ -1836,7 +1836,8 @@ func (s *pgStore) DeleteAPIKey(ctx context.Context, id string) error {
 // Returns ErrNotFound if no preferences row exists yet (use defaults in that case).
 func (s *pgStore) GetNotificationPrefs(ctx context.Context, userID string) (*NotificationPrefs, error) {
 	const q = `SELECT id, user_id, notify_on_job_complete, notify_on_job_failed,
-	                  notify_on_agent_stale, webhook_filter_user_only, created_at, updated_at
+	                  notify_on_agent_stale, webhook_filter_user_only,
+	                  email_address, notify_email, created_at, updated_at
 	           FROM notification_preferences WHERE user_id = $1`
 	return scanNotificationPrefs(s.pool.QueryRow(ctx, q, userID))
 }
@@ -1846,22 +1847,52 @@ func (s *pgStore) UpsertNotificationPrefs(ctx context.Context, p UpsertNotificat
 	const q = `
 		INSERT INTO notification_preferences
 		    (user_id, notify_on_job_complete, notify_on_job_failed,
-		     notify_on_agent_stale, webhook_filter_user_only)
-		VALUES ($1, $2, $3, $4, $5)
+		     notify_on_agent_stale, webhook_filter_user_only,
+		     email_address, notify_email)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id) DO UPDATE SET
 		    notify_on_job_complete   = EXCLUDED.notify_on_job_complete,
 		    notify_on_job_failed     = EXCLUDED.notify_on_job_failed,
 		    notify_on_agent_stale    = EXCLUDED.notify_on_agent_stale,
 		    webhook_filter_user_only = EXCLUDED.webhook_filter_user_only,
+		    email_address            = EXCLUDED.email_address,
+		    notify_email             = EXCLUDED.notify_email,
 		    updated_at               = now()`
 	_, err := s.pool.Exec(ctx, q,
 		p.UserID, p.NotifyOnJobComplete, p.NotifyOnJobFailed,
 		p.NotifyOnAgentStale, p.WebhookFilterUserOnly,
+		p.EmailAddress, p.NotifyEmail,
 	)
 	if err != nil {
 		return fmt.Errorf("db: upsert notification prefs: %w", err)
 	}
 	return nil
+}
+
+// ListUsersWithEmailNotifications returns notification preferences for all
+// users that have email notifications enabled. Used by the webhook service to
+// dispatch emails alongside webhook deliveries.
+func (s *pgStore) ListUsersWithEmailNotifications(ctx context.Context) ([]*NotificationPrefs, error) {
+	const q = `SELECT id, user_id, notify_on_job_complete, notify_on_job_failed,
+	                  notify_on_agent_stale, webhook_filter_user_only,
+	                  email_address, notify_email, created_at, updated_at
+	           FROM notification_preferences
+	           WHERE notify_email = true AND email_address <> ''
+	           ORDER BY user_id`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list users with email notifications: %w", err)
+	}
+	defer rows.Close()
+	var out []*NotificationPrefs
+	for rows.Next() {
+		np, err := scanNotificationPrefs(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, np)
+	}
+	return out, rows.Err()
 }
 
 func scanNotificationPrefs(row pgx.Row) (*NotificationPrefs, error) {
@@ -1870,6 +1901,7 @@ func scanNotificationPrefs(row pgx.Row) (*NotificationPrefs, error) {
 		&np.ID, &np.UserID,
 		&np.NotifyOnJobComplete, &np.NotifyOnJobFailed,
 		&np.NotifyOnAgentStale, &np.WebhookFilterUserOnly,
+		&np.EmailAddress, &np.NotifyEmail,
 		&np.CreatedAt, &np.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -507,6 +507,11 @@ type NotificationPrefs struct {
 	NotifyOnJobFailed     bool      `json:"notify_on_job_failed"`
 	NotifyOnAgentStale    bool      `json:"notify_on_agent_stale"`
 	WebhookFilterUserOnly bool      `json:"webhook_filter_user_only"`
+	// EmailAddress is the address to send email notifications to.
+	// Empty string means email notifications are disabled for this user.
+	EmailAddress          string    `json:"email_address"`
+	// NotifyEmail controls whether email notifications are sent for enabled events.
+	NotifyEmail           bool      `json:"notify_email"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
 }
@@ -519,6 +524,8 @@ type UpsertNotificationPrefsParams struct {
 	NotifyOnJobFailed     bool
 	NotifyOnAgentStale    bool
 	WebhookFilterUserOnly bool
+	EmailAddress          string
+	NotifyEmail           bool
 }
 
 // Flow is a row from the flows table.

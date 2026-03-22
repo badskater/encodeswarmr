@@ -153,6 +153,7 @@ type Store interface {
 	// --- Notification Preferences ---
 	GetNotificationPrefs(ctx context.Context, userID string) (*NotificationPrefs, error)
 	UpsertNotificationPrefs(ctx context.Context, p UpsertNotificationPrefsParams) error
+	ListUsersWithEmailNotifications(ctx context.Context) ([]*NotificationPrefs, error)
 
 	// --- Schedules ---
 	CreateSchedule(ctx context.Context, p CreateScheduleParams) (*Schedule, error)

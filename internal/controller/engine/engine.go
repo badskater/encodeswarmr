@@ -36,12 +36,13 @@ type ConcatRunner interface {
 
 // Engine orchestrates job expansion and stale-agent detection on a timer.
 type Engine struct {
-	store    db.Store
-	gen      *ScriptGenerator
-	cfg      Config
-	logger   *slog.Logger
-	analysis AnalysisRunner // optional; nil falls back to agent dispatch
-	concat   ConcatRunner   // optional; nil falls back to agent dispatch
+	store       db.Store
+	gen         *ScriptGenerator
+	cfg         Config
+	logger      *slog.Logger
+	analysis    AnalysisRunner     // optional; nil falls back to agent dispatch
+	concat      ConcatRunner       // optional; nil falls back to agent dispatch
+	autoScaling *AutoScalingHook   // optional; nil disables auto-scaling checks
 }
 
 // New creates an Engine. Does not start the background loop.
@@ -68,6 +69,13 @@ func (e *Engine) SetConcatRunner(r ConcatRunner) {
 	e.concat = r
 }
 
+// SetAutoScalingHook attaches an auto-scaling hook. When set, the engine
+// checks queue depth and idle agent count on each dispatch tick and fires
+// the hook when thresholds are crossed.
+func (e *Engine) SetAutoScalingHook(h *AutoScalingHook) {
+	e.autoScaling = h
+}
+
 // Start launches the background dispatch loop in a goroutine.
 // Returns immediately. The loop runs until ctx is cancelled.
 func (e *Engine) Start(ctx context.Context) {
@@ -92,8 +100,39 @@ func (e *Engine) loop(ctx context.Context) {
 			if err := e.checkStaleAgents(ctx); err != nil {
 				e.logger.Warn("engine: check stale agents", "error", err)
 			}
+			if e.autoScaling != nil {
+				e.checkAutoScaling(ctx)
+			}
 		}
 	}
+}
+
+// checkAutoScaling gathers current queue and agent state and calls the
+// AutoScalingHook to fire scale events when thresholds are crossed.
+func (e *Engine) checkAutoScaling(ctx context.Context) {
+	qstats, err := e.store.GetQueueStats(ctx)
+	if err != nil {
+		e.logger.Warn("engine: auto-scaling: get queue stats", "error", err)
+		return
+	}
+	agents, err := e.store.ListAgents(ctx)
+	if err != nil {
+		e.logger.Warn("engine: auto-scaling: list agents", "error", err)
+		return
+	}
+
+	var activeAgents, idleAgents int
+	for _, a := range agents {
+		switch a.Status {
+		case "idle":
+			idleAgents++
+			activeAgents++
+		case "running":
+			activeAgents++
+		}
+	}
+
+	e.autoScaling.Check(ctx, qstats.Pending, activeAgents, idleAgents)
 }
 
 // logRetentionLoop periodically prunes task log rows older than LogRetention.

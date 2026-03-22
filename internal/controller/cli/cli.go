@@ -30,6 +30,7 @@ import (
 	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	controllergrpc "github.com/badskater/encodeswarmr/internal/controller/grpc"
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/notifications"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
 	"github.com/spf13/cobra"
@@ -137,6 +138,12 @@ func runServer(ctx context.Context, cfgPath string) error {
 		DeliveryTimeout: cfg.Webhooks.DeliveryTimeout,
 		MaxRetries:      cfg.Webhooks.MaxRetries,
 	}, logger)
+	// Attach email sender when SMTP is configured.
+	emailSender := notifications.NewEmailSender(cfg.SMTP, logger)
+	if emailSender != nil {
+		whSvc.SetEmailSender(emailSender)
+		logger.Info("email notifications enabled", "smtp_host", cfg.SMTP.Host)
+	}
 	whSvc.Start(ctx)
 	logger.Info("webhook delivery service started", "workers", cfg.Webhooks.WorkerCount)
 
@@ -186,6 +193,17 @@ func runServer(ctx context.Context, cfgPath string) error {
 		"ffprobe", cfg.Analysis.FFprobeBin,
 		"concurrency", cfg.Analysis.Concurrency,
 	)
+
+	// Attach auto-scaling hook when enabled.
+	asHook := engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger)
+	eng.SetAutoScalingHook(asHook)
+	if cfg.AutoScaling.Enabled {
+		logger.Info("auto-scaling hooks enabled",
+			"scale_up_threshold", cfg.AutoScaling.ScaleUpThreshold,
+			"scale_down_threshold", cfg.AutoScaling.ScaleDownThreshold,
+			"cooldown_seconds", cfg.AutoScaling.CooldownSeconds,
+		)
+	}
 
 	eng.Start(ctx)
 	logger.Info("core engine started",

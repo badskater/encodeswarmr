@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -306,3 +306,29 @@ export interface AuditEntry {
 
 export const listAuditLog = (limit = 100, offset = 0) =>
   requestCollection<AuditEntry>(`/audit-log${buildQuery({ limit, offset })}`)
+
+// Notification Preferences
+export const getNotificationPrefs = () =>
+  request<NotificationPrefs>('/me/notifications')
+
+export const updateNotificationPrefs = (body: Partial<NotificationPrefs>) =>
+  request<NotificationPrefs>('/me/notifications', { method: 'PUT', body: JSON.stringify(body) })
+
+export const testEmail = (to: string) =>
+  request<{ ok: boolean; to: string }>('/notifications/test-email', {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  })
+
+// Auto-Scaling Settings
+export const getAutoScaling = () =>
+  request<AutoScalingSettings>('/settings/auto-scaling')
+
+export const updateAutoScaling = (body: Partial<AutoScalingSettings>) =>
+  request<AutoScalingSettings>('/settings/auto-scaling', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+
+export const testAutoScalingWebhook = () =>
+  request<{ ok: boolean; url: string }>('/settings/auto-scaling/test', { method: 'POST' })
