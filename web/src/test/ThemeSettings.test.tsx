@@ -28,14 +28,15 @@ describe('ThemeSettings', () => {
 
   it('renders 3 theme cards: Light, Dark, Dim', () => {
     renderThemeSettings()
-    expect(screen.getByText('Light')).toBeInTheDocument()
-    expect(screen.getByText('Dark')).toBeInTheDocument()
-    expect(screen.getByText('Dim')).toBeInTheDocument()
+    // Theme labels are rendered as "{icon} {label}" in a single span
+    expect(screen.getByText(/Light/)).toBeInTheDocument()
+    expect(screen.getByText(/Dark/)).toBeInTheDocument()
+    expect(screen.getByText(/Dim/)).toBeInTheDocument()
   })
 
   it('clicking a theme card marks it as active', () => {
     renderThemeSettings()
-    const darkButton = screen.getByText('Dark').closest('button')
+    const darkButton = screen.getByText(/Dark/).closest('button')
     expect(darkButton).toBeInTheDocument()
     fireEvent.click(darkButton!)
 

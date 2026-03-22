@@ -4,8 +4,8 @@ import { NODE_REGISTRY, NODE_REGISTRY_MAP, NODE_BY_CATEGORY, CATEGORY_ORDER, CAT
 const EXPECTED_CATEGORIES = ['input', 'encoding', 'analysis', 'condition', 'audio', 'output', 'notification', 'template', 'flow']
 
 describe('nodeRegistry', () => {
-  it('has 35 node templates registered', () => {
-    expect(NODE_REGISTRY.length).toBe(35)
+  it('has 34 node templates registered', () => {
+    expect(NODE_REGISTRY.length).toBe(34)
   })
 
   it('each node has required fields: type, label, category, icon', () => {

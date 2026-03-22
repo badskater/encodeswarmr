@@ -108,10 +108,15 @@ func TestSecurity_NoAuthRequired_Health(t *testing.T) {
 		t.Fatalf("health: expected 200, got %d", resp.StatusCode)
 	}
 
-	var body map[string]any
-	decodeJSON(t, resp, &body)
-	if body["status"] != "ok" {
-		t.Errorf("health body: want status=ok, got %v", body["status"])
+	// The health response is wrapped in the standard envelope: {"data": {...}, "meta": {...}}.
+	var envelope map[string]any
+	decodeJSON(t, resp, &envelope)
+	data, ok := envelope["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("health body: expected 'data' envelope, got: %v", envelope)
+	}
+	if data["status"] != "ok" {
+		t.Errorf("health body: want status=ok, got %v", data["status"])
 	}
 }
 

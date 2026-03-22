@@ -8,7 +8,7 @@ const mockTemplates: Template[] = [
   { id: 'tpl-2', name: 'AviSynth Source', type: 'avs', extension: 'avs', description: null, content: 'FFVideoSource()', created_at: '2024-01-02T00:00:00Z', updated_at: '2024-01-02T00:00:00Z' },
 ]
 
-vi.mock('../../api/client', () => ({
+vi.mock('../api/client', () => ({
   listTemplates: vi.fn().mockResolvedValue([]),
   createTemplate: vi.fn().mockResolvedValue({ id: 'new-tpl' }),
   updateTemplate: vi.fn().mockResolvedValue(undefined),
@@ -35,7 +35,7 @@ describe('Templates', () => {
   })
 
   it('renders template list with names', async () => {
-    const { listTemplates } = await import('../../api/client')
+    const { listTemplates } = await import('../api/client')
     vi.mocked(listTemplates).mockResolvedValueOnce(mockTemplates)
 
     render(<Templates />)

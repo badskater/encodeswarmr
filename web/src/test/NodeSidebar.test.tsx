@@ -8,8 +8,8 @@ describe('NodeSidebar', () => {
     render(<NodeSidebar />)
     for (const cat of CATEGORY_ORDER) {
       const label = CATEGORY_LABELS[cat]
-      // Category labels are uppercase in the sidebar
-      const elements = screen.getAllByText(label.toUpperCase())
+      // Category labels are rendered as-is in the DOM; CSS uppercase is visual only
+      const elements = screen.getAllByText(label)
       expect(elements.length).toBeGreaterThan(0)
     }
   })
@@ -54,9 +54,9 @@ describe('NodeSidebar', () => {
     fireEvent.change(input, { target: { value: 'x265' } })
     fireEvent.change(input, { target: { value: '' } })
 
-    // Category headers should reappear
-    expect(screen.getAllByText('INPUT').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('ENCODING').length).toBeGreaterThan(0)
+    // Category headers should reappear (DOM text is not uppercased; CSS handles that)
+    expect(screen.getAllByText('Input').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Encoding').length).toBeGreaterThan(0)
   })
 
   it('each category shows node count badge', () => {
