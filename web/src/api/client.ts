@@ -173,6 +173,16 @@ export interface BatchImportResponse {
 
 export const batchImportSources = (body: BatchImportRequest) =>
   request<BatchImportResponse>('/sources/batch-import', { method: 'POST', body: JSON.stringify(body) })
+/** Returns a URL for the job export endpoint (opens as file download). */
+export const jobExportURL = (params: { format: 'csv' | 'json'; status?: string; from?: string; to?: string }) =>
+  `${API_BASE}/jobs/export${buildQuery(params)}`
+
+export const listArchivedJobs = (params?: { status?: string; cursor?: string; page_size?: number }) =>
+  requestCollection<Job>(`/archive/jobs${buildQuery(params ?? {})}`)
+
+/** Returns a URL for the archived job export endpoint. */
+export const archivedJobExportURL = (params: { format: 'csv' | 'json'; status?: string; from?: string; to?: string }) =>
+  `${API_BASE}/archive/jobs/export${buildQuery(params)}`
 
 // Tasks
 export const getTask = (id: string) => request<Task>(`/tasks/${id}`)
@@ -235,6 +245,12 @@ export const updateTemplate = (id: string, body: Partial<Template>) =>
   request<Template>(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) })
 
 export const deleteTemplate = (id: string) => request<void>(`/templates/${id}`, { method: 'DELETE' })
+
+export const previewTemplate = (id: string, sourceId?: string, variables?: Record<string, string>) =>
+  request<{ template_name: string; extension: string; content: string }>(
+    `/templates/${id}/preview`,
+    { method: 'POST', body: JSON.stringify({ source_id: sourceId ?? '', variables: variables ?? {} }) }
+  )
 
 // Variables
 export const listVariables = () => request<Variable[]>('/variables')

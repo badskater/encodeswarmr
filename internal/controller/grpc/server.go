@@ -28,6 +28,7 @@ type Server struct {
 	store        db.Store
 	cfg          *config.GRPCConfig
 	agentCfg     *config.AgentConfig
+	validationCfg engine.ValidationConfig
 	logger       *slog.Logger
 	webhooks     *webhooks.Service
 	concatRunner engine.ConcatRunner // optional; triggers controller-side concat
@@ -36,13 +37,17 @@ type Server struct {
 // New creates a new gRPC Server.
 func New(store db.Store, grpcCfg *config.GRPCConfig, agentCfg *config.AgentConfig, logger *slog.Logger, wh *webhooks.Service) *Server {
 	return &Server{
-		store:    store,
-		cfg:      grpcCfg,
-		agentCfg: agentCfg,
-		logger:   logger,
-		webhooks: wh,
+		store:         store,
+		cfg:           grpcCfg,
+		agentCfg:      agentCfg,
+		validationCfg: engine.DefaultValidationConfig(),
+		logger:        logger,
+		webhooks:      wh,
 	}
 }
+
+// SetValidationConfig attaches output validation configuration.
+func (s *Server) SetValidationConfig(cfg engine.ValidationConfig) { s.validationCfg = cfg }
 
 // SetConcatRunner attaches a controller-side concat runner.  When set,
 // the final ffmpeg concat step runs on the controller after all chunk tasks

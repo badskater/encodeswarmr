@@ -30,6 +30,10 @@ export default function Jobs() {
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkCancelling, setBulkCancelling] = useState(false)
+  const [showExport, setShowExport] = useState(false)
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv')
+  const [exportFrom, setExportFrom] = useState('')
+  const [exportTo, setExportTo] = useState('')
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
@@ -136,6 +140,12 @@ export default function Jobs() {
               {bulkCancelling ? 'Cancelling…' : `Cancel Selected (${activeSelected.length})`}
             </button>
           )}
+          <button
+            onClick={() => setShowExport(v => !v)}
+            className="bg-th-surface-muted border border-th-border text-th-text-secondary px-3 py-1.5 rounded text-sm font-medium hover:bg-th-surface whitespace-nowrap"
+          >
+            Export
+          </button>
           <Link
             to="/jobs/create-chain"
             className="border border-th-border text-th-text px-3 py-1.5 rounded text-sm font-medium hover:bg-th-surface-muted whitespace-nowrap"
@@ -150,6 +160,68 @@ export default function Jobs() {
           </Link>
         </div>
       </div>
+
+      {showExport && (
+        <div className="bg-th-surface rounded-lg shadow p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-th-text-secondary">Export Job History</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">Format</label>
+              <select
+                value={exportFormat}
+                onChange={e => setExportFormat(e.target.value as 'csv' | 'json')}
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              >
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">Status filter</label>
+              <select
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              >
+                {STATUSES.map(s => <option key={s} value={s}>{s || 'All'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">From (YYYY-MM-DD)</label>
+              <input
+                type="date"
+                value={exportFrom}
+                onChange={e => setExportFrom(e.target.value)}
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">To (YYYY-MM-DD)</label>
+              <input
+                type="date"
+                value={exportTo}
+                onChange={e => setExportTo(e.target.value)}
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={api.jobExportURL({ format: exportFormat, status: status || undefined, from: exportFrom || undefined, to: exportTo || undefined })}
+              download
+              className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
+            >
+              Download {exportFormat.toUpperCase()}
+            </a>
+            <button
+              onClick={() => setShowExport(false)}
+              className="px-3 py-1.5 rounded text-sm text-th-text-muted border border-th-border hover:bg-th-surface-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-red-600 text-sm">{error}</p>}
 

@@ -81,6 +81,9 @@ type Store interface {
 	CancelPendingTasksForJob(ctx context.Context, jobID string) error
 	DeleteTasksByJobID(ctx context.Context, jobID string) error
 	RetryTaskWithBackoff(ctx context.Context, taskID string, retryCount int) (*Task, error)
+	// RetryTaskWithBackoffJitter creates a retry task with exponential backoff
+	// plus an additional jitter delay in seconds.
+	RetryTaskWithBackoffJitter(ctx context.Context, taskID string, retryCount int, jitterSec int) (*Task, error)
 
 	// --- Task Logs ---
 	InsertTaskLog(ctx context.Context, p InsertTaskLogParams) error
@@ -176,6 +179,19 @@ type Store interface {
 	ListFlows(ctx context.Context) ([]*Flow, error)
 	UpdateFlow(ctx context.Context, p UpdateFlowParams) (*Flow, error)
 	DeleteFlow(ctx context.Context, id string) error
+
+	// --- Job Archive ---
+	// ArchiveOldJobs moves completed/failed jobs older than olderThan days to
+	// job_archive (along with their tasks and task_logs) in a single
+	// transaction. Returns the number of jobs archived.
+	ArchiveOldJobs(ctx context.Context, olderThan time.Duration) (int64, error)
+	// ListArchivedJobs returns a paginated list of archived jobs.
+	ListArchivedJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64, error)
+	// ExportJobs returns all jobs (or archived jobs) matching the filter as a
+	// slice. Intended for CSV/JSON export where all rows are needed at once.
+	ExportJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error)
+	// ExportArchivedJobs returns archived jobs matching the export filter.
+	ExportArchivedJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error)
 
 	// --- Estimation ---
 	// GetAvgFPSStats returns the average encoding FPS and sample count from

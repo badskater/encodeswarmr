@@ -378,3 +378,20 @@ func renderToFile(name, content string, data map[string]string, path string) err
 	}
 	return nil
 }
+
+// RenderTemplatePreview renders a template with the provided data map and
+// returns the rendered string. No files are written to disk. Returns the
+// rendered content and any template parse/execution error.
+func RenderTemplatePreview(name, content string, data map[string]string) (string, error) {
+	t, err := template.New(name).Funcs(templateFuncs).Parse(content)
+	if err != nil {
+		return "", fmt.Errorf("parse template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute template: %w", err)
+	}
+
+	return buf.String(), nil
+}

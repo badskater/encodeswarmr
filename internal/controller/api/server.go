@@ -145,6 +145,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// --- Jobs ---
 	mux.Handle("GET /api/v1/jobs", viewer(s.handleListJobs))
 	mux.Handle("POST /api/v1/jobs", operator(s.handleCreateJob))
+	mux.Handle("GET /api/v1/jobs/export", viewer(s.handleExportJobs))
 	mux.Handle("GET /api/v1/jobs/{id}", viewer(s.handleGetJob))
 	mux.Handle("POST /api/v1/jobs/{id}/cancel", operator(s.handleCancelJob))
 	mux.Handle("POST /api/v1/jobs/{id}/retry", operator(s.handleRetryJob))
@@ -156,6 +157,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 
 	// --- Batch Import ---
 	mux.Handle("POST /api/v1/sources/batch-import", operator(s.handleBatchImport))
+	// --- Job Archive ---
+	mux.Handle("GET /api/v1/archive/jobs", viewer(s.handleListArchivedJobs))
+	mux.Handle("GET /api/v1/archive/jobs/export", viewer(s.handleExportArchivedJobs))
 
 	// --- Tasks ---
 	mux.Handle("GET /api/v1/tasks/{id}", viewer(s.handleGetTask))
@@ -204,6 +208,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/templates", admin(s.handleCreateTemplate))
 	mux.Handle("PUT /api/v1/templates/{id}", admin(s.handleUpdateTemplate))
 	mux.Handle("DELETE /api/v1/templates/{id}", admin(s.handleDeleteTemplate))
+	mux.Handle("POST /api/v1/templates/{id}/preview", operator(s.handlePreviewTemplate))
 
 	// --- Variables ---
 	mux.Handle("GET /api/v1/variables", viewer(s.handleListVariables))

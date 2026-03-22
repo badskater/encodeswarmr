@@ -136,6 +136,22 @@ export default function TaskDetail() {
         <Row label="Started" value={fmtDate(task.started_at)} />
         <Row label="Completed" value={fmtDate(task.completed_at)} />
         {task.error_msg && <Row label="Error" value={<span className="text-red-600 text-xs">{task.error_msg}</span>} />}
+        {task.error_category && (
+          <Row label="Error Category" value={
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+              task.error_category === 'permanent'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                : task.error_category === 'transient'
+                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+            }`}>
+              {task.error_category}
+            </span>
+          } />
+        )}
+        {task.retry_count != null && task.retry_count > 0 && (
+          <Row label="Retry Count" value={task.retry_count} />
+        )}
       </div>
 
       <div className="bg-th-surface rounded-lg shadow">

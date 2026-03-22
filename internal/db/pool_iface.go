@@ -15,6 +15,7 @@ type poolIface interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Ping(ctx context.Context) error
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 // Ensure *pgxpool.Pool satisfies poolIface at compile time.
