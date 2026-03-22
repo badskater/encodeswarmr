@@ -582,7 +582,7 @@ function ConfigFields({
 // ---------------------------------------------------------------------------
 
 export default function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
-  const nodeData = node.data as FlowNodeData
+  const nodeData = node.data as unknown as FlowNodeData
   const tpl = NODE_REGISTRY_MAP.get(nodeData.nodeType)
   const color = CATEGORY_COLORS[nodeData.category] ?? '#6b7280'
 

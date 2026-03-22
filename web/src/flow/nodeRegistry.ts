@@ -1,4 +1,5 @@
 import type { NodeTemplate, NodeCategory } from '../types/flow'
+export type { NodeTemplate } from '../types/flow'
 
 export const NODE_REGISTRY: NodeTemplate[] = [
   // ── Input ──────────────────────────────────────────────────────────────────

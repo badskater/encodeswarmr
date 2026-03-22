@@ -4,7 +4,7 @@ import type { FlowNodeData } from '../../types/flow'
 import { CATEGORY_COLORS } from '../nodeRegistry'
 
 function FlowNode({ data, selected }: NodeProps) {
-  const nodeData = data as FlowNodeData
+  const nodeData = data as unknown as FlowNodeData
   const color = CATEGORY_COLORS[nodeData.category] ?? '#6b7280'
   const isCondition = nodeData.category === 'condition'
 

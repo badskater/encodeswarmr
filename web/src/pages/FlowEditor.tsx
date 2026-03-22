@@ -181,7 +181,7 @@ export default function FlowEditor() {
     connectingHandle.current = null
   }, [])
 
-  const isValidConnection = useCallback((connection: Connection) => {
+  const isValidConnection = useCallback((connection: Connection | { source: string; target: string }) => {
     // Prevent self-loops
     if (connection.source === connection.target) return false
     return true
@@ -303,7 +303,7 @@ export default function FlowEditor() {
 
   // ── MiniMap node color ────────────────────────────────────────────────────
   const minimapNodeColor = useCallback((node: Node) => {
-    const cat = (node.data as FlowNodeData)?.category
+    const cat = (node.data as unknown as FlowNodeData)?.category
     return cat ? CATEGORY_COLORS[cat] ?? '#6b7280' : '#6b7280'
   }, [])
 
