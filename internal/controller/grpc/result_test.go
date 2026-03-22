@@ -250,7 +250,7 @@ func TestReportResult_GetJobError(t *testing.T) {
 
 func TestReportResult_HDRDetect_SentinelParsed(t *testing.T) {
 	// When an hdr_detect job completes, the controller should find the
-	// DE_HDR_RESULT sentinel in task stdout and call UpdateSourceHDR.
+	// ES_HDR_RESULT sentinel in task stdout and call UpdateSourceHDR.
 	stub := &resultStub{
 		job: &db.Job{
 			ID:             "job-hdr",
@@ -266,7 +266,7 @@ func TestReportResult_HDRDetect_SentinelParsed(t *testing.T) {
 		tasks: []*db.Task{{ID: "task-hdr", JobID: "job-hdr"}},
 		logs: []*db.TaskLog{
 			{ID: 1, TaskID: "task-hdr", Stream: "stdout",
-				Message: `DE_HDR_RESULT={"hdr_type":"dolby_vision","dv_profile":8}`},
+				Message: `ES_HDR_RESULT={"hdr_type":"dolby_vision","dv_profile":8}`},
 		},
 	}
 	srv := newResultServer(stub)
@@ -362,7 +362,7 @@ func TestReportResult_HDRDetect_HDR10Plus(t *testing.T) {
 		tasks: []*db.Task{{ID: "task-hdr10p", JobID: "job-hdr10p"}},
 		logs: []*db.TaskLog{
 			{ID: 1, TaskID: "task-hdr10p", Stream: "stdout",
-				Message: `DE_HDR_RESULT={"hdr_type":"hdr10+","dv_profile":0}`},
+				Message: `ES_HDR_RESULT={"hdr_type":"hdr10+","dv_profile":0}`},
 		},
 	}
 	srv := newResultServer(stub)

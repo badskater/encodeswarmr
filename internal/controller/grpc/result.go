@@ -249,7 +249,7 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 }
 
 // extractHDRResult scans the task stdout logs of a completed hdr_detect job
-// for the DE_HDR_RESULT sentinel line, parses it, and updates the source.
+// for the ES_HDR_RESULT sentinel line, parses it, and updates the source.
 func (s *Server) extractHDRResult(ctx context.Context, job *db.Job) error {
 	tasks, err := s.store.ListTasksByJob(ctx, job.ID)
 	if err != nil {
