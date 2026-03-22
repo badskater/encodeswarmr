@@ -4,7 +4,7 @@
 # path_mappings configured in controller.yaml.
 
 resource "aws_efs_file_system" "main" {
-  creation_token   = "distencoder-${var.environment}-efs"
+  creation_token   = "encodeswarmr-${var.environment}-efs"
   performance_mode = var.efs_performance_mode
   throughput_mode  = var.efs_throughput_mode
   encrypted        = true
@@ -18,7 +18,7 @@ resource "aws_efs_file_system" "main" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-efs"
+    Name = "encodeswarmr-${var.environment}-efs"
   }
 }
 
@@ -56,7 +56,7 @@ resource "aws_efs_access_point" "media" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-efs-media"
+    Name = "encodeswarmr-${var.environment}-efs-media"
   }
 }
 
@@ -78,7 +78,7 @@ resource "aws_efs_access_point" "encodes" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-efs-encodes"
+    Name = "encodeswarmr-${var.environment}-efs-encodes"
   }
 }
 
@@ -100,7 +100,7 @@ resource "aws_efs_access_point" "temp" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-efs-temp"
+    Name = "encodeswarmr-${var.environment}-efs-temp"
   }
 }
 

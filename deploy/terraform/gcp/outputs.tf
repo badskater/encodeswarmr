@@ -18,7 +18,7 @@ output "controller_grpc_lb_ip" {
 }
 
 output "controller_web_url" {
-  description = "URL for the distributed-encoder web UI."
+  description = "URL for the encodeswarmr web UI."
   value = var.enable_ha ? (
     "http://${google_compute_forwarding_rule.http[0].ip_address}:8080"
   ) : (

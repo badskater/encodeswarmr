@@ -71,13 +71,13 @@ variable "db_tier" {
 variable "db_name" {
   description = "PostgreSQL database name."
   type        = string
-  default     = "distencoder"
+  default     = "encodeswarmr"
 }
 
 variable "db_user" {
   description = "PostgreSQL user name."
   type        = string
-  default     = "distencoder"
+  default     = "encodeswarmr"
 }
 
 variable "db_password" {
@@ -93,7 +93,7 @@ variable "db_password" {
 variable "ssh_user" {
   description = "Linux user account added to VMs for SSH access."
   type        = string
-  default     = "distencoder"
+  default     = "encodeswarmr"
 }
 
 variable "ssh_public_key" {
@@ -105,8 +105,8 @@ variable "ssh_public_key" {
 # Application
 # ---------------------------------------------------------------------------
 
-variable "distencoder_version" {
-  description = "distributed-encoder release version to install (e.g. 1.0.4). Used to fetch the .deb from GitHub releases."
+variable "encodeswarmr_version" {
+  description = "encodeswarmr release version to install (e.g. 1.0.4). Used to fetch the .deb from GitHub releases."
   type        = string
   default     = "1.0.4"
 }

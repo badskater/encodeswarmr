@@ -59,8 +59,8 @@ resource "azurerm_postgresql_flexible_server" "main" {
 
 # ─── Application Database ─────────────────────────────────────────────────────
 
-resource "azurerm_postgresql_flexible_server_database" "distencoder" {
-  name      = "distencoder"
+resource "azurerm_postgresql_flexible_server_database" "encodeswarmr" {
+  name      = "encodeswarmr"
   server_id = azurerm_postgresql_flexible_server.main.id
   charset   = "UTF8"
   collation = "en_US.utf8"

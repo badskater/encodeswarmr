@@ -1,4 +1,4 @@
-; Distributed Encoder Agent — Inno Setup 6 installer
+; EncodeSwarmr Agent — Inno Setup 6 installer
 ;
 ; Build:
 ;   ISCC.exe /DAgentVersion=1.2.0 /O"dist" installer\agent-setup.iss
@@ -13,10 +13,10 @@
   #define AgentVersion "0.0.0-dev"
 #endif
 
-#define AppName    "Distributed Encoder Agent"
-#define AppURL     "https://github.com/badskater/distributed-encoder"
-#define ServiceName "distributed-encoder-agent"
-#define ConfigDir   "C:\ProgramData\distributed-encoder"
+#define AppName    "EncodeSwarmr Agent"
+#define AppURL     "https://github.com/badskater/encodeswarmr"
+#define ServiceName "encodeswarmr-agent"
+#define ConfigDir   "C:\ProgramData\encodeswarmr"
 #define ConfigFile  ConfigDir + "\agent.yaml"
 
 ; ── [Setup] ────────────────────────────────────────────────────────────────────
@@ -31,13 +31,13 @@ DefaultDirName=C:\DistEncoder
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
-OutputBaseFilename=distencoder-agent-setup
+OutputBaseFilename=encodeswarmr-agent-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ; Uninstall info
 UninstallDisplayName={#AppName}
-UninstallDisplayIcon={app}\distencoder-agent.exe
+UninstallDisplayIcon={app}\encodeswarmr-agent.exe
 
 ; ── [Languages] ───────────────────────────────────────────────────────────────
 [Languages]
@@ -46,7 +46,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; ── [Messages] ────────────────────────────────────────────────────────────────
 [Messages]
 WelcomeLabel2=This wizard will install [name/ver] on your computer.%n%nThe installer will:%n  - Download the agent binary from GitHub Releases%n  - Create the required directory structure%n  - Copy your TLS certificate files%n  - Write the agent configuration file%n  - Install and start the Windows Service%n%nClick Next to continue.
-FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe service %"distributed-encoder-agent%" is now running.%n%nNext step: approve this agent in the web UI (Farm Servers -%n Approve) or run:%n%n  docker compose exec controller /app/controller agent approve <hostname>
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe service %"encodeswarmr-agent%" is now running.%n%nNext step: approve this agent in the web UI (Farm Servers -%n Approve) or run:%n%n  docker compose exec controller /app/controller agent approve <hostname>
 
 ; ── [Dirs] ────────────────────────────────────────────────────────────────────
 [Dirs]
@@ -250,7 +250,7 @@ var
   Url, PSArgs : String;
   ResultCode  : Integer;
 begin
-  Url := 'https://github.com/badskater/distributed-encoder/releases/download/v' +
+  Url := 'https://github.com/badskater/encodeswarmr/releases/download/v' +
          Version + '/agent-windows-amd64.exe';
 
   PSArgs := '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
@@ -282,7 +282,7 @@ begin
   PageController := CreateInputQueryPage(
     wpSelectDir,
     'Controller Connection',
-    'Enter the gRPC address of the Distributed Encoder Controller.',
+    'Enter the gRPC address of the EncodeSwarmr Controller.',
     '');
   PageController.Add('Controller address (host:port):', False);
   PageController.Values[0] := '';
@@ -302,7 +302,7 @@ begin
     'Agent Binary',
     'The installer will download the agent binary from GitHub Releases.',
     'Leave blank only if you have already placed the binary at:' + #13#10 +
-    '<install-dir>\distencoder-agent.exe');
+    '<install-dir>\encodeswarmr-agent.exe');
   PageVersion.Add('Release version to download (e.g. 1.2.0 — without the v prefix):', False);
   PageVersion.Values[0] := '';
 
@@ -389,7 +389,7 @@ begin
   GAgentHostname     := Trim(PageAgent.Values[0]);
   GVersion           := Trim(PageVersion.Values[0]);
   GCertSourceDir     := PageCerts.Values[0];
-  GBinaryDest        := GInstallDir + '\distencoder-agent.exe';
+  GBinaryDest        := GInstallDir + '\encodeswarmr-agent.exe';
 
   if CurStep = ssInstall then
   begin
@@ -419,7 +419,7 @@ begin
           'No version was specified and no binary was found at:' + #13#10 +
           GBinaryDest + #13#10#13#10 +
           'Either enter a version number to download, or copy' + #13#10 +
-          'distencoder-agent.exe to that path before running the installer.',
+          'encodeswarmr-agent.exe to that path before running the installer.',
           mbError, MB_OK);
         WizardForm.Close;
         Exit;
@@ -484,7 +484,7 @@ begin
       MsgBox(
         'The service was installed but could not be started.' + #13#10 +
         'Check Event Viewer → Windows Logs → Application,' + #13#10 +
-        'source: distributed-encoder-agent.' + #13#10#13#10 +
+        'source: encodeswarmr-agent.' + #13#10#13#10 +
         'Or check the log files at: ' + GInstallDir + '\logs',
         mbInformation, MB_OK);
 
@@ -498,7 +498,7 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    BinaryPath := ExpandConstant('{app}') + '\distencoder-agent.exe';
+    BinaryPath := ExpandConstant('{app}') + '\encodeswarmr-agent.exe';
     Exec(BinaryPath, 'stop',                                    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(BinaryPath, 'uninstall --config "' + '{#ConfigFile}' + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;

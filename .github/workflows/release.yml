@@ -2,10 +2,10 @@ name: Release
 
 # Triggered by a semver tag push (e.g. v1.2.3).
 # Produces four artifacts attached to the GitHub Release:
-#   - distributed-encoder-controller_<ver>_linux_amd64.deb
-#   - distributed-encoder-agent_<ver>_linux_amd64.deb
-#   - distencoder-agent.exe  (Windows amd64 binary)
-#   - ghcr.io/<owner>/distributed-encoder-controller:<ver>  (container)
+#   - encodeswarmr-controller_<ver>_linux_amd64.deb
+#   - encodeswarmr-agent_<ver>_linux_amd64.deb
+#   - encodeswarmr-agent.exe  (Windows amd64 binary)
+#   - ghcr.io/<owner>/encodeswarmr-controller:<ver>  (container)
 #
 # The Inno Setup Windows installer is built separately by installer.yml.
 
@@ -63,7 +63,7 @@ jobs:
       - name: Upload controller .deb to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/distributed-encoder-controller_*.deb
+          files: dist/encodeswarmr-controller_*.deb
 
   # ── Controller: container image ──────────────────────────────────────────────
   controller-container:
@@ -85,7 +85,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/distributed-encoder-controller
+          images: ghcr.io/${{ github.repository_owner }}/encodeswarmr-controller
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -97,7 +97,9 @@ jobs:
         with:
           context: .
           file: deployments/Dockerfile.controller
+          platforms: linux/amd64
           push: true
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ github.ref_name }}
@@ -136,7 +138,7 @@ jobs:
       - name: Upload agent .deb to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/distributed-encoder-agent_*.deb
+          files: dist/encodeswarmr-agent_*.deb
 
   # ── Controller: .rpm package ─────────────────────────────────────────────────
   controller-rpm:
@@ -179,7 +181,7 @@ jobs:
       - name: Upload controller .rpm to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/distributed-encoder-controller*.rpm
+          files: dist/encodeswarmr-controller*.rpm
 
   # ── Agent: Linux .rpm package ─────────────────────────────────────────────────
   agent-linux-rpm:
@@ -213,7 +215,7 @@ jobs:
       - name: Upload agent .rpm to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/distributed-encoder-agent*.rpm
+          files: dist/encodeswarmr-agent*.rpm
 
   # ── Agent: Windows .exe ───────────────────────────────────────────────────────
   agent-windows-exe:

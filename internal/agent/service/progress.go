@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

@@ -1,6 +1,6 @@
 # Terraform — Azure Deployment
 
-Deploys the distributed-encoder stack on Microsoft Azure.
+Deploys the encodeswarmr stack on Microsoft Azure.
 Supports standard (single-controller) and HA (dual-controller + load balancer) modes,
 toggled by the `enable_ha` variable.
 

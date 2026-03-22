@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -40,11 +40,11 @@ func TestHandleMetrics_Success(t *testing.T) {
 	}
 
 	body := rr.Body.String()
-	if !strings.Contains(body, "distencoder_jobs_total") {
-		t.Error("response missing distencoder_jobs_total metric")
+	if !strings.Contains(body, "encodeswarmr_jobs_total") {
+		t.Error("response missing encodeswarmr_jobs_total metric")
 	}
-	if !strings.Contains(body, "distencoder_agents_total") {
-		t.Error("response missing distencoder_agents_total metric")
+	if !strings.Contains(body, "encodeswarmr_agents_total") {
+		t.Error("response missing encodeswarmr_agents_total metric")
 	}
 }
 
@@ -85,10 +85,10 @@ func TestHandleMetrics_AgentStatusCounts(t *testing.T) {
 
 	body := rr.Body.String()
 	// idle=2, running=1 should be present in the Prometheus text.
-	if !strings.Contains(body, `distencoder_agents_total{status="idle"} 2`) {
+	if !strings.Contains(body, `encodeswarmr_agents_total{status="idle"} 2`) {
 		t.Errorf("expected idle=2 in body:\n%s", body)
 	}
-	if !strings.Contains(body, `distencoder_agents_total{status="running"} 1`) {
+	if !strings.Contains(body, `encodeswarmr_agents_total{status="running"} 1`) {
 		t.Errorf("expected running=1 in body:\n%s", body)
 	}
 }

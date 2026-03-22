@@ -7,8 +7,8 @@ import {
   type ReactNode,
 } from 'react'
 
-const BRANDING_KEY = 'distencoder-branding'
-const OVERRIDES_KEY = 'distencoder-theme-overrides'
+const BRANDING_KEY = 'encodeswarmr-branding'
+const OVERRIDES_KEY = 'encodeswarmr-theme-overrides'
 
 export interface BrandingSettings {
   logoUrl: string

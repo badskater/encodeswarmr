@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
-	"github.com/badskater/distributed-encoder/tests/integration/testharness"
+	"github.com/badskater/encodeswarmr/internal/db"
+	"github.com/badskater/encodeswarmr/tests/integration/testharness"
 
 	_ "modernc.org/sqlite"
 )

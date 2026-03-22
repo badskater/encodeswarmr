@@ -1,7 +1,7 @@
 //go:build integration
 
 // Package integration_test contains Layer 2 integration tests that exercise
-// the full HTTP API and gRPC surface of the distributed-encoder controller.
+// the full HTTP API and gRPC surface of the encodeswarmr controller.
 //
 // Requirements:
 //   - A reachable PostgreSQL instance (TEST_DATABASE_URL or a testcontainers-
@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
-	"github.com/badskater/distributed-encoder/tests/integration/testharness"
+	"github.com/badskater/encodeswarmr/internal/db"
+	"github.com/badskater/encodeswarmr/tests/integration/testharness"
 )
 
 // cookieJar creates a new RFC 6265-compliant cookie jar.

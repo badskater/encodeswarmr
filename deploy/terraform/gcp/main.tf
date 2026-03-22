@@ -23,7 +23,7 @@ terraform {
   # Uncomment and configure to use a GCS backend for remote state.
   # backend "gcs" {
   #   bucket = "your-terraform-state-bucket"
-  #   prefix = "distributed-encoder/gcp"
+  #   prefix = "encodeswarmr/gcp"
   # }
 }
 
@@ -45,9 +45,9 @@ resource "random_id" "suffix" {
 }
 
 locals {
-  name_prefix = "distencoder-${var.environment}"
+  name_prefix = "encodeswarmr-${var.environment}"
   common_labels = {
-    project     = "distributed-encoder"
+    project     = "encodeswarmr"
     environment = var.environment
     managed_by  = "terraform"
   }

@@ -1,6 +1,6 @@
 #cloud-config
 # Agent cloud-init — installs .deb package, encoding tools, mounts Azure Files,
-# pulls mTLS certs from Key Vault, then starts distributed-encoder-agent service.
+# pulls mTLS certs from Key Vault, then starts encodeswarmr-agent service.
 
 package_update: true
 package_upgrade: true
@@ -16,16 +16,16 @@ packages:
   - libx264-dev
 
 write_files:
-  - path: /etc/distributed-encoder-agent/agent.yaml
+  - path: /etc/encodeswarmr-agent/agent.yaml
     permissions: "0640"
-    owner: root:distencoder
+    owner: root:encodeswarmr
     content: |
       controller:
         address: "${controller_address}"
         tls:
-          cert: "/etc/distributed-encoder-agent/certs/agent.crt"
-          key:  "/etc/distributed-encoder-agent/certs/agent.key"
-          ca:   "/etc/distributed-encoder-agent/certs/ca.crt"
+          cert: "/etc/encodeswarmr-agent/certs/agent.crt"
+          key:  "/etc/encodeswarmr-agent/certs/agent.key"
+          ca:   "/etc/encodeswarmr-agent/certs/ca.crt"
         reconnect:
           initial_delay: 5s
           max_delay: 5m
@@ -33,9 +33,9 @@ write_files:
 
       agent:
         hostname: ""
-        work_dir: "/var/lib/distributed-encoder-agent/work"
-        log_dir:  "/var/log/distributed-encoder-agent"
-        offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+        work_dir: "/var/lib/encodeswarmr-agent/work"
+        log_dir:  "/var/log/encodeswarmr-agent"
+        offline_db: "/var/lib/encodeswarmr-agent/offline.db"
         heartbeat_interval: 30s
         poll_interval: 10s
         cleanup_on_success: true
@@ -89,13 +89,13 @@ write_files:
           | jq -r '.value'
       }
 
-      mkdir -p /etc/distributed-encoder-agent/certs
-      chmod 750 /etc/distributed-encoder-agent/certs
+      mkdir -p /etc/encodeswarmr-agent/certs
+      chmod 750 /etc/encodeswarmr-agent/certs
 
-      get_secret "agent-cert" > /etc/distributed-encoder-agent/certs/agent.crt
-      get_secret "agent-key"  > /etc/distributed-encoder-agent/certs/agent.key
-      get_secret "ca-cert"    > /etc/distributed-encoder-agent/certs/ca.crt
-      chmod 640 /etc/distributed-encoder-agent/certs/*.crt /etc/distributed-encoder-agent/certs/*.key
+      get_secret "agent-cert" > /etc/encodeswarmr-agent/certs/agent.crt
+      get_secret "agent-key"  > /etc/encodeswarmr-agent/certs/agent.key
+      get_secret "ca-cert"    > /etc/encodeswarmr-agent/certs/ca.crt
+      chmod 640 /etc/encodeswarmr-agent/certs/*.crt /etc/encodeswarmr-agent/certs/*.key
 
       echo "Agent secrets fetched successfully."
 
@@ -129,11 +129,11 @@ write_files:
 
 runcmd:
   # Create service user
-  - useradd -r -m -s /bin/bash distencoder || true
-  # Install distributed-encoder-agent .deb
+  - useradd -r -m -s /bin/bash encodeswarmr || true
+  # Install encodeswarmr-agent .deb
   - >
     curl -fsSL
-    "https://github.com/badskater/distributed-encoder/releases/download/v${distencoder_version}/distributed-encoder-agent_${distencoder_version}_linux_amd64.deb"
+    "https://github.com/badskater/encodeswarmr/releases/download/v${encodeswarmr_version}/encodeswarmr-agent_${encodeswarmr_version}_linux_amd64.deb"
     -o /tmp/agent.deb
   - dpkg -i /tmp/agent.deb || apt-get install -f -y
   - rm /tmp/agent.deb
@@ -144,9 +144,9 @@ runcmd:
   # Mount NAS shares
   - /usr/local/bin/mount-nas.sh
   # Set correct permissions
-  - chown -R distencoder:distencoder /var/lib/distributed-encoder-agent /var/log/distributed-encoder-agent
-  - chown -R root:distencoder /etc/distributed-encoder-agent
+  - chown -R encodeswarmr:encodeswarmr /var/lib/encodeswarmr-agent /var/log/encodeswarmr-agent
+  - chown -R root:encodeswarmr /etc/encodeswarmr-agent
   # Enable and start agent service
   - systemctl daemon-reload
-  - systemctl enable distributed-encoder-agent
-  - systemctl start distributed-encoder-agent
+  - systemctl enable encodeswarmr-agent
+  - systemctl start encodeswarmr-agent

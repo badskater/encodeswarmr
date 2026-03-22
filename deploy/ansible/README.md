@@ -1,6 +1,6 @@
-# Ansible Deployment — Distributed Encoder
+# Ansible Deployment — EncodeSwarmr
 
-Ansible playbooks for deploying `distributed-encoder` to on-premise systems.
+Ansible playbooks for deploying `encodeswarmr` to on-premise systems.
 
 Three deployment modes are provided:
 
@@ -114,7 +114,7 @@ Required inventory groups: `controllers_ha`, `loadbalancer`, and either `databas
 ### `playbooks/upgrade.yml` — Rolling upgrade
 
 Upgrades all components one host at a time. Set the target version in `group_vars/all.yml`
-(`distencoder_version`) or pass it on the command line.
+(`encodeswarmr_version`) or pass it on the command line.
 
 ```bash
 # Upgrade to version set in group_vars
@@ -122,7 +122,7 @@ ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml --ask-vault-pass
 
 # Override version at runtime
 ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
-  -e distencoder_version=1.1.0 --ask-vault-pass
+  -e encodeswarmr_version=1.1.0 --ask-vault-pass
 
 # Upgrade only Linux agents
 ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
@@ -145,16 +145,16 @@ ansible-playbook -i inventory/hosts.yml docker-compose/deploy.yml --ask-vault-pa
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `distencoder_version` | `"1.0.4"` | Release version to deploy |
-| `distencoder_github_repo` | `"badskater/distributed-encoder"` | GitHub repo |
+| `encodeswarmr_version` | `"1.0.4"` | Release version to deploy |
+| `encodeswarmr_github_repo` | `"badskater/encodeswarmr"` | GitHub repo |
 | `controller_http_port` | `8080` | Controller REST API / web UI port |
 | `controller_grpc_port` | `9443` | Controller gRPC + mTLS port |
 | `db_host` | `"localhost"` | PostgreSQL host |
 | `db_port` | `5432` | PostgreSQL port |
-| `db_name` | `"distencoder"` | Database name |
-| `db_user` | `"distencoder"` | Database user |
+| `db_name` | `"encodeswarmr"` | Database name |
+| `db_user` | `"encodeswarmr"` | Database user |
 | `db_password` | `"{{ vault_db_password }}"` | Database password (from Vault) |
-| `cert_dir` | `"/etc/distributed-encoder/certs"` | mTLS cert directory (Linux) |
+| `cert_dir` | `"/etc/encodeswarmr/certs"` | mTLS cert directory (Linux) |
 | `mtls_generate_certs` | `true` | Generate certs automatically |
 | `mtls_ca_days` | `3650` | CA cert validity (days) |
 | `mtls_cert_days` | `1825` | Leaf cert validity (days) |
@@ -261,9 +261,9 @@ ansible-playbook -i inventory/hosts.yml docker-compose/deploy.yml --ask-vault-pa
 
 The playbook:
 1. Installs Docker Engine + Compose plugin
-2. Creates `/opt/distributed-encoder/` with templated config
-3. Copies mTLS certs into `/opt/distributed-encoder/certs/`
-4. Writes secrets to `/opt/distributed-encoder/.env`
+2. Creates `/opt/encodeswarmr/` with templated config
+3. Copies mTLS certs into `/opt/encodeswarmr/certs/`
+4. Writes secrets to `/opt/encodeswarmr/.env`
 5. Runs `docker compose up -d`
 
 NFS shares must be pre-mounted on the Docker host (or mount them via the `common` role).
@@ -276,7 +276,7 @@ Use `playbooks/upgrade.yml` for rolling upgrades with no downtime:
 
 ```bash
 ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
-  -e distencoder_version=1.1.0 --ask-vault-pass
+  -e encodeswarmr_version=1.1.0 --ask-vault-pass
 ```
 
 The playbook upgrades each component (`serial: 1`) and waits for health checks
@@ -313,7 +313,7 @@ All tasks are tagged. Use `--tags` to run only specific phases:
 **Symptom:** Agent cannot connect to controller; TLS handshake fails.
 
 - Verify cert files exist on the agent host:
-  - Linux: `ls -la /etc/distributed-encoder/certs/`
+  - Linux: `ls -la /etc/encodeswarmr/certs/`
   - Windows: `dir C:\DistEncoder\certs\`
 - Verify cert and CA match: `openssl verify -CAfile ca.crt agent.crt`
 - Re-distribute certs: `ansible-playbook playbooks/site.yml --tags certs`
@@ -322,8 +322,8 @@ All tasks are tagged. Use `--tags` to run only specific phases:
 
 ```bash
 # Check service status and logs
-sudo systemctl status distributed-encoder-controller
-sudo journalctl -u distributed-encoder-controller -n 50 --no-pager
+sudo systemctl status encodeswarmr-controller
+sudo journalctl -u encodeswarmr-controller -n 50 --no-pager
 ```
 
 Common causes: database not reachable, missing cert files, config YAML syntax error.
@@ -331,15 +331,15 @@ Common causes: database not reachable, missing cert files, config YAML syntax er
 ### Agent service not starting (Linux)
 
 ```bash
-sudo systemctl status distributed-encoder-agent
-sudo journalctl -u distributed-encoder-agent -n 50 --no-pager
+sudo systemctl status encodeswarmr-agent
+sudo journalctl -u encodeswarmr-agent -n 50 --no-pager
 ```
 
 ### Agent service not starting (Windows)
 
 ```powershell
-Get-Service distributed-encoder-agent
-Get-EventLog -LogName Application -Source 'distributed-encoder-agent' -Newest 20
+Get-Service encodeswarmr-agent
+Get-EventLog -LogName Application -Source 'encodeswarmr-agent' -Newest 20
 ```
 
 ### WinRM connectivity

@@ -3,7 +3,7 @@
     {
       "name": "DS_PROMETHEUS",
       "label": "Prometheus",
-      "description": "Prometheus datasource for distributed-encoder metrics",
+      "description": "Prometheus datasource for encodeswarmr metrics",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
@@ -76,7 +76,7 @@
       }
     ]
   },
-  "description": "Operational dashboard for the distributed-encoder system: throughput, latency, agent utilization, and error rates.",
+  "description": "Operational dashboard for the encodeswarmr system: throughput, latency, agent utilization, and error rates.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -144,7 +144,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "increase(distencoder_jobs_total{status=\"completed\"}[1h])",
+          "expr": "increase(encodeswarmr_jobs_total{status=\"completed\"}[1h])",
           "legendFormat": "Completed jobs",
           "refId": "A"
         }
@@ -199,19 +199,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, rate(distencoder_task_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, rate(encodeswarmr_task_duration_seconds_bucket[5m]))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, rate(distencoder_task_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(encodeswarmr_task_duration_seconds_bucket[5m]))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.99, rate(distencoder_task_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, rate(encodeswarmr_task_duration_seconds_bucket[5m]))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -334,7 +334,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "distencoder_tasks_total{status=\"pending\"}",
+          "expr": "encodeswarmr_tasks_total{status=\"pending\"}",
           "legendFormat": "Pending tasks",
           "refId": "A"
         }
@@ -393,13 +393,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "distencoder_tasks_total{status=\"failed\"} / clamp_min(distencoder_tasks_total{status=\"failed\"} + distencoder_tasks_total{status=\"completed\"}, 1)",
+          "expr": "encodeswarmr_tasks_total{status=\"failed\"} / clamp_min(encodeswarmr_tasks_total{status=\"failed\"} + encodeswarmr_tasks_total{status=\"completed\"}, 1)",
           "legendFormat": "Task error rate",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "distencoder_jobs_total{status=\"failed\"} / clamp_min(distencoder_jobs_total{status=\"failed\"} + distencoder_jobs_total{status=\"completed\"}, 1)",
+          "expr": "encodeswarmr_jobs_total{status=\"failed\"} / clamp_min(encodeswarmr_jobs_total{status=\"failed\"} + encodeswarmr_jobs_total{status=\"completed\"}, 1)",
           "legendFormat": "Job error rate",
           "refId": "B"
         }
@@ -449,7 +449,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "distencoder_active_agents",
+          "expr": "encodeswarmr_active_agents",
           "legendFormat": "Active agents",
           "refId": "A"
         }
@@ -505,7 +505,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "distencoder_encoding_fps",
+          "expr": "encodeswarmr_encoding_fps",
           "legendFormat": "Total encoding FPS",
           "refId": "A"
         }
@@ -561,7 +561,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "topk(10, rate(distencoder_http_requests_total[1m]))",
+          "expr": "topk(10, rate(encodeswarmr_http_requests_total[1m]))",
           "legendFormat": "{{method}} {{path}} {{status}}",
           "refId": "A"
         }
@@ -572,13 +572,13 @@
   ],
   "refresh": "30s",
   "schemaVersion": 37,
-  "tags": ["distributed-encoder", "encoding", "video"],
+  "tags": ["encodeswarmr", "encoding", "video"],
   "templating": {
     "list": [
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-        "definition": "label_values(distencoder_agents_total, status)",
+        "definition": "label_values(encodeswarmr_agents_total, status)",
         "hide": 0,
         "includeAll": true,
         "label": "Agent",
@@ -586,7 +586,7 @@
         "name": "agent",
         "options": [],
         "query": {
-          "query": "label_values(distencoder_agents_total, instance)",
+          "query": "label_values(encodeswarmr_agents_total, instance)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -618,8 +618,8 @@
   "time": { "from": "now-3h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Distributed Encoder",
-  "uid": "distributed-encoder-v1",
+  "title": "EncodeSwarmr",
+  "uid": "encodeswarmr-v1",
   "version": 1,
   "weekStart": ""
 }

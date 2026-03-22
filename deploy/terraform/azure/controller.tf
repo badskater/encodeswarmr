@@ -4,10 +4,10 @@
 locals {
   controller_cloud_init = templatefile("${path.module}/templates/controller-cloud-init.yaml.tpl", {
     docker_image        = var.controller_docker_image
-    distencoder_version = var.distencoder_version
+    encodeswarmr_version = var.encodeswarmr_version
     storage_account     = azurerm_storage_account.nas.name
     db_host             = azurerm_postgresql_flexible_server.main.fqdn
-    db_name             = azurerm_postgresql_flexible_server_database.distencoder.name
+    db_name             = azurerm_postgresql_flexible_server_database.encodeswarmr.name
     db_admin_login      = var.db_admin_login
     key_vault_name      = azurerm_key_vault.main.name
     nfs_enabled         = var.storage_account_tier == "Premium"
@@ -46,9 +46,9 @@ resource "azurerm_linux_virtual_machine" "controller" {
 
   network_interface_ids = [azurerm_network_interface.controller[count.index].id]
 
-  admin_username = "distencoder"
+  admin_username = "encodeswarmr"
   admin_ssh_key {
-    username   = "distencoder"
+    username   = "encodeswarmr"
     public_key = file(var.ssh_public_key_path)
   }
 

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

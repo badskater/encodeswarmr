@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/scheduler"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/scheduler"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // scheduleResponse is the public representation of a schedule.

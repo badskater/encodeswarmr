@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-agent-linux.sh — Install the Distributed Encoder agent on Linux.
+# install-agent-linux.sh — Install the EncodeSwarmr agent on Linux.
 #
 # Supports Debian/Ubuntu (apt/.deb) and RHEL/Rocky Linux/AlmaLinux (dnf/.rpm).
 # Falls back to a raw binary install on other distributions.
@@ -23,23 +23,23 @@
 #
 # What this script does:
 #   1. Detects the Linux distribution family (deb/rpm/binary).
-#   2. Creates /var/lib/distributed-encoder-agent and /etc/distributed-encoder/.
+#   2. Creates /var/lib/encodeswarmr-agent and /etc/encodeswarmr/.
 #   3. Installs the agent binary via .deb, .rpm, or raw binary copy.
-#   4. Copies mTLS certificate files to /etc/distributed-encoder/certs/.
-#   5. Writes /etc/distributed-encoder/agent.yaml.
+#   4. Copies mTLS certificate files to /etc/encodeswarmr/certs/.
+#   5. Writes /etc/encodeswarmr/agent.yaml.
 #   6. Verifies encoding tools (ffmpeg, x265, x264).
-#   7. Enables and starts the distributed-encoder-agent systemd service.
+#   7. Enables and starts the encodeswarmr-agent systemd service.
 #
 # Idempotent: re-running upgrades the binary and overwrites agent.yaml.
 
 set -euo pipefail
 
-CONFIG_DIR="/etc/distributed-encoder"
+CONFIG_DIR="/etc/encodeswarmr"
 CERTS_DIR="${CONFIG_DIR}/certs"
 CONFIG_FILE="${CONFIG_DIR}/agent.yaml"
-WORK_DIR="/var/lib/distributed-encoder-agent/work"
-LOG_DIR="/var/log/distributed-encoder-agent"
-SERVICE_NAME="distributed-encoder-agent"
+WORK_DIR="/var/lib/encodeswarmr-agent/work"
+LOG_DIR="/var/log/encodeswarmr-agent"
+SERVICE_NAME="encodeswarmr-agent"
 
 # ── Colour helpers ─────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BOLD='\033[1m'; NC='\033[0m'
@@ -102,39 +102,39 @@ if [[ -n "${AGENT_BINARY:-}" ]]; then
   if [[ ! -f "${AGENT_BINARY}" ]]; then
     error "AGENT_BINARY not found: ${AGENT_BINARY}"
   fi
-  install -m 0755 "${AGENT_BINARY}" /usr/bin/distributed-encoder-agent
+  install -m 0755 "${AGENT_BINARY}" /usr/bin/encodeswarmr-agent
   info "Installed binary from ${AGENT_BINARY}"
 
 elif [[ "${DISTRO_FAMILY}" == "deb" ]]; then
-  DEB_FILE="/tmp/distributed-encoder-agent_${AGENT_VERSION}_linux_amd64.deb"
+  DEB_FILE="/tmp/encodeswarmr-agent_${AGENT_VERSION}_linux_amd64.deb"
   if [[ ! -f "${DEB_FILE}" ]]; then
     info "Downloading .deb package..."
     curl -fsSL -o "${DEB_FILE}" \
-      "https://github.com/badskater/distributed-encoder/releases/download/v${AGENT_VERSION}/distributed-encoder-agent_${AGENT_VERSION}_linux_amd64.deb"
+      "https://github.com/badskater/encodeswarmr/releases/download/v${AGENT_VERSION}/encodeswarmr-agent_${AGENT_VERSION}_linux_amd64.deb"
   fi
   dpkg -i "${DEB_FILE}"
   info ".deb package installed."
 
 elif [[ "${DISTRO_FAMILY}" == "rpm" ]]; then
-  RPM_FILE="/tmp/distributed-encoder-agent_${AGENT_VERSION}.x86_64.rpm"
+  RPM_FILE="/tmp/encodeswarmr-agent_${AGENT_VERSION}.x86_64.rpm"
   if [[ ! -f "${RPM_FILE}" ]]; then
     info "Downloading .rpm package..."
     curl -fsSL -o "${RPM_FILE}" \
-      "https://github.com/badskater/distributed-encoder/releases/download/v${AGENT_VERSION}/distributed-encoder-agent_${AGENT_VERSION}.x86_64.rpm"
+      "https://github.com/badskater/encodeswarmr/releases/download/v${AGENT_VERSION}/encodeswarmr-agent_${AGENT_VERSION}.x86_64.rpm"
   fi
   dnf install -y "${RPM_FILE}" 2>/dev/null || rpm -Uvh "${RPM_FILE}"
   info ".rpm package installed."
 
 else
   # Raw binary fallback for other distros
-  BINARY_FILE="/tmp/distributed-encoder-agent-${AGENT_VERSION}"
+  BINARY_FILE="/tmp/encodeswarmr-agent-${AGENT_VERSION}"
   if [[ ! -f "${BINARY_FILE}" ]]; then
     info "Downloading raw binary..."
     curl -fsSL -o "${BINARY_FILE}" \
-      "https://github.com/badskater/distributed-encoder/releases/download/v${AGENT_VERSION}/distributed-encoder-agent-linux-amd64"
+      "https://github.com/badskater/encodeswarmr/releases/download/v${AGENT_VERSION}/encodeswarmr-agent-linux-amd64"
   fi
-  install -m 0755 "${BINARY_FILE}" /usr/bin/distributed-encoder-agent
-  info "Binary installed to /usr/bin/distributed-encoder-agent"
+  install -m 0755 "${BINARY_FILE}" /usr/bin/encodeswarmr-agent
+  info "Binary installed to /usr/bin/encodeswarmr-agent"
 fi
 
 # ── Step 3: Copy certificates ─────────────────────────────────────────────────
@@ -157,7 +157,7 @@ fi
 if [[ ${CERT_MISSING} -gt 0 ]]; then
   warn "${CERT_MISSING} cert file(s) missing. Copy them to ${CERTS_DIR}/ before starting the service."
 fi
-chown -R distributed-encoder-agent:distributed-encoder-agent "${CERTS_DIR}" 2>/dev/null || true
+chown -R encodeswarmr-agent:encodeswarmr-agent "${CERTS_DIR}" 2>/dev/null || true
 
 # ── Step 4: Write agent.yaml ──────────────────────────────────────────────────
 step "4/7" "Writing ${CONFIG_FILE}"
@@ -177,7 +177,7 @@ agent:
   hostname: "${AGENT_HOSTNAME}"
   work_dir:   "${WORK_DIR}"
   log_dir:    "${LOG_DIR}"
-  offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+  offline_db: "/var/lib/encodeswarmr-agent/offline.db"
   heartbeat_interval: 30s
   poll_interval: 10s
   cleanup_on_success: true
@@ -247,36 +247,36 @@ if [[ "${DISTRO_FAMILY}" == "binary" ]]; then
   mkdir -p "${UNIT_DIR}"
   cat > "${UNIT_DIR}/${SERVICE_NAME}.service" <<'UNIT'
 [Unit]
-Description=Distributed Encoder Agent
-Documentation=https://github.com/badskater/distributed-encoder
+Description=EncodeSwarmr Agent
+Documentation=https://github.com/badskater/encodeswarmr
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=distributed-encoder-agent
-Group=distributed-encoder-agent
-EnvironmentFile=-/etc/distributed-encoder/agent-environment
-ExecStart=/usr/bin/distributed-encoder-agent run \
-  --config /etc/distributed-encoder/agent.yaml
+User=encodeswarmr-agent
+Group=encodeswarmr-agent
+EnvironmentFile=-/etc/encodeswarmr/agent-environment
+ExecStart=/usr/bin/encodeswarmr-agent run \
+  --config /etc/encodeswarmr/agent.yaml
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=distributed-encoder-agent
+SyslogIdentifier=encodeswarmr-agent
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=full
-ReadWritePaths=/var/lib/distributed-encoder-agent /var/log/distributed-encoder-agent
+ReadWritePaths=/var/lib/encodeswarmr-agent /var/log/encodeswarmr-agent
 
 [Install]
 WantedBy=multi-user.target
 UNIT
   # Create service user if not present
-  if ! id distributed-encoder-agent &>/dev/null 2>&1; then
-    groupadd -r distributed-encoder-agent 2>/dev/null || true
-    useradd -r -s /sbin/nologin -d /var/lib/distributed-encoder-agent \
-      -g distributed-encoder-agent -M distributed-encoder-agent
+  if ! id encodeswarmr-agent &>/dev/null 2>&1; then
+    groupadd -r encodeswarmr-agent 2>/dev/null || true
+    useradd -r -s /sbin/nologin -d /var/lib/encodeswarmr-agent \
+      -g encodeswarmr-agent -M encodeswarmr-agent
   fi
 fi
 
@@ -303,7 +303,7 @@ fi
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${GREEN}  Distributed Encoder Agent Installed!${NC}"
+echo -e "${GREEN}  EncodeSwarmr Agent Installed!${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
 echo "  Agent hostname  : ${AGENT_HOSTNAME}"

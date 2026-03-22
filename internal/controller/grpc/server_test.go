@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 )

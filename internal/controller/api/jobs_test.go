@@ -10,9 +10,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
-	"github.com/badskater/distributed-encoder/internal/db/teststore"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db/teststore"
 )
 
 // ---------------------------------------------------------------------------

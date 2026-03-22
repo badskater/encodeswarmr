@@ -3,7 +3,7 @@
 # We still define the SG unconditionally so the controller SG can reference it.
 
 resource "aws_security_group" "alb" {
-  name        = "distencoder-${var.environment}-alb-sg"
+  name        = "encodeswarmr-${var.environment}-alb-sg"
   description = "Allow HTTP and HTTPS inbound to the Application Load Balancer."
   vpc_id      = aws_vpc.main.id
 
@@ -32,14 +32,14 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-alb-sg"
+    Name = "encodeswarmr-${var.environment}-alb-sg"
   }
 }
 
 # ── Controller Security Group ──────────────────────────────────────────────────
 
 resource "aws_security_group" "controller" {
-  name        = "distencoder-${var.environment}-controller-sg"
+  name        = "encodeswarmr-${var.environment}-controller-sg"
   description = "Allow HTTP REST/UI, gRPC mTLS, and SSH inbound to controller instances."
   vpc_id      = aws_vpc.main.id
 
@@ -98,14 +98,14 @@ resource "aws_security_group" "controller" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-controller-sg"
+    Name = "encodeswarmr-${var.environment}-controller-sg"
   }
 }
 
 # ── Agent Security Group ───────────────────────────────────────────────────────
 
 resource "aws_security_group" "agent" {
-  name        = "distencoder-${var.environment}-agent-sg"
+  name        = "encodeswarmr-${var.environment}-agent-sg"
   description = "Encoding agent instances. Allow SSH inbound; gRPC outbound to controller."
   vpc_id      = aws_vpc.main.id
 
@@ -139,14 +139,14 @@ resource "aws_security_group" "agent" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-agent-sg"
+    Name = "encodeswarmr-${var.environment}-agent-sg"
   }
 }
 
 # ── Database Security Group ────────────────────────────────────────────────────
 
 resource "aws_security_group" "database" {
-  name        = "distencoder-${var.environment}-db-sg"
+  name        = "encodeswarmr-${var.environment}-db-sg"
   description = "Allow PostgreSQL connections from controller instances only."
   vpc_id      = aws_vpc.main.id
 
@@ -167,14 +167,14 @@ resource "aws_security_group" "database" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-db-sg"
+    Name = "encodeswarmr-${var.environment}-db-sg"
   }
 }
 
 # ── EFS Security Group ─────────────────────────────────────────────────────────
 
 resource "aws_security_group" "efs" {
-  name        = "distencoder-${var.environment}-efs-sg"
+  name        = "encodeswarmr-${var.environment}-efs-sg"
   description = "Allow NFS traffic from controller and agent instances."
   vpc_id      = aws_vpc.main.id
 
@@ -203,6 +203,6 @@ resource "aws_security_group" "efs" {
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-efs-sg"
+    Name = "encodeswarmr-${var.environment}-efs-sg"
   }
 }

@@ -1,4 +1,4 @@
-# Distributed Encoder
+# EncodeSwarmr
 
 A distributed video encoding system that offloads encoding workloads from a central **Controller** to one or more **Agents**. The Controller orchestrates jobs, tracks state in PostgreSQL, exposes a REST and gRPC API, serves a management web UI, and fires webhooks on completion. Each Agent pulls work, executes batch and script files from UNC shares, and reports results — including GPU-accelerated encodes — surviving network outages via a local SQLite journal.
 
@@ -29,10 +29,10 @@ make all
 cd deployments && docker compose up -d
 
 # Apply migrations
-DATABASE_URL="postgres://distenc:<pass>@localhost:5432/distencoder?sslmode=disable" make migrate-up
+DATABASE_URL="postgres://distenc:<pass>@localhost:5432/encodeswarmr?sslmode=disable" make migrate-up
 
 # Install agent (Windows — GUI installer)
-# Download distencoder-agent-setup.exe from the latest GitHub Release
+# Download encodeswarmr-agent-setup.exe from the latest GitHub Release
 
 # Install agent (Linux)
 sudo CONTROLLER_ADDRESS=encoder.example.com:9443 ./scripts/install-agent-linux.sh
@@ -63,18 +63,18 @@ Web UI at `http://localhost:8080`. First visit prompts admin account creation.
 
 ## Documentation
 
-All documentation lives in the **[Wiki](https://github.com/badskater/distributed-encoder/wiki)**.
+All documentation lives in the **[Wiki](https://github.com/badskater/encodeswarmr/wiki)**.
 
 | Resource | Description |
 |---|---|
-| **[Wiki Home](https://github.com/badskater/distributed-encoder/wiki)** | Navigation hub for all documentation |
-| [Getting Started](https://github.com/badskater/distributed-encoder/wiki/Getting-Started) | Prerequisites, build, install, first run |
-| [Deployment](https://github.com/badskater/distributed-encoder/wiki/Deployment) | Step-by-step deployment, TLS, HA, troubleshooting |
-| [Agents](https://github.com/badskater/distributed-encoder/wiki/Agents) | Agent specification, state machine, configuration |
-| [Configuration](https://github.com/badskater/distributed-encoder/wiki/Configuration) | Agent and Controller YAML reference |
-| [API Reference](https://github.com/badskater/distributed-encoder/wiki/API-Reference) | REST endpoints and example workflow |
-| [Architecture](https://github.com/badskater/distributed-encoder/wiki/Architecture) | System design and component deep-dives |
-| [Roadmap](https://github.com/badskater/distributed-encoder/wiki/Roadmap) | All 6 completed phases |
+| **[Wiki Home](https://github.com/badskater/encodeswarmr/wiki)** | Navigation hub for all documentation |
+| [Getting Started](https://github.com/badskater/encodeswarmr/wiki/Getting-Started) | Prerequisites, build, install, first run |
+| [Deployment](https://github.com/badskater/encodeswarmr/wiki/Deployment) | Step-by-step deployment, TLS, HA, troubleshooting |
+| [Agents](https://github.com/badskater/encodeswarmr/wiki/Agents) | Agent specification, state machine, configuration |
+| [Configuration](https://github.com/badskater/encodeswarmr/wiki/Configuration) | Agent and Controller YAML reference |
+| [API Reference](https://github.com/badskater/encodeswarmr/wiki/API-Reference) | REST endpoints and example workflow |
+| [Architecture](https://github.com/badskater/encodeswarmr/wiki/Architecture) | System design and component deep-dives |
+| [Roadmap](https://github.com/badskater/encodeswarmr/wiki/Roadmap) | All 6 completed phases |
 | [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions - Used to help build commits and documentations |
 
 Also in repo: [ARCHITECTURE.md](ARCHITECTURE.md) (detailed system design)

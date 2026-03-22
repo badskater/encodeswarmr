@@ -10,15 +10,15 @@
 #   ansible-playbook -i inventory/hosts.yml deploy/ansible/docker-compose/deploy.yml \
 #     --tags configure   # re-template config only, no package install
 
-- name: Deploy distributed-encoder via Docker Compose
+- name: Deploy encodeswarmr via Docker Compose
   hosts: docker_hosts
   become: true
 
   vars:
-    compose_dir: "/opt/distributed-encoder"
-    compose_file: "/opt/distributed-encoder/docker-compose.yml"
-    controller_config_file_docker: "/opt/distributed-encoder/controller.yaml"
-    docker_cert_dir: "/opt/distributed-encoder/certs"
+    compose_dir: "/opt/encodeswarmr"
+    compose_file: "/opt/encodeswarmr/docker-compose.yml"
+    controller_config_file_docker: "/opt/encodeswarmr/controller.yaml"
+    docker_cert_dir: "/opt/encodeswarmr/certs"
 
   tasks:
     # ── mTLS certs ────────────────────────────────────────────────────────────

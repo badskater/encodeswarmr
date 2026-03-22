@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"

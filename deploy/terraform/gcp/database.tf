@@ -68,13 +68,13 @@ resource "google_sql_database_instance" "main" {
   depends_on = [google_service_networking_connection.private_vpc_connection]
 }
 
-resource "google_sql_database" "distencoder" {
+resource "google_sql_database" "encodeswarmr" {
   name     = var.db_name
   instance = google_sql_database_instance.main.name
   project  = var.project_id
 }
 
-resource "google_sql_user" "distencoder" {
+resource "google_sql_user" "encodeswarmr" {
   name     = var.db_user
   instance = google_sql_database_instance.main.name
   password = var.db_password

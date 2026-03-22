@@ -6,13 +6,13 @@
 # account (workload identity).
 #
 # Secret layout:
-#   distencoder-<env>-ca-cert          — CA certificate (PEM)
-#   distencoder-<env>-ca-key           — CA private key  (PEM, controller-only access)
-#   distencoder-<env>-controller-cert  — Controller TLS certificate (PEM)
-#   distencoder-<env>-controller-key   — Controller TLS private key  (PEM)
-#   distencoder-<env>-agent-cert       — Agent TLS certificate (PEM)
-#   distencoder-<env>-agent-key        — Agent TLS private key  (PEM)
-#   distencoder-<env>-db-password      — PostgreSQL password
+#   encodeswarmr-<env>-ca-cert          — CA certificate (PEM)
+#   encodeswarmr-<env>-ca-key           — CA private key  (PEM, controller-only access)
+#   encodeswarmr-<env>-controller-cert  — Controller TLS certificate (PEM)
+#   encodeswarmr-<env>-controller-key   — Controller TLS private key  (PEM)
+#   encodeswarmr-<env>-agent-cert       — Agent TLS certificate (PEM)
+#   encodeswarmr-<env>-agent-key        — Agent TLS private key  (PEM)
+#   encodeswarmr-<env>-db-password      — PostgreSQL password
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -31,8 +31,8 @@ resource "tls_self_signed_cert" "ca" {
   is_ca_certificate = true
 
   subject {
-    common_name  = "distributed-encoder CA (${var.environment})"
-    organization = "distributed-encoder"
+    common_name  = "encodeswarmr CA (${var.environment})"
+    organization = "encodeswarmr"
   }
 
   validity_period_hours = 87600 # 10 years
@@ -55,11 +55,11 @@ resource "tls_cert_request" "controller" {
   private_key_pem = tls_private_key.controller.private_key_pem
 
   subject {
-    common_name  = "controller.distencoder.internal"
-    organization = "distributed-encoder"
+    common_name  = "controller.encodeswarmr.internal"
+    organization = "encodeswarmr"
   }
 
-  dns_names = ["controller.distencoder.internal", "localhost"]
+  dns_names = ["controller.encodeswarmr.internal", "localhost"]
 }
 
 resource "tls_locally_signed_cert" "controller" {
@@ -87,8 +87,8 @@ resource "tls_cert_request" "agent" {
   private_key_pem = tls_private_key.agent.private_key_pem
 
   subject {
-    common_name  = "agent.distencoder.internal"
-    organization = "distributed-encoder"
+    common_name  = "agent.encodeswarmr.internal"
+    organization = "encodeswarmr"
   }
 }
 

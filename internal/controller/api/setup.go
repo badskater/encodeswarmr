@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // setupDone is set to true after setup completes within this process lifetime.

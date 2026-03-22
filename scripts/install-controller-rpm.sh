@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-controller-rpm.sh — Bootstrap the Distributed Encoder controller
+# install-controller-rpm.sh — Bootstrap the EncodeSwarmr controller
 # on RHEL 9 / Rocky Linux 9 / AlmaLinux 9 (or compatible RPM-based distros).
 #
 # Usage (all parameters can be set as environment variables or entered interactively):
@@ -19,9 +19,9 @@
 # What this script does:
 #   1. Verifies RHEL/Rocky/AlmaLinux 9 and root/sudo access.
 #   2. Installs Docker CE + Compose V2 if not present.
-#   3. Creates /opt/distributed-encoder/ directory structure.
+#   3. Creates /opt/encodeswarmr/ directory structure.
 #   4. Calls gen-certs.sh to generate CA + controller + per-agent mTLS certs.
-#   5. Writes /opt/distributed-encoder/.env with all secrets (chmod 600).
+#   5. Writes /opt/encodeswarmr/.env with all secrets (chmod 600).
 #   6. Copies deployments/docker-compose.yml to the install directory.
 #   7. Runs: docker compose up -d
 #   8. Waits for PostgreSQL to become healthy.
@@ -33,7 +33,7 @@
 
 set -euo pipefail
 
-INSTALL_DIR="/opt/distributed-encoder"
+INSTALL_DIR="/opt/encodeswarmr"
 CERTS_DIR="${INSTALL_DIR}/certs"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -147,8 +147,8 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 DE_DB_HOST=postgres
 DE_DB_PORT=5432
-DE_DB_NAME=distencoder
-DE_DB_USER=distencoder
+DE_DB_NAME=encodeswarmr
+DE_DB_USER=encodeswarmr
 DE_DB_PASS=${POSTGRES_PASSWORD}
 
 DE_HTTP_PORT=8080
@@ -173,7 +173,7 @@ info "Services started."
 # ── Step 7: Wait for PostgreSQL ───────────────────────────────────────────────
 step "7/7" "Waiting for PostgreSQL to become healthy"
 RETRIES=30
-until docker compose exec -T postgres pg_isready -U distencoder -q 2>/dev/null; do
+until docker compose exec -T postgres pg_isready -U encodeswarmr -q 2>/dev/null; do
   RETRIES=$((RETRIES - 1))
   if [[ $RETRIES -le 0 ]]; then
     error "PostgreSQL did not become healthy. Run: docker compose logs postgres"
@@ -187,7 +187,7 @@ info "PostgreSQL is healthy."
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${GREEN}  Distributed Encoder Controller is running!${NC}"
+echo -e "${GREEN}  EncodeSwarmr Controller is running!${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
 echo "  Web UI  :  http://${DOMAIN}:8080"

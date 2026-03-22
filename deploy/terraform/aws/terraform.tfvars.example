@@ -40,8 +40,8 @@ enable_ha = false
 
 db_instance_class        = "db.t3.medium"
 db_multi_az              = false   # overridden to true when enable_ha = true
-db_name                  = "distencoder"
-db_username              = "distencoder"
+db_name                  = "encodeswarmr"
+db_username              = "encodeswarmr"
 db_password              = "CHANGE_ME_use_a_long_random_password_here"   # min 16 chars
 db_allocated_storage     = 20     # GiB
 db_max_allocated_storage = 100    # GiB autoscaling ceiling
@@ -54,7 +54,7 @@ efs_throughput_mode  = "bursting"         # bursting | provisioned | elastic
 
 # ── Application ────────────────────────────────────────────────────────────────
 
-distencoder_version = "1.0.4"
+encodeswarmr_version = "1.0.4"
 
 # Long random string — generate with: openssl rand -hex 32
 controller_session_secret = "CHANGE_ME_generate_with_openssl_rand_hex_32"

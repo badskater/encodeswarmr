@@ -95,7 +95,7 @@ func TestWriteProblem(t *testing.T) {
 	}
 
 	// type URI should contain the correct slug.
-	wantType := "https://distencoder.dev/errors/not-found"
+	wantType := "https://encodeswarmr.dev/errors/not-found"
 	if body.Type != wantType {
 		t.Errorf("type = %q, want %q", body.Type, wantType)
 	}

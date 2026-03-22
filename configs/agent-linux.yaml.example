@@ -1,9 +1,9 @@
 controller:
   address: "controller.example.com:9443"
   tls:
-    cert: "/etc/distributed-encoder/certs/agent.crt"
-    key:  "/etc/distributed-encoder/certs/agent.key"
-    ca:   "/etc/distributed-encoder/certs/ca.crt"
+    cert: "/etc/encodeswarmr/certs/agent.crt"
+    key:  "/etc/encodeswarmr/certs/agent.key"
+    ca:   "/etc/encodeswarmr/certs/ca.crt"
   reconnect:
     initial_delay: 5s
     max_delay: 5m
@@ -11,9 +11,9 @@ controller:
 
 agent:
   hostname: ""        # auto-detected from os.Hostname() if empty
-  work_dir: "/var/lib/distributed-encoder-agent/work"
-  log_dir:  "/var/log/distributed-encoder-agent"
-  offline_db: "/var/lib/distributed-encoder-agent/offline.db"
+  work_dir: "/var/lib/encodeswarmr-agent/work"
+  log_dir:  "/var/log/encodeswarmr-agent"
+  offline_db: "/var/lib/encodeswarmr-agent/offline.db"
   heartbeat_interval: 30s
   poll_interval: 10s
   cleanup_on_success: true

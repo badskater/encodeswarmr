@@ -1,6 +1,6 @@
 # Terraform — AWS Deployment
 
-Terraform scripts for deploying `distributed-encoder` on AWS in either standard
+Terraform scripts for deploying `encodeswarmr` on AWS in either standard
 (single-controller) or HA (multi-controller) mode.
 
 ---
@@ -131,11 +131,11 @@ HA mode adds:
 
 ## Upgrading to a new version
 
-Update `distencoder_version` in `terraform.tfvars` and run `terraform apply`.
+Update `encodeswarmr_version` in `terraform.tfvars` and run `terraform apply`.
 The ASG instance refresh replaces instances one at a time (50 % minimum healthy).
 
 ```bash
-terraform apply -var="distencoder_version=1.1.0"
+terraform apply -var="encodeswarmr_version=1.1.0"
 ```
 
 ---

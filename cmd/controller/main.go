@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/badskater/distributed-encoder/internal/controller/cli"
+	"github.com/badskater/encodeswarmr/internal/controller/cli"
 )
 
 // Version is set at build time via -ldflags "-X main.Version=..."

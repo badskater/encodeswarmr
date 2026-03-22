@@ -1,4 +1,4 @@
-scope: distencoder
+scope: encodeswarmr
 name: pg-node-1
 
 restapi:
@@ -21,7 +21,7 @@ bootstrap:
     - host replication replicator 0.0.0.0/0 md5
     - host all all 0.0.0.0/0 md5
   users:
-    distencoder:
+    encodeswarmr:
       password: changeme
       options:
         - createdb

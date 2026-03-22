@@ -7,8 +7,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // handleCreateAPIKey creates a new API key for the authenticated user.

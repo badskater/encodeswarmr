@@ -23,14 +23,14 @@
 
 - name: Download Windows agent installer from GitHub releases
   ansible.windows.win_get_url:
-    url: "{{ _release_base_url }}/distributed-encoder-agent-setup-{{ distencoder_version }}-amd64.exe"
-    dest: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+    url: "{{ _release_base_url }}/encodeswarmr-agent-setup-{{ encodeswarmr_version }}-amd64.exe"
+    dest: "{{ windows_install_dir }}\\agent-setup-{{ encodeswarmr_version }}.exe"
   tags: [agent, agent-windows, install]
 
 - name: Run Windows agent installer silently
   ansible.windows.win_shell: |
     $result = Start-Process -Wait -PassThru `
-      -FilePath "{{ windows_install_dir }}\agent-setup-{{ distencoder_version }}.exe" `
+      -FilePath "{{ windows_install_dir }}\agent-setup-{{ encodeswarmr_version }}.exe" `
       -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
                     "/DIR={{ windows_install_dir }}"
     exit $result.ExitCode
@@ -40,7 +40,7 @@
 
 - name: Remove installer after successful install
   ansible.windows.win_file:
-    path: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+    path: "{{ windows_install_dir }}\\agent-setup-{{ encodeswarmr_version }}.exe"
     state: absent
   tags: [agent, agent-windows, install]
 

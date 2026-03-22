@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // handleListFlows returns all flows ordered by most-recently-updated.

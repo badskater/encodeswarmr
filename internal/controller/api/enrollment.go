@@ -13,8 +13,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // enrollmentTokenResponse is the public representation returned in list/get

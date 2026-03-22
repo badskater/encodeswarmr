@@ -18,7 +18,7 @@ resource "google_filestore_instance" "media" {
   location = var.zone
   project  = var.project_id
 
-  description = "Shared NFS storage for distributed-encoder media, encodes, and temp files."
+  description = "Shared NFS storage for encodeswarmr media, encodes, and temp files."
 
   file_shares {
     name        = "media"

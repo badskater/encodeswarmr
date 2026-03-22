@@ -88,13 +88,13 @@ variable "db_multi_az" {
 variable "db_name" {
   description = "Name of the PostgreSQL database to create."
   type        = string
-  default     = "distencoder"
+  default     = "encodeswarmr"
 }
 
 variable "db_username" {
   description = "Master username for the RDS PostgreSQL instance."
   type        = string
-  default     = "distencoder"
+  default     = "encodeswarmr"
 }
 
 variable "db_password" {
@@ -152,7 +152,7 @@ variable "efs_throughput_mode" {
 
 # ── Application ────────────────────────────────────────────────────────────────
 
-variable "distencoder_version" {
+variable "encodeswarmr_version" {
   description = "Distributed-encoder release version to deploy (e.g. 1.0.4). Used to download the correct GitHub release."
   type        = string
   default     = "1.0.4"

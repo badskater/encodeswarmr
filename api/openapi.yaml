@@ -1,10 +1,10 @@
 openapi: "3.1.0"
 
 info:
-  title: Distributed Encoder API
+  title: EncodeSwarmr API
   version: "1.0.0"
   description: >
-    REST API for the Distributed Encoder controller. Manages encoding jobs,
+    REST API for the EncodeSwarmr controller. Manages encoding jobs,
     agents, sources, templates, variables, webhooks, users, and audit logs.
     All versioned endpoints are prefixed with /api/v1.
 

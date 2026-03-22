@@ -23,7 +23,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // Stub is a zero-value implementation of db.Store.  Every method returns the

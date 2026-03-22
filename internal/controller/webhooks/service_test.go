@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ---------------------------------------------------------------------------

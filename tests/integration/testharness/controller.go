@@ -12,14 +12,14 @@ import (
 
 	"log/slog"
 
-	"github.com/badskater/distributed-encoder/internal/controller/api"
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/controller/engine"
-	controllergrpc "github.com/badskater/distributed-encoder/internal/controller/grpc"
-	"github.com/badskater/distributed-encoder/internal/controller/ha"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/api"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
+	controllergrpc "github.com/badskater/encodeswarmr/internal/controller/grpc"
+	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

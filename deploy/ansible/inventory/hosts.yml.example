@@ -1,5 +1,5 @@
 ---
-# Example Ansible inventory for distributed-encoder deployments.
+# Example Ansible inventory for encodeswarmr deployments.
 # Copy this file to hosts.yml, fill in your IP addresses and credentials,
 # then run one of the playbooks in playbooks/.
 #

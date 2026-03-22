@@ -4,21 +4,21 @@
 
 - name: Download Linux agent .deb from GitHub releases
   ansible.builtin.get_url:
-    url: "{{ _release_base_url }}/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
-    dest: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    url: "{{ _release_base_url }}/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
+    dest: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
     mode: "0644"
   tags: [agent, agent-linux, install]
 
 - name: Install Linux agent .deb
   ansible.builtin.apt:
-    deb: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    deb: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
     state: present
   notify: Restart agent
   tags: [agent, agent-linux, install]
 
 - name: Remove downloaded .deb
   ansible.builtin.file:
-    path: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+    path: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
     state: absent
   tags: [agent, agent-linux, install]
 
@@ -26,8 +26,8 @@
   ansible.builtin.file:
     path: "{{ linux_agent_cert_dir }}"
     state: directory
-    owner: distributed-encoder-agent
-    group: distributed-encoder-agent
+    owner: encodeswarmr-agent
+    group: encodeswarmr-agent
     mode: "0750"
   tags: [agent, agent-linux, certs]
 
@@ -35,8 +35,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/ca.crt"
     dest: "{{ linux_agent_cert_dir }}/ca.crt"
-    owner: distributed-encoder-agent
-    group: distributed-encoder-agent
+    owner: encodeswarmr-agent
+    group: encodeswarmr-agent
     mode: "0640"
   notify: Restart agent
   tags: [agent, agent-linux, certs]
@@ -45,8 +45,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.crt"
     dest: "{{ linux_agent_cert_dir }}/agent.crt"
-    owner: distributed-encoder-agent
-    group: distributed-encoder-agent
+    owner: encodeswarmr-agent
+    group: encodeswarmr-agent
     mode: "0640"
   notify: Restart agent
   tags: [agent, agent-linux, certs]
@@ -55,8 +55,8 @@
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../roles/mtls-certs/files/agent.key"
     dest: "{{ linux_agent_cert_dir }}/agent.key"
-    owner: distributed-encoder-agent
-    group: distributed-encoder-agent
+    owner: encodeswarmr-agent
+    group: encodeswarmr-agent
     mode: "0600"
   notify: Restart agent
   tags: [agent, agent-linux, certs]
@@ -65,8 +65,8 @@
   ansible.builtin.template:
     src: agent.yaml.j2
     dest: "{{ linux_agent_config_file }}"
-    owner: distributed-encoder-agent
-    group: distributed-encoder-agent
+    owner: encodeswarmr-agent
+    group: encodeswarmr-agent
     mode: "0640"
   notify: Restart agent
   tags: [agent, agent-linux, configure]

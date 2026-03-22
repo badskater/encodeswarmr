@@ -9,7 +9,7 @@ variable "location" {
 variable "resource_group_name" {
   description = "Name of the resource group to create."
   type        = string
-  default     = "distributed-encoder-rg"
+  default     = "encodeswarmr-rg"
 }
 
 variable "environment" {
@@ -78,7 +78,7 @@ variable "db_storage_mb" {
 variable "db_admin_login" {
   description = "Administrator login name for PostgreSQL."
   type        = string
-  default     = "distencoder_admin"
+  default     = "encodeswarmr_admin"
 }
 
 variable "db_admin_password" {
@@ -146,8 +146,8 @@ variable "ssh_public_key_path" {
 
 # ─── Application ──────────────────────────────────────────────────────────────
 
-variable "distencoder_version" {
-  description = "Version of distributed-encoder to install (e.g. 1.0.4). Used to fetch the correct .deb package."
+variable "encodeswarmr_version" {
+  description = "Version of encodeswarmr to install (e.g. 1.0.4). Used to fetch the correct .deb package."
   type        = string
   default     = "1.0.4"
 }
@@ -155,7 +155,7 @@ variable "distencoder_version" {
 variable "controller_docker_image" {
   description = "Docker image for the controller (registry/image:tag)."
   type        = string
-  default     = "ghcr.io/badskater/distributed-encoder-controller:latest"
+  default     = "ghcr.io/badskater/encodeswarmr-controller:latest"
 }
 
 # ─── Storage ──────────────────────────────────────────────────────────────────

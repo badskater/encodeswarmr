@@ -1,4 +1,4 @@
-# nFPM package descriptor — Distributed Encoder Agent (RPM)
+# nFPM package descriptor — EncodeSwarmr Agent (RPM)
 #
 # Build:
 #   VERSION=1.2.0 nfpm package --config nfpm-agent-rpm.yaml --packager rpm --target dist/
@@ -9,17 +9,17 @@
 # Install nFPM:
 #   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
-name:        distributed-encoder-agent
+name:        encodeswarmr-agent
 arch:        amd64
 platform:    linux
 version:     ${VERSION}
 maintainer:  "badskater"
 description: |
-  Distributed Encoder Agent.
-  Connects to the Distributed Encoder Controller via gRPC+mTLS and
+  EncodeSwarmr Agent.
+  Connects to the EncodeSwarmr Controller via gRPC+mTLS and
   executes video encoding tasks using shell scripts. Supports NVIDIA
   (NVENC), Intel (QSV), and AMD (AMF) hardware encoders via ffmpeg.
-homepage:    https://github.com/badskater/distributed-encoder
+homepage:    https://github.com/badskater/encodeswarmr
 license:     AGPL-3.0
 
 depends:
@@ -35,34 +35,34 @@ recommends:
 contents:
   # ── Agent binary ─────────────────────────────────────────────────────────────
   - src: bin/agent
-    dst: /usr/bin/distributed-encoder-agent
+    dst: /usr/bin/encodeswarmr-agent
     file_info:
       mode: 0755
 
   # ── Config template (not overwritten on upgrade) ────────────────────────────
   - src: configs/agent-linux.yaml.example
-    dst: /etc/distributed-encoder/agent.yaml
+    dst: /etc/encodeswarmr/agent.yaml
     type: config|noreplace
 
   # ── Certs directory (operator populates with mTLS certs) ────────────────────
-  - dst: /etc/distributed-encoder/certs
+  - dst: /etc/encodeswarmr/certs
     type: dir
     file_info:
       mode: 0750
-      owner: distributed-encoder-agent
-      group: distributed-encoder-agent
+      owner: encodeswarmr-agent
+      group: encodeswarmr-agent
 
   # ── Work and data directories ────────────────────────────────────────────────
-  - dst: /var/lib/distributed-encoder-agent
+  - dst: /var/lib/encodeswarmr-agent
     type: dir
     file_info:
       mode: 0750
-      owner: distributed-encoder-agent
-      group: distributed-encoder-agent
+      owner: encodeswarmr-agent
+      group: encodeswarmr-agent
 
   # ── Systemd service unit (RPM path: /usr/lib/systemd/system/) ───────────────
-  - src: deployments/rpm/distributed-encoder-agent.service
-    dst: /usr/lib/systemd/system/distributed-encoder-agent.service
+  - src: deployments/rpm/encodeswarmr-agent.service
+    dst: /usr/lib/systemd/system/encodeswarmr-agent.service
 
 scripts:
   postinstall: deployments/rpm/agent-postinstall.sh

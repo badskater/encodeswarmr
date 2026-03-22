@@ -8,7 +8,7 @@
 #
 #   # Override version at runtime
 #   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
-#     -e distencoder_version=1.1.0
+#     -e encodeswarmr_version=1.1.0
 #
 #   # Upgrade only Linux agents
 #   ansible-playbook -i inventory/hosts.yml playbooks/upgrade.yml \
@@ -25,14 +25,14 @@
   tasks:
     - name: Download new controller .deb
       ansible.builtin.get_url:
-        url: "{{ _release_base_url }}/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
-        dest: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        url: "{{ _release_base_url }}/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
+        dest: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
         mode: "0644"
       tags: [install]
 
     - name: Install new controller .deb
       ansible.builtin.apt:
-        deb: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        deb: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
         state: present
       tags: [install]
 
@@ -55,7 +55,7 @@
 
     - name: Remove downloaded .deb
       ansible.builtin.file:
-        path: "/tmp/distributed-encoder-controller_{{ distencoder_version }}_amd64.deb"
+        path: "/tmp/encodeswarmr-controller_{{ encodeswarmr_version }}_amd64.deb"
         state: absent
       tags: [install]
 
@@ -67,14 +67,14 @@
   tasks:
     - name: Download new agent .deb
       ansible.builtin.get_url:
-        url: "{{ _release_base_url }}/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
-        dest: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        url: "{{ _release_base_url }}/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
+        dest: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
         mode: "0644"
       tags: [install]
 
     - name: Install new agent .deb
       ansible.builtin.apt:
-        deb: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        deb: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
         state: present
       tags: [install]
 
@@ -96,7 +96,7 @@
 
     - name: Remove downloaded .deb
       ansible.builtin.file:
-        path: "/tmp/distributed-encoder-agent_{{ distencoder_version }}_amd64.deb"
+        path: "/tmp/encodeswarmr-agent_{{ encodeswarmr_version }}_amd64.deb"
         state: absent
       tags: [install]
 
@@ -107,8 +107,8 @@
   tasks:
     - name: Download new Windows agent installer
       ansible.windows.win_get_url:
-        url: "{{ _release_base_url }}/distributed-encoder-agent-setup-{{ distencoder_version }}-amd64.exe"
-        dest: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+        url: "{{ _release_base_url }}/encodeswarmr-agent-setup-{{ encodeswarmr_version }}-amd64.exe"
+        dest: "{{ windows_install_dir }}\\agent-setup-{{ encodeswarmr_version }}.exe"
       tags: [install]
 
     - name: Stop agent service before upgrade
@@ -119,7 +119,7 @@
 
     - name: Run silent upgrade installer
       ansible.windows.win_shell: |
-        Start-Process -Wait -FilePath "{{ windows_install_dir }}\agent-setup-{{ distencoder_version }}.exe" `
+        Start-Process -Wait -FilePath "{{ windows_install_dir }}\agent-setup-{{ encodeswarmr_version }}.exe" `
           -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
                         "/DIR={{ windows_install_dir }}"
       tags: [install]
@@ -139,6 +139,6 @@
 
     - name: Remove installer file
       ansible.windows.win_file:
-        path: "{{ windows_install_dir }}\\agent-setup-{{ distencoder_version }}.exe"
+        path: "{{ windows_install_dir }}\\agent-setup-{{ encodeswarmr_version }}.exe"
         state: absent
       tags: [install]

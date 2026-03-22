@@ -44,22 +44,22 @@ enable_ha = false
 # ---------------------------------------------------------------------------
 
 db_tier     = "db-custom-2-8192"
-db_name     = "distencoder"
-db_user     = "distencoder"
+db_name     = "encodeswarmr"
+db_user     = "encodeswarmr"
 db_password = "CHANGE_ME_use_a_strong_random_password"
 
 # ---------------------------------------------------------------------------
 # Access
 # ---------------------------------------------------------------------------
 
-ssh_user       = "distencoder"
+ssh_user       = "encodeswarmr"
 ssh_public_key = "ssh-ed25519 AAAA... user@host"
 
 # ---------------------------------------------------------------------------
 # Application
 # ---------------------------------------------------------------------------
 
-distencoder_version = "1.0.4"
+encodeswarmr_version = "1.0.4"
 
 # ---------------------------------------------------------------------------
 # Networking

@@ -15,7 +15,7 @@ packages:
   - azure-cli
 
 write_files:
-  - path: /etc/distributed-encoder/controller.yaml
+  - path: /etc/encodeswarmr/controller.yaml
     permissions: "0640"
     owner: root:docker
     content: |
@@ -30,20 +30,20 @@ write_files:
         max_conns: 25
         min_conns: 5
         max_conn_lifetime: 1h
-        migrations_path: "/usr/share/distributed-encoder/migrations"
+        migrations_path: "/usr/share/encodeswarmr/migrations"
 
       grpc:
         host: "0.0.0.0"
         port: 9443
         tls:
-          cert: "/etc/distributed-encoder/certs/controller.crt"
-          key:  "/etc/distributed-encoder/certs/controller.key"
-          ca:   "/etc/distributed-encoder/certs/ca.crt"
+          cert: "/etc/encodeswarmr/certs/controller.crt"
+          key:  "/etc/encodeswarmr/certs/controller.key"
+          ca:   "/etc/encodeswarmr/certs/ca.crt"
 
       tls:
-        cert: "/etc/distributed-encoder/certs/controller.crt"
-        key:  "/etc/distributed-encoder/certs/controller.key"
-        ca:   "/etc/distributed-encoder/certs/ca.crt"
+        cert: "/etc/encodeswarmr/certs/controller.crt"
+        key:  "/etc/encodeswarmr/certs/controller.key"
+        ca:   "/etc/encodeswarmr/certs/ca.crt"
 
       logging:
         level: info
@@ -77,7 +77,7 @@ write_files:
             windows: "\\\\azurefile\\temp"
             linux:   "/mnt/nas/temp"
 
-  - path: /etc/distributed-encoder/docker-compose.yml
+  - path: /etc/encodeswarmr/docker-compose.yml
     permissions: "0640"
     owner: root:docker
     content: |
@@ -88,14 +88,14 @@ write_files:
           restart: unless-stopped
           network_mode: host
           volumes:
-            - /etc/distributed-encoder:/etc/distributed-encoder:ro
+            - /etc/encodeswarmr:/etc/encodeswarmr:ro
             - /mnt/nas:/mnt/nas
           env_file:
-            - /etc/distributed-encoder/.env
+            - /etc/encodeswarmr/.env
           logging:
             driver: journald
             options:
-              tag: "distencoder-controller"
+              tag: "encodeswarmr-controller"
 
   - path: /usr/local/bin/fetch-kv-secrets.sh
     permissions: "0750"
@@ -117,24 +117,24 @@ write_files:
           | jq -r '.value'
       }
 
-      mkdir -p /etc/distributed-encoder/certs
-      chmod 750 /etc/distributed-encoder/certs
+      mkdir -p /etc/encodeswarmr/certs
+      chmod 750 /etc/encodeswarmr/certs
 
       # Fetch mTLS certificates
-      get_secret "controller-cert" > /etc/distributed-encoder/certs/controller.crt
-      get_secret "controller-key"  > /etc/distributed-encoder/certs/controller.key
-      get_secret "ca-cert"         > /etc/distributed-encoder/certs/ca.crt
-      chmod 640 /etc/distributed-encoder/certs/*.crt /etc/distributed-encoder/certs/*.key
+      get_secret "controller-cert" > /etc/encodeswarmr/certs/controller.crt
+      get_secret "controller-key"  > /etc/encodeswarmr/certs/controller.key
+      get_secret "ca-cert"         > /etc/encodeswarmr/certs/ca.crt
+      chmod 640 /etc/encodeswarmr/certs/*.crt /etc/encodeswarmr/certs/*.key
 
       # Fetch DB password and write .env
       DB_PASSWORD=$(get_secret "db-password")
       SESSION_SECRET=$(get_secret "session-secret")
 
-      cat > /etc/distributed-encoder/.env <<EOF
+      cat > /etc/encodeswarmr/.env <<EOF
       DB_PASSWORD=$${DB_PASSWORD}
       SESSION_SECRET=$${SESSION_SECRET}
       EOF
-      chmod 640 /etc/distributed-encoder/.env
+      chmod 640 /etc/encodeswarmr/.env
 
       echo "Secrets fetched successfully."
 
@@ -174,14 +174,14 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
   # Add admin user to docker group
-  - usermod -aG docker distencoder
+  - usermod -aG docker encodeswarmr
   # Create config directories
-  - mkdir -p /etc/distributed-encoder/certs
+  - mkdir -p /etc/encodeswarmr/certs
   # Fetch secrets from Key Vault (requires managed identity)
   - /usr/local/bin/fetch-kv-secrets.sh
   # Mount NAS shares
   - /usr/local/bin/mount-nas.sh
   # Start controller
-  - cd /etc/distributed-encoder && docker compose up -d
+  - cd /etc/encodeswarmr && docker compose up -d
   # Enable restart on reboot
   - systemctl enable docker

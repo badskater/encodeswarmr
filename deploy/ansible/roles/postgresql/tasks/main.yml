@@ -1,6 +1,6 @@
 ---
 # postgresql/tasks/main.yml — Install and configure PostgreSQL 16 for the
-# distributed-encoder controller database.
+# encodeswarmr controller database.
 
 - name: Install PostgreSQL GPG key
   ansible.builtin.apt:
@@ -39,7 +39,7 @@
     state: started
   tags: [postgresql, service]
 
-- name: Create distributed-encoder database user
+- name: Create encodeswarmr database user
   community.postgresql.postgresql_user:
     name: "{{ db_user }}"
     password: "{{ db_password }}"
@@ -47,7 +47,7 @@
   become_user: postgres
   tags: [postgresql, configure]
 
-- name: Create distributed-encoder database
+- name: Create encodeswarmr database
   community.postgresql.postgresql_db:
     name: "{{ db_name }}"
     owner: "{{ db_user }}"

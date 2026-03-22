@@ -3,13 +3,13 @@
 
 services:
   controller:
-    image: ghcr.io/{{ distencoder_github_repo }}/controller:{{ distencoder_version }}
+    image: ghcr.io/{{ encodeswarmr_github_repo }}/controller:{{ encodeswarmr_version }}
     ports:
       - "{{ controller_http_port }}:8080"
       - "{{ controller_grpc_port }}:9443"
     volumes:
-      - {{ controller_config_file_docker }}:/etc/distributed-encoder/controller.yaml:ro
-      - {{ docker_cert_dir }}:/etc/distributed-encoder/certs:ro
+      - {{ controller_config_file_docker }}:/etc/encodeswarmr/controller.yaml:ro
+      - {{ docker_cert_dir }}:/etc/encodeswarmr/certs:ro
 {% for export in nas_nfs_exports %}
       - {{ export.dest }}:{{ export.dest }}:rw
 {% endfor %}

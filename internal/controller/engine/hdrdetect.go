@@ -7,7 +7,7 @@ import (
 
 	"context"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // hdrDetectScriptBat is the Windows .bat script written to the task's script
@@ -139,7 +139,7 @@ printf 'DE_HDR_RESULT={"hdr_type":"%s","dv_profile":%d}\n' "${HDR_TYPE}" "${DV_P
 `
 
 // HDRResultSentinel is the prefix the controller searches for in task stdout logs.
-const HDRResultSentinel = "DE_HDR_RESULT="
+const HDRResultSentinel = "ES_HDR_RESULT="
 
 // expandHDRDetectJob creates one task for the source and writes the built-in
 // hdr_detect scripts (both .bat and .sh) to its script directory.  The agent

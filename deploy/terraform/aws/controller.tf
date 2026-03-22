@@ -1,7 +1,7 @@
 # ── IAM Role for Controller Instances ─────────────────────────────────────────
 
 resource "aws_iam_role" "controller" {
-  name = "distencoder-${var.environment}-controller-role"
+  name = "encodeswarmr-${var.environment}-controller-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -17,12 +17,12 @@ resource "aws_iam_role" "controller" {
   })
 
   tags = {
-    Name = "distencoder-${var.environment}-controller-role"
+    Name = "encodeswarmr-${var.environment}-controller-role"
   }
 }
 
 resource "aws_iam_role_policy" "controller_ssm" {
-  name = "distencoder-${var.environment}-controller-ssm-policy"
+  name = "encodeswarmr-${var.environment}-controller-ssm-policy"
   role = aws_iam_role.controller.id
 
   policy = jsonencode({
@@ -36,7 +36,7 @@ resource "aws_iam_role_policy" "controller_ssm" {
           "ssm:GetParameters",
           "ssm:GetParametersByPath",
         ]
-        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/distencoder/${var.environment}/*"
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/encodeswarmr/${var.environment}/*"
       },
       {
         # SSM Session Manager — allows shell access without opening SSH port
@@ -55,7 +55,7 @@ resource "aws_iam_role_policy" "controller_ssm" {
 }
 
 resource "aws_iam_instance_profile" "controller" {
-  name = "distencoder-${var.environment}-controller-profile"
+  name = "encodeswarmr-${var.environment}-controller-profile"
   role = aws_iam_role.controller.name
 }
 
@@ -65,10 +65,10 @@ locals {
   controller_userdata = <<-USERDATA
     #!/bin/bash
     set -euo pipefail
-    exec > >(tee /var/log/distencoder-init.log | logger -t distencoder-init) 2>&1
+    exec > >(tee /var/log/encodeswarmr-init.log | logger -t encodeswarmr-init) 2>&1
 
-    echo "=== distributed-encoder controller bootstrap ==="
-    echo "Version: ${var.distencoder_version}"
+    echo "=== encodeswarmr controller bootstrap ==="
+    echo "Version: ${var.encodeswarmr_version}"
     echo "Environment: ${var.environment}"
 
     # ── System update and base packages ──────────────────────────────────────
@@ -101,23 +101,23 @@ $EFS_DNS:/ /mnt/nas/media    nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,t
 EOF
 
     # ── Fetch mTLS certificates from SSM ──────────────────────────────────────
-    CERT_DIR=/etc/distributed-encoder/certs
+    CERT_DIR=/etc/encodeswarmr/certs
     mkdir -p "$CERT_DIR"
     chmod 700 "$CERT_DIR"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/ca.crt" \
+      --name "/encodeswarmr/${var.environment}/certs/ca.crt" \
       --query "Parameter.Value" --output text > "$CERT_DIR/ca.crt"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/controller.crt" \
+      --name "/encodeswarmr/${var.environment}/certs/controller.crt" \
       --query "Parameter.Value" --output text > "$CERT_DIR/controller.crt"
 
     aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/certs/controller.key" \
+      --name "/encodeswarmr/${var.environment}/certs/controller.key" \
       --with-decryption \
       --query "Parameter.Value" --output text > "$CERT_DIR/controller.key"
 
@@ -126,18 +126,18 @@ EOF
     # ── Fetch application secrets ─────────────────────────────────────────────
     DB_PASSWORD=$(aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/db/password" \
+      --name "/encodeswarmr/${var.environment}/db/password" \
       --with-decryption \
       --query "Parameter.Value" --output text)
 
     SESSION_SECRET=$(aws ssm get-parameter \
       --region "${var.region}" \
-      --name "/distencoder/${var.environment}/controller/session_secret" \
+      --name "/encodeswarmr/${var.environment}/controller/session_secret" \
       --with-decryption \
       --query "Parameter.Value" --output text)
 
     # ── Write controller config ───────────────────────────────────────────────
-    CONFIG_DIR=/etc/distributed-encoder
+    CONFIG_DIR=/etc/encodeswarmr
     mkdir -p "$CONFIG_DIR"
 
     cat > "$CONFIG_DIR/controller.yaml" <<EOF
@@ -152,15 +152,15 @@ database:
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "/usr/share/distributed-encoder/migrations"
+  migrations_path: "/usr/share/encodeswarmr/migrations"
 
 grpc:
   host: "0.0.0.0"
   port: ${var.controller_grpc_port}
   tls:
-    cert: "/etc/distributed-encoder/certs/controller.crt"
-    key:  "/etc/distributed-encoder/certs/controller.key"
-    ca:   "/etc/distributed-encoder/certs/ca.crt"
+    cert: "/etc/encodeswarmr/certs/controller.crt"
+    key:  "/etc/encodeswarmr/certs/controller.key"
+    ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 auth:
   session_ttl: 24h
@@ -190,9 +190,9 @@ webhooks:
   max_retries: 3
 
 tls:
-  cert: "/etc/distributed-encoder/certs/controller.crt"
-  key:  "/etc/distributed-encoder/certs/controller.key"
-  ca:   "/etc/distributed-encoder/certs/ca.crt"
+  cert: "/etc/encodeswarmr/certs/controller.crt"
+  key:  "/etc/encodeswarmr/certs/controller.key"
+  ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 analysis:
   ffmpeg_bin:  "/usr/bin/ffmpeg"
@@ -212,18 +212,18 @@ analysis:
 EOF
 
     # ── Pull and start controller container ───────────────────────────────────
-    docker pull "ghcr.io/badskater/distributed-encoder:${var.distencoder_version}" || \
-      docker pull "ghcr.io/badskater/distributed-encoder:latest"
+    docker pull "ghcr.io/badskater/encodeswarmr:${var.encodeswarmr_version}" || \
+      docker pull "ghcr.io/badskater/encodeswarmr:latest"
 
     docker run -d \
-      --name distencoder-controller \
+      --name encodeswarmr-controller \
       --restart unless-stopped \
       -p ${var.controller_http_port}:${var.controller_http_port} \
       -p ${var.controller_grpc_port}:${var.controller_grpc_port} \
-      -v /etc/distributed-encoder:/etc/distributed-encoder:ro \
+      -v /etc/encodeswarmr:/etc/encodeswarmr:ro \
       -v /mnt/nas:/mnt/nas \
-      "ghcr.io/badskater/distributed-encoder:${var.distencoder_version}" \
-      controller --config /etc/distributed-encoder/controller.yaml
+      "ghcr.io/badskater/encodeswarmr:${var.encodeswarmr_version}" \
+      controller --config /etc/encodeswarmr/controller.yaml
 
     echo "=== Controller bootstrap complete ==="
   USERDATA
@@ -232,7 +232,7 @@ EOF
 # ── Launch Template ────────────────────────────────────────────────────────────
 
 resource "aws_launch_template" "controller" {
-  name_prefix   = "distencoder-${var.environment}-controller-"
+  name_prefix   = "encodeswarmr-${var.environment}-controller-"
   image_id      = data.aws_ami.ubuntu_24_04.id
   instance_type = var.controller_instance_type
 
@@ -274,13 +274,13 @@ resource "aws_launch_template" "controller" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "distencoder-${var.environment}-controller"
+      Name = "encodeswarmr-${var.environment}-controller"
       Role = "controller"
     }
   }
 
   tags = {
-    Name = "distencoder-${var.environment}-controller-lt"
+    Name = "encodeswarmr-${var.environment}-controller-lt"
   }
 
   lifecycle {
@@ -291,7 +291,7 @@ resource "aws_launch_template" "controller" {
 # ── Auto Scaling Group ─────────────────────────────────────────────────────────
 
 resource "aws_autoscaling_group" "controller" {
-  name                = "distencoder-${var.environment}-controller-asg"
+  name                = "encodeswarmr-${var.environment}-controller-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
 
   min_size         = var.enable_ha ? 2 : 1
@@ -318,7 +318,7 @@ resource "aws_autoscaling_group" "controller" {
 
   tag {
     key                 = "Name"
-    value               = "distencoder-${var.environment}-controller"
+    value               = "encodeswarmr-${var.environment}-controller"
     propagate_at_launch = true
   }
 

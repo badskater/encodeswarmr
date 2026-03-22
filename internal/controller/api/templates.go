@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {

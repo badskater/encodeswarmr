@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/controller/auth"
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/controller/ha"
-	"github.com/badskater/distributed-encoder/internal/controller/plugins"
-	"github.com/badskater/distributed-encoder/internal/controller/webhooks"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/controller/ha"
+	"github.com/badskater/encodeswarmr/internal/controller/plugins"
+	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // Server is the HTTP API server.

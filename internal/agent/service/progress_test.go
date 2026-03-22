@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
 )
 
 // --- parseProgress: x265 format ---

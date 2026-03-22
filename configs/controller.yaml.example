@@ -6,11 +6,11 @@ server:
   allowed_origins: []  # CORS origins. Empty = same-origin only
 
 database:
-  url: "postgres://distencoder:password@localhost:5432/distencoder"
+  url: "postgres://encodeswarmr:password@localhost:5432/encodeswarmr"
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "/usr/share/distributed-encoder/migrations"
+  migrations_path: "/usr/share/encodeswarmr/migrations"
 
 grpc:
   host: "0.0.0.0"
@@ -58,7 +58,7 @@ engine:
 # Agent binary upgrade distribution — place binaries in this directory
 # and agents will self-upgrade via GET /api/v1/agent/upgrade/check
 upgrade:
-  binary_dir: ""                  # e.g. /var/lib/distributed-encoder/binaries
+  binary_dir: ""                  # e.g. /var/lib/encodeswarmr/binaries
 
 webhooks:
   worker_count: 4

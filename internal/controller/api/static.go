@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	webui "github.com/badskater/distributed-encoder/web"
+	webui "github.com/badskater/encodeswarmr/web"
 )
 
 // staticHandler serves the embedded SPA. For any path that does not map

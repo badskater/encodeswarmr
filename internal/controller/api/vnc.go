@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/db"
 	"github.com/gorilla/websocket"
 )
 

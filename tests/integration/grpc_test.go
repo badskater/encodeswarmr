@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/badskater/distributed-encoder/internal/db"
-	pb "github.com/badskater/distributed-encoder/internal/proto/encoderv1"
-	"github.com/badskater/distributed-encoder/tests/integration/testharness"
+	"github.com/badskater/encodeswarmr/internal/db"
+	pb "github.com/badskater/encodeswarmr/internal/proto/encoderv1"
+	"github.com/badskater/encodeswarmr/tests/integration/testharness"
 )
 
 // grpcClient dials the controller gRPC address with insecure (plaintext)

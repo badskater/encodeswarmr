@@ -20,8 +20,8 @@ import (
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 
-	"github.com/badskater/distributed-encoder/internal/controller/config"
-	"github.com/badskater/distributed-encoder/internal/db"
+	"github.com/badskater/encodeswarmr/internal/controller/config"
+	"github.com/badskater/encodeswarmr/internal/db"
 )
 
 // ---------------------------------------------------------------------------

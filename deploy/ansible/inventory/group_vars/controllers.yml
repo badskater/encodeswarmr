@@ -2,13 +2,13 @@
 # group_vars/controllers.yml — Variables specific to controller hosts.
 
 # ── Controller config paths ────────────────────────────────────────────────────
-controller_config_dir: "/etc/distributed-encoder"
-controller_config_file: "/etc/distributed-encoder/controller.yaml"
-controller_migrations_path: "/usr/share/distributed-encoder/migrations"
-controller_binary_dir: "/var/lib/distributed-encoder/binaries"
+controller_config_dir: "/etc/encodeswarmr"
+controller_config_file: "/etc/encodeswarmr/controller.yaml"
+controller_migrations_path: "/usr/share/encodeswarmr/migrations"
+controller_binary_dir: "/var/lib/encodeswarmr/binaries"
 
 # ── Service ────────────────────────────────────────────────────────────────────
-controller_service_name: "distributed-encoder-controller"
+controller_service_name: "encodeswarmr-controller"
 
 # ── Auth / session — store real values in Ansible Vault ───────────────────────
 controller_session_ttl: "24h"
