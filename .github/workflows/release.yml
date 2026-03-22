@@ -61,7 +61,7 @@ jobs:
             nfpm package --config nfpm.yaml --packager deb --target dist/
 
       - name: Upload controller .deb to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/encodeswarmr-controller_*.deb
 
@@ -136,7 +136,7 @@ jobs:
             nfpm package --config nfpm-agent.yaml --packager deb --target dist/
 
       - name: Upload agent .deb to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/encodeswarmr-agent_*.deb
 
@@ -179,7 +179,7 @@ jobs:
             nfpm package --config nfpm-rpm.yaml --packager rpm --target dist/
 
       - name: Upload controller .rpm to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/encodeswarmr-controller*.rpm
 
@@ -213,7 +213,7 @@ jobs:
             nfpm package --config nfpm-agent-rpm.yaml --packager rpm --target dist/
 
       - name: Upload agent .rpm to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/encodeswarmr-agent*.rpm
 
@@ -238,6 +238,6 @@ jobs:
             -o dist/agent-windows-amd64.exe ./cmd/agent
 
       - name: Upload agent .exe to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/agent-windows-amd64.exe
