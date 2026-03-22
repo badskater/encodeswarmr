@@ -183,6 +183,9 @@ type Task struct {
 	// RetryAfter is the earliest time this task is eligible to be claimed.
 	// nil means it can be claimed immediately.
 	RetryAfter  *time.Time `json:"retry_after,omitempty"`
+	// ErrorCategory is a computed field populated by the API layer (not stored
+	// in the database). Values: "transient", "permanent", "unknown", or "".
+	ErrorCategory string    `json:"error_category,omitempty"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -679,4 +682,14 @@ type ActivityEvent struct {
 	Status     string    `json:"status"`
 	SourceName string    `json:"source_name"`
 	Timestamp  time.Time `json:"timestamp"`
+}
+
+// ExportJobsFilter carries filter parameters for the job export endpoints.
+type ExportJobsFilter struct {
+	// Status filters by job status. Empty means all statuses.
+	Status string
+	// From is the inclusive start of the created_at range. Zero means no lower bound.
+	From time.Time
+	// To is the inclusive end of the created_at range. Zero means no upper bound.
+	To time.Time
 }

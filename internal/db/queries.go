@@ -2187,6 +2187,40 @@ func (s *pgStore) RetryTaskWithBackoff(ctx context.Context, taskID string, retry
 	return t, nil
 }
 
+// RetryTaskWithBackoffJitter creates a new retry task with exponential backoff
+// plus an additional jitter delay in seconds.
+func (s *pgStore) RetryTaskWithBackoffJitter(ctx context.Context, taskID string, retryCount int, jitterSec int) (*Task, error) {
+	// backoffSeconds = 2^retryCount * 30 (capped at 1 hour = 3600 s) + jitter.
+	backoffSeconds := (1 << retryCount) * 30
+	if backoffSeconds > 3600 {
+		backoffSeconds = 3600
+	}
+	backoffSeconds += jitterSec
+
+	const q = `
+		INSERT INTO tasks
+		    (job_id, chunk_index, task_type, source_path, output_path, variables,
+		     retry_count, retry_after)
+		SELECT job_id,
+		       (SELECT COALESCE(MAX(t2.chunk_index), 0) + 1 FROM tasks t2 WHERE t2.job_id = t.job_id),
+		       task_type, source_path, output_path, variables,
+		       $2, now() + ($3 * interval '1 second')
+		FROM   tasks t
+		WHERE  t.id = $1
+		RETURNING id, job_id, chunk_index, task_type, status, agent_id,
+		          script_dir, source_path, output_path, variables,
+		          exit_code, frames_encoded, avg_fps, output_size, duration_sec,
+		          vmaf_score, psnr, ssim, error_msg,
+		          retry_count, retry_after,
+		          started_at, completed_at, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, taskID, retryCount+1, backoffSeconds)
+	t, err := scanTask(row)
+	if err != nil {
+		return nil, fmt.Errorf("db: retry task with backoff jitter: %w", err)
+	}
+	return t, nil
+}
+
 // ---------------------------------------------------------------------------
 // Flows
 // ---------------------------------------------------------------------------
@@ -2280,4 +2314,273 @@ func scanFlow(row pgx.Row) (*Flow, error) {
 		f.Graph = json.RawMessage(`{"nodes":[],"edges":[]}`)
 	}
 	return &f, nil
+}
+
+// ---------------------------------------------------------------------------
+// Job Archive
+// ---------------------------------------------------------------------------
+
+// ArchiveOldJobs moves completed/failed jobs older than the given duration
+// to job_archive (along with their tasks and task_logs) in a single
+// transaction.  Returns the number of jobs archived.
+func (s *pgStore) ArchiveOldJobs(ctx context.Context, olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("db: archive jobs: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Archive task logs for eligible jobs.
+	const archiveLogs = `
+		INSERT INTO task_log_archive
+		    (id, task_id, job_id, stream, level, message, metadata, logged_at)
+		SELECT id, task_id, job_id, stream, level, message, metadata, logged_at
+		FROM   task_logs
+		WHERE  job_id IN (
+		           SELECT id FROM jobs
+		           WHERE  status IN ('completed','failed','cancelled')
+		           AND    updated_at < $1
+		       )`
+	if _, err := tx.Exec(ctx, archiveLogs, cutoff); err != nil {
+		return 0, fmt.Errorf("db: archive job logs: %w", err)
+	}
+
+	// Delete task logs for those jobs.
+	const deleteLogs = `
+		DELETE FROM task_logs
+		WHERE job_id IN (
+		    SELECT id FROM jobs
+		    WHERE  status IN ('completed','failed','cancelled')
+		    AND    updated_at < $1
+		)`
+	if _, err := tx.Exec(ctx, deleteLogs, cutoff); err != nil {
+		return 0, fmt.Errorf("db: delete archived logs: %w", err)
+	}
+
+	// Archive tasks for eligible jobs.
+	const archiveTasks = `
+		INSERT INTO task_archive
+		    (id, job_id, chunk_index, task_type, status, agent_id,
+		     script_dir, source_path, output_path, variables,
+		     exit_code, frames_encoded, avg_fps, output_size, duration_sec,
+		     vmaf_score, psnr, ssim, error_msg,
+		     retry_count, retry_after,
+		     started_at, completed_at, created_at, updated_at)
+		SELECT id, job_id, chunk_index, task_type, status, agent_id,
+		       script_dir, source_path, output_path, variables,
+		       exit_code, frames_encoded, avg_fps, output_size, duration_sec,
+		       vmaf_score, psnr, ssim, error_msg,
+		       retry_count, retry_after,
+		       started_at, completed_at, created_at, updated_at
+		FROM   tasks
+		WHERE  job_id IN (
+		           SELECT id FROM jobs
+		           WHERE  status IN ('completed','failed','cancelled')
+		           AND    updated_at < $1
+		       )`
+	if _, err := tx.Exec(ctx, archiveTasks, cutoff); err != nil {
+		return 0, fmt.Errorf("db: archive tasks: %w", err)
+	}
+
+	// Delete tasks for those jobs (cascades handled by task_logs already removed).
+	const deleteTasks = `
+		DELETE FROM tasks
+		WHERE job_id IN (
+		    SELECT id FROM jobs
+		    WHERE  status IN ('completed','failed','cancelled')
+		    AND    updated_at < $1
+		)`
+	if _, err := tx.Exec(ctx, deleteTasks, cutoff); err != nil {
+		return 0, fmt.Errorf("db: delete archived tasks: %w", err)
+	}
+
+	// Archive jobs.
+	const archiveJobs = `
+		INSERT INTO job_archive
+		    (id, source_id, status, job_type, priority, target_tags,
+		     tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+		     encode_config, max_retries,
+		     completed_at, failed_at, created_at, updated_at)
+		SELECT id, source_id, status, job_type, priority, target_tags,
+		       tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+		       encode_config, max_retries,
+		       completed_at, failed_at, created_at, updated_at
+		FROM   jobs
+		WHERE  status IN ('completed','failed','cancelled')
+		AND    updated_at < $1`
+	ct, err := tx.Exec(ctx, archiveJobs, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("db: archive jobs: %w", err)
+	}
+	archived := ct.RowsAffected()
+
+	// Delete archived jobs from the active table.
+	const deleteJobs = `
+		DELETE FROM jobs
+		WHERE  status IN ('completed','failed','cancelled')
+		AND    updated_at < $1`
+	if _, err := tx.Exec(ctx, deleteJobs, cutoff); err != nil {
+		return 0, fmt.Errorf("db: delete archived jobs: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("db: archive jobs: commit: %w", err)
+	}
+
+	return archived, nil
+}
+
+// ListArchivedJobs returns a paginated list of archived jobs ordered by
+// created_at descending. The source_path column is populated as an empty
+// string because archived jobs may reference deleted sources.
+func (s *pgStore) ListArchivedJobs(ctx context.Context, f ListJobsFilter) ([]*Job, int64, error) {
+	pageSize := f.PageSize
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = 50
+	}
+
+	var (
+		whereConds []string
+		args       []any
+		argN       = 1
+	)
+	if f.Status != "" {
+		whereConds = append(whereConds, fmt.Sprintf("status = $%d", argN))
+		args = append(args, f.Status)
+		argN++
+	}
+	if f.Search != "" {
+		whereConds = append(whereConds, fmt.Sprintf("id::text ILIKE $%d", argN))
+		args = append(args, "%"+f.Search+"%")
+		argN++
+	}
+
+	whereClause := ""
+	if len(whereConds) > 0 {
+		whereClause = "WHERE " + joinConditions(whereConds)
+	}
+
+	countQ := `SELECT COUNT(*) FROM job_archive ` + whereClause
+	var total int64
+	if err := s.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("db: count archived jobs: %w", err)
+	}
+
+	if f.Cursor != "" {
+		whereConds = append(whereConds, fmt.Sprintf("created_at < $%d", argN))
+		args = append(args, f.Cursor)
+		argN++
+	}
+
+	if len(whereConds) > 0 {
+		whereClause = "WHERE " + joinConditions(whereConds)
+	}
+	args = append(args, pageSize+1)
+
+	listQ := fmt.Sprintf(`
+		SELECT id, source_id, status, job_type, priority, target_tags,
+		       tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+		       encode_config, max_retries, completed_at, failed_at, created_at, updated_at,
+		       '' AS source_path
+		FROM   job_archive
+		%s
+		ORDER BY created_at DESC
+		LIMIT $%d`, whereClause, argN)
+
+	rows, err := s.pool.Query(ctx, listQ, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list archived jobs: %w", err)
+	}
+	defer rows.Close()
+	var out []*Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, j)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("db: list archived jobs rows: %w", err)
+	}
+	return out, total, nil
+}
+
+// ExportJobs returns all active jobs matching the filter (no pagination limit).
+func (s *pgStore) ExportJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error) {
+	return exportJobsFromTable(ctx, s.pool, "jobs", "sources", f)
+}
+
+// ExportArchivedJobs returns all archived jobs matching the filter.
+func (s *pgStore) ExportArchivedJobs(ctx context.Context, f ExportJobsFilter) ([]*Job, error) {
+	return exportJobsFromTable(ctx, s.pool, "job_archive", "", f)
+}
+
+// exportJobsFromTable is shared logic for ExportJobs and ExportArchivedJobs.
+// When sourcesTable is empty, source_path is returned as an empty string.
+func exportJobsFromTable(ctx context.Context, pool poolIface, table, sourcesTable string, f ExportJobsFilter) ([]*Job, error) {
+	var (
+		conds []string
+		args  []any
+		argN  = 1
+	)
+
+	if f.Status != "" {
+		conds = append(conds, fmt.Sprintf("j.status = $%d", argN))
+		args = append(args, f.Status)
+		argN++
+	}
+	if !f.From.IsZero() {
+		conds = append(conds, fmt.Sprintf("j.created_at >= $%d", argN))
+		args = append(args, f.From)
+		argN++
+	}
+	if !f.To.IsZero() {
+		conds = append(conds, fmt.Sprintf("j.created_at <= $%d", argN))
+		args = append(args, f.To)
+		argN++
+	}
+
+	whereClause := ""
+	if len(conds) > 0 {
+		whereClause = "WHERE " + joinConditions(conds)
+	}
+
+	var q string
+	if sourcesTable != "" {
+		q = fmt.Sprintf(`
+			SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+			       j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+			       j.encode_config, j.max_retries, j.completed_at, j.failed_at, j.created_at, j.updated_at,
+			       COALESCE(s.unc_path, '') AS source_path
+			FROM   %s j LEFT JOIN %s s ON j.source_id = s.id
+			%s
+			ORDER BY j.created_at DESC`, table, sourcesTable, whereClause)
+	} else {
+		q = fmt.Sprintf(`
+			SELECT id, source_id, status, job_type, priority, target_tags,
+			       tasks_total, tasks_pending, tasks_running, tasks_completed, tasks_failed,
+			       encode_config, max_retries, completed_at, failed_at, created_at, updated_at,
+			       '' AS source_path
+			FROM   %s j
+			%s
+			ORDER BY created_at DESC`, table, whereClause)
+	}
+
+	rows, err := pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: export jobs from %s: %w", table, err)
+	}
+	defer rows.Close()
+	var out []*Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
 }

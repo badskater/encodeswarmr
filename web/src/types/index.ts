@@ -32,9 +32,12 @@ export interface Task {
   chunk_index: number
   exit_code: number | null
   error_msg: string | null
+  /** error_category is a computed field populated by the API for failed tasks. */
+  error_category?: 'transient' | 'permanent' | 'unknown'
   frames_encoded: number | null
   avg_fps: number | null
   output_size: number | null
+  retry_count?: number
   started_at: string | null
   completed_at: string | null
   created_at: string

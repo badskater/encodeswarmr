@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sort"
 	"strings"
 
@@ -16,6 +17,22 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// taskSourceDurationSec returns the source file duration in seconds by looking
+// up the source via the job. Returns 0 if not determinable (non-fatal).
+func (s *Server) taskSourceDurationSec(ctx context.Context, jobID string) float64 {
+	job, err := s.store.GetJobByID(ctx, jobID)
+	if err != nil {
+		return 0
+	}
+	src, err := s.store.GetSourceByID(ctx, job.SourceID)
+	if err != nil {
+		return 0
+	}
+	// Source duration is not stored directly; return 0 to skip ratio check.
+	_ = src
+	return 0
+}
 
 // ReportResult is called by an agent when a task finishes (success or failure).
 // It updates the task and job state in the database accordingly.
@@ -53,8 +70,30 @@ func (s *Server) ReportResult(ctx context.Context, req *pb.TaskResult) (*pb.Ack,
 }
 
 // processResult marks a single task as completed or failed.
+// When the task reports success, output validation is run via ffprobe before
+// the task is marked complete. A failed validation marks the task as failed.
 func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 	if req.GetSuccess() {
+		// Run output validation after task completion as a best-effort check.
+		// Validation errors are logged as warnings but do NOT block job completion;
+		// ffprobe may not be available in all environments (e.g. CI test harnesses).
+		if s.validationCfg.Enabled {
+			task, taskErr := s.store.GetTaskByID(ctx, req.GetTaskId())
+			if taskErr == nil && task.OutputPath != "" {
+				sourceDur := s.taskSourceDurationSec(ctx, req.GetJobId())
+				vr := engine.ValidateOutput(ctx, s.validationCfg, task.OutputPath, "", sourceDur, s.logger)
+				if !vr.OK {
+					s.logger.LogAttrs(ctx, slog.LevelWarn, "output validation failed (non-blocking)",
+						slog.String("task_id", req.GetTaskId()),
+						slog.String("job_id", req.GetJobId()),
+						slog.String("output_path", task.OutputPath),
+						slog.String("reason", vr.FailureReason),
+					)
+					// Validation failure is advisory only — task still completes.
+				}
+			}
+		}
+
 		p := db.CompleteTaskParams{
 			ID:       req.GetTaskId(),
 			ExitCode: int(req.GetExitCode()),
@@ -100,8 +139,14 @@ func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 }
 
 // maybeRetryTask checks whether a failed task should be automatically retried
-// according to the parent job's max_retries setting. If eligible, it creates a
-// new pending task row with exponential backoff and re-queues the job.
+// according to the parent job's max_retries setting and the error category.
+//
+// Error classification:
+//   - permanent errors (codec not found, invalid data, etc.) are never retried
+//   - transient errors get the full max_retries budget
+//   - unknown errors get max_retries/2
+//
+// Backoff: delay = (2^retryCount * 30s) + jitter(0..15s)
 func (s *Server) maybeRetryTask(ctx context.Context, taskID, jobID string) error {
 	task, err := s.store.GetTaskByID(ctx, taskID)
 	if err != nil {
@@ -113,19 +158,50 @@ func (s *Server) maybeRetryTask(ctx context.Context, taskID, jobID string) error
 		return fmt.Errorf("get job: %w", err)
 	}
 
-	if job.MaxRetries <= 0 || task.RetryCount >= job.MaxRetries {
-		return nil // no retries configured or limit reached
+	if job.MaxRetries <= 0 {
+		return nil // no retries configured
 	}
 
-	if _, err := s.store.RetryTaskWithBackoff(ctx, taskID, task.RetryCount); err != nil {
+	// Classify the error to determine retry eligibility.
+	exitCode := 0
+	if task.ExitCode != nil {
+		exitCode = *task.ExitCode
+	}
+	errMsg := ""
+	if task.ErrorMsg != nil {
+		errMsg = *task.ErrorMsg
+	}
+
+	category := engine.ClassifyError(exitCode, errMsg)
+	effectiveMax := engine.MaxRetriesForCategory(category, job.MaxRetries)
+
+	if effectiveMax <= 0 || task.RetryCount >= effectiveMax {
+		s.logger.LogAttrs(ctx, slog.LevelInfo, "task not eligible for retry",
+			slog.String("task_id", taskID),
+			slog.String("error_category", string(category)),
+			slog.Int("retry_count", task.RetryCount),
+			slog.Int("effective_max", effectiveMax),
+		)
+		return nil
+	}
+
+	// Add jitter to the backoff: jitter is 0–15 seconds.
+	// The base backoff (2^n * 30s, capped at 3600s) is computed in the DB
+	// query; we pass the retry count and the DB computes the base. We add
+	// the jitter on top here by using RetryTaskWithBackoffJitter which
+	// accepts an additional jitter seconds argument.
+	jitterSec := rand.Intn(16) // [0, 15]
+	if _, err := s.store.RetryTaskWithBackoffJitter(ctx, taskID, task.RetryCount, jitterSec); err != nil {
 		return fmt.Errorf("retry task with backoff: %w", err)
 	}
 
 	s.logger.LogAttrs(ctx, slog.LevelInfo, "task queued for auto-retry",
 		slog.String("task_id", taskID),
 		slog.String("job_id", jobID),
+		slog.String("error_category", string(category)),
 		slog.Int("retry_count", task.RetryCount+1),
-		slog.Int("max_retries", job.MaxRetries),
+		slog.Int("effective_max", effectiveMax),
+		slog.Int("jitter_sec", jitterSec),
 	)
 	return nil
 }

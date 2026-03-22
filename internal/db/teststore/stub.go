@@ -89,7 +89,8 @@ func (Stub) CompleteTask(_ context.Context, _ db.CompleteTaskParams) error      
 func (Stub) FailTask(_ context.Context, _ string, _ int, _ string) error                 { return nil }
 func (Stub) CancelPendingTasksForJob(_ context.Context, _ string) error                  { return nil }
 func (Stub) DeleteTasksByJobID(_ context.Context, _ string) error                        { return nil }
-func (Stub) RetryTaskWithBackoff(_ context.Context, _ string, _ int) (*db.Task, error)   { return nil, nil }
+func (Stub) RetryTaskWithBackoff(_ context.Context, _ string, _ int) (*db.Task, error)              { return nil, nil }
+func (Stub) RetryTaskWithBackoffJitter(_ context.Context, _ string, _ int, _ int) (*db.Task, error) { return nil, nil }
 
 // --- Task Logs ---
 func (Stub) InsertTaskLog(_ context.Context, _ db.InsertTaskLogParams) error                     { return nil }
@@ -193,6 +194,12 @@ func (Stub) GetFlowByID(_ context.Context, _ string) (*db.Flow, error)          
 func (Stub) ListFlows(_ context.Context) ([]*db.Flow, error)                       { return nil, nil }
 func (Stub) UpdateFlow(_ context.Context, _ db.UpdateFlowParams) (*db.Flow, error) { return nil, nil }
 func (Stub) DeleteFlow(_ context.Context, _ string) error                          { return nil }
+
+// --- Job Archive ---
+func (Stub) ArchiveOldJobs(_ context.Context, _ time.Duration) (int64, error)                        { return 0, nil }
+func (Stub) ListArchivedJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, error)       { return nil, 0, nil }
+func (Stub) ExportJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)                  { return nil, nil }
+func (Stub) ExportArchivedJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)          { return nil, nil }
 
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }

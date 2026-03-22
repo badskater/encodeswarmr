@@ -22,6 +22,8 @@ type Config struct {
 	Analysis    AnalysisConfig    `mapstructure:"analysis"`
 	SMTP        SMTPConfig        `mapstructure:"smtp"`
 	AutoScaling AutoScalingConfig `mapstructure:"auto_scaling"`
+	Validation  ValidationConfig  `mapstructure:"validation"`
+	Archive     ArchiveConfig     `mapstructure:"archive"`
 }
 
 type ServerConfig struct {
@@ -176,6 +178,24 @@ type AutoScalingConfig struct {
 	CooldownSeconds int `mapstructure:"cooldown_seconds"`
 }
 
+// ValidationConfig controls post-encode output validation via ffprobe.
+type ValidationConfig struct {
+	// Enabled enables or disables post-encode validation. Default true.
+	Enabled bool `mapstructure:"enabled"`
+	// MinDurationRatio is the minimum acceptable output/source duration ratio.
+	// Default 0.9 (output must be at least 90% of source duration).
+	MinDurationRatio float64 `mapstructure:"min_duration_ratio"`
+}
+
+// ArchiveConfig controls the job history archival background job.
+type ArchiveConfig struct {
+	// Enabled enables or disables the archival job. Default true.
+	Enabled bool `mapstructure:"enabled"`
+	// RetentionDays is how many days a completed/failed job is kept in the
+	// active jobs table before being moved to job_archive. Default 30.
+	RetentionDays int `mapstructure:"retention_days"`
+}
+
 // VNCConfig controls the web-based VNC remote desktop feature.
 type VNCConfig struct {
 	// NoVNCBaseURL is the base URL from which the noVNC JavaScript client
@@ -227,6 +247,10 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("auto_scaling.scale_up_threshold", 10)
 	v.SetDefault("auto_scaling.scale_down_threshold", 2)
 	v.SetDefault("auto_scaling.cooldown_seconds", 300)
+	v.SetDefault("validation.enabled", true)
+	v.SetDefault("validation.min_duration_ratio", 0.9)
+	v.SetDefault("archive.enabled", true)
+	v.SetDefault("archive.retention_days", 30)
 
 	v.AutomaticEnv()
 

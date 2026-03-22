@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
@@ -419,6 +420,19 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("get task", "err", err)
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
+	}
+
+	// Populate the computed error_category field for failed tasks.
+	if task.Status == "failed" {
+		exitCode := 0
+		if task.ExitCode != nil {
+			exitCode = *task.ExitCode
+		}
+		errMsg := ""
+		if task.ErrorMsg != nil {
+			errMsg = *task.ErrorMsg
+		}
+		task.ErrorCategory = string(engine.ClassifyError(exitCode, errMsg))
 	}
 
 	writeJSON(w, r, http.StatusOK, task)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../../api/client'
-import type { Template } from '../../types'
+import type { Template, Source } from '../../types'
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleString()
@@ -209,6 +209,115 @@ function VariableReference() {
 }
 
 // ---------------------------------------------------------------------------
+// PreviewModal — renders a template dry-run and shows the output
+// ---------------------------------------------------------------------------
+
+interface PreviewModalProps {
+  template: Template
+  onClose: () => void
+}
+
+function PreviewModal({ template, onClose }: PreviewModalProps) {
+  const [sources, setSources] = useState<Source[]>([])
+  const [selectedSourceId, setSelectedSourceId] = useState('')
+  const [variables, setVariables] = useState('')
+  const [result, setResult] = useState<{ content: string; error?: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    api.listSources().then(setSources).catch(() => {})
+  }, [])
+
+  const handlePreview = async () => {
+    setLoading(true)
+    setResult(null)
+    try {
+      let vars: Record<string, string> = {}
+      if (variables.trim()) {
+        try {
+          vars = JSON.parse(variables)
+        } catch {
+          setResult({ content: '', error: 'Variables must be valid JSON, e.g. {"KEY": "value"}' })
+          setLoading(false)
+          return
+        }
+      }
+      const resp = await api.previewTemplate(template.id, selectedSourceId || undefined, vars)
+      setResult({ content: resp.content })
+    } catch (e: unknown) {
+      setResult({ content: '', error: e instanceof Error ? e.message : 'Preview failed' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-th-surface rounded-lg shadow-xl w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-th-border">
+          <h2 className="text-sm font-semibold text-th-text">
+            Preview: <span className="font-mono text-th-text-muted">{template.name}</span>
+          </h2>
+          <button type="button" onClick={onClose} className="text-xs text-th-text-muted hover:text-th-text">✕ Close</button>
+        </div>
+
+        <div className="p-4 space-y-3 flex-1 overflow-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">Source (optional)</label>
+              <select
+                value={selectedSourceId}
+                onChange={e => setSelectedSourceId(e.target.value)}
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+              >
+                <option value="">— use placeholder path —</option>
+                {sources.map(s => (
+                  <option key={s.id} value={s.id}>{s.filename}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-th-text-muted mb-1">Extra Variables (JSON)</label>
+              <input
+                value={variables}
+                onChange={e => setVariables(e.target.value)}
+                placeholder='{"MY_VAR": "value"}'
+                className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm font-mono text-th-text"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePreview}
+            disabled={loading}
+            className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Rendering…' : 'Render Preview'}
+          </button>
+
+          {result && (
+            <div className="space-y-1">
+              {result.error ? (
+                <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded p-3">
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">Template error</p>
+                  <pre className="text-xs font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap">{result.error}</pre>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-th-text-muted">Rendered output (.{template.extension})</p>
+                  <pre className="bg-th-log-bg rounded p-3 text-xs font-mono text-th-log-text overflow-auto max-h-96 whitespace-pre">{result.content}</pre>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // StarterGrid — modal/panel showing starter template cards
 // ---------------------------------------------------------------------------
 
@@ -275,6 +384,7 @@ export default function Templates() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<{ name: string; description: string; content: string }>({ name: '', description: '', content: '' })
   const [editSaving, setEditSaving] = useState(false)
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -409,6 +519,10 @@ export default function Templates() {
         </form>
       )}
 
+      {previewTemplate && (
+        <PreviewModal template={previewTemplate} onClose={() => setPreviewTemplate(null)} />
+      )}
+
       <div className="space-y-3">
         {templates.length === 0 && !loading && (
           <p className="text-th-text-subtle text-sm text-center py-4">No templates</p>
@@ -471,6 +585,7 @@ export default function Templates() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-xs text-th-text-subtle">{fmtDate(t.created_at)}</span>
+                    <button onClick={() => setPreviewTemplate(t)} className="text-xs text-green-600 hover:underline">Preview</button>
                     <button onClick={() => startEdit(t)} className="text-xs text-blue-600 hover:underline">Edit</button>
                     <button onClick={() => handleDelete(t.id)} className="text-xs text-red-600 hover:underline">Delete</button>
                   </div>

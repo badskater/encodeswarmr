@@ -204,12 +204,34 @@ func runServer(ctx context.Context, cfgPath string) error {
 			"cooldown_seconds", cfg.AutoScaling.CooldownSeconds,
 		)
 	}
+	// Configure post-encode output validation.
+	validationCfg := engine.ValidationConfig{
+		Enabled:          cfg.Validation.Enabled,
+		FFprobeBin:       cfg.Analysis.FFprobeBin,
+		MinDurationRatio: cfg.Validation.MinDurationRatio,
+	}
+	grpcSrv.SetValidationConfig(validationCfg)
+	logger.Info("output validation configured",
+		"enabled", validationCfg.Enabled,
+		"min_duration_ratio", validationCfg.MinDurationRatio,
+	)
 
 	eng.Start(ctx)
 	logger.Info("core engine started",
 		"dispatch_interval", cfg.Agent.DispatchInterval,
 		"stale_threshold", cfg.Agent.HeartbeatTimeout,
 	)
+
+	// Start job archival loop if enabled.
+	eng.StartArchivalLoop(ctx, engine.ArchiveConfig{
+		Enabled:       cfg.Archive.Enabled,
+		RetentionDays: cfg.Archive.RetentionDays,
+	})
+	if cfg.Archive.Enabled {
+		logger.Info("job archival loop started",
+			"retention_days", cfg.Archive.RetentionDays,
+		)
+	}
 
 	select {
 	case <-ctx.Done():
