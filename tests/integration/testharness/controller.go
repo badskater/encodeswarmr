@@ -159,6 +159,121 @@ func StartController(t *testing.T) *TestController {
 	}
 }
 
+// StartControllerSameDB boots a full controller stack reusing the provided
+// pgxpool.Pool (and its underlying DSN).  No migrations are re-applied and no
+// tables are truncated — the caller is responsible for data state.  This is
+// used by HA and controller-restart tests that need a second (or replacement)
+// controller sharing the same Postgres instance.
+func StartControllerSameDB(t *testing.T, pool *pgxpool.Pool) *TestController {
+	t.Helper()
+
+	dsn := pool.Config().ConnConfig.ConnString()
+
+	store, _, err := db.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("testharness: open db (same pool): %v", err)
+	}
+
+	httpPort := freePort(t)
+	grpcPort := freePort(t)
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Host:           "127.0.0.1",
+			Port:           httpPort,
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			AllowedOrigins: []string{"*"},
+		},
+		Database: config.DatabaseConfig{
+			URL: dsn,
+		},
+		GRPC: config.GRPCConfig{
+			Host: "127.0.0.1",
+			Port: grpcPort,
+			TLS:  config.TLSConfig{},
+		},
+		Auth: config.AuthConfig{
+			SessionTTL: 1 * time.Hour,
+			OIDC:       config.OIDCConfig{Enabled: false},
+		},
+		Agent: config.AgentConfig{
+			AutoApprove:      true,
+			HeartbeatTimeout: 30 * time.Second,
+			DispatchInterval: 500 * time.Millisecond,
+		},
+		Logging: config.LoggingConfig{
+			Level: "debug",
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	logger := slog.Default()
+
+	authSvc, err := auth.NewService(ctx, store, &cfg.Auth, logger)
+	if err != nil {
+		cancel()
+		t.Fatalf("testharness: new auth service (same db): %v", err)
+	}
+
+	whSvc := webhooks.New(store, webhooks.Config{
+		WorkerCount:     1,
+		DeliveryTimeout: 5 * time.Second,
+		MaxRetries:      1,
+	}, logger)
+	whSvc.Start(ctx)
+
+	leader := ha.NewLeader(pool, fmt.Sprintf("test-node-%d", grpcPort), logger)
+	leader.Start(ctx)
+
+	apiSrv, err := api.New(store, authSvc, cfg, logger, whSvc, leader)
+	if err != nil {
+		cancel()
+		t.Fatalf("testharness: new api server (same db): %v", err)
+	}
+	go func() {
+		if serveErr := apiSrv.Serve(ctx); serveErr != nil {
+			if ctx.Err() == nil {
+				t.Logf("testharness: api serve error (same db): %v", serveErr)
+			}
+		}
+	}()
+
+	grpcSrv := controllergrpc.New(store, &cfg.GRPC, &cfg.Agent, logger, whSvc)
+	go func() {
+		if serveErr := grpcSrv.Serve(ctx); serveErr != nil {
+			if ctx.Err() == nil {
+				t.Logf("testharness: grpc serve error (same db): %v", serveErr)
+			}
+		}
+	}()
+
+	eng := engine.New(store, engine.Config{
+		DispatchInterval: 500 * time.Millisecond,
+		StaleThreshold:   90 * time.Second,
+		ScriptBaseDir:    t.TempDir(),
+	}, logger)
+	eng.Start(ctx)
+
+	httpBase := fmt.Sprintf("http://127.0.0.1:%d", httpPort)
+	waitForHealth(t, httpBase, 5*time.Second)
+
+	t.Cleanup(func() {
+		cancel()
+		leader.Stop()
+	})
+
+	return &TestController{
+		Store:       store,
+		Pool:        pool,
+		HTTPBaseURL: httpBase,
+		GRPCAddr:    fmt.Sprintf("127.0.0.1:%d", grpcPort),
+		AuthSvc:     authSvc,
+		Config:      cfg,
+		Cancel:      cancel,
+	}
+}
+
 // freePort finds a free TCP port on 127.0.0.1 and returns it.
 func freePort(t *testing.T) int {
 	t.Helper()

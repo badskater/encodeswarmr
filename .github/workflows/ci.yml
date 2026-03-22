@@ -62,6 +62,8 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: go test -tags integration -race -count=1 -timeout 300s ./tests/integration/...
 
   web-test:
