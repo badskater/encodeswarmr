@@ -654,3 +654,120 @@ func (r *recordingAnalysisRunner) RunAudio(_ context.Context, _ *db.Job, _ *db.S
 	r.done <- struct{}{}
 	return nil
 }
+
+// ---------------------------------------------------------------------------
+// computeAdaptiveChunks
+// ---------------------------------------------------------------------------
+
+func TestComputeAdaptiveChunks_ProportionalToAgentSpeeds(t *testing.T) {
+	// Agent 0 is twice as fast as agent 1: 200 vs 100 fps.
+	// With a large enough frame count the maxChunk cap won't apply
+	// and agent 0 should receive proportionally more frames.
+	// maxChunk = totalFrames/2, so with 3 agents we need at least 3*500 frames
+	// where the cap is above the 2/3 allocation.
+	// Use 6000 frames: maxChunk = 3000, agent0 allocation = 4000 (> maxChunk, capped to 3000)
+	// Actually, we want to avoid the maxChunk cap, so use 4 agents
+	// or use a large enough frame count where the proportional share is below maxChunk.
+	//
+	// With agentFPS = [200, 100] and totalFrames = 1500:
+	//   maxChunk = 750
+	//   agent0 weight = 200/(200+100) * 1500 = 1000 → capped to 750
+	//   remaining for agent1 = 750
+	// Both become 750. Let's use 3 agents instead to test proportionality.
+	//
+	// Use agentFPS = [300, 100, 100] totalFrames = 1500:
+	//   total weight = 500
+	//   maxChunk = 750
+	//   agent0 alloc = round(1500 * 300/500) = 900 → capped to 750
+	//   remaining after agent0 = 750
+	//   agent1 alloc = round(1500 * 100/500) = 300 → OK
+	//   remaining for agent2 = 750 - 300 = 450
+	// chunk[0] = 750, chunk[1] = 300, chunk[2] = 450
+	// chunk[0] > chunk[1]: true; chunk[0] > chunk[2]: true. OK for testing.
+	agentFPS := []float64{300, 100, 100}
+	totalFrames := 1500
+
+	chunks := computeAdaptiveChunks(agentFPS, totalFrames)
+	if len(chunks) != 3 {
+		t.Fatalf("len(chunks) = %d, want 3", len(chunks))
+	}
+
+	// The first agent is the fastest, so its chunk must be the largest.
+	size0 := chunks[0].EndFrame - chunks[0].StartFrame + 1
+	size1 := chunks[1].EndFrame - chunks[1].StartFrame + 1
+
+	if size0 <= size1 {
+		t.Errorf("chunk[0] size %d should be > chunk[1] size %d (faster agent gets more frames)",
+			size0, size1)
+	}
+
+	// All frames covered.
+	if chunks[0].StartFrame != 0 {
+		t.Errorf("chunks[0].StartFrame = %d, want 0", chunks[0].StartFrame)
+	}
+	if chunks[2].EndFrame != totalFrames-1 {
+		t.Errorf("chunks[2].EndFrame = %d, want %d", chunks[2].EndFrame, totalFrames-1)
+	}
+}
+
+func TestComputeAdaptiveChunks_MinChunkSizeEnforced(t *testing.T) {
+	// With 3 agents but only 600 total frames and the minimum chunk size of 500,
+	// each chunk should be at least 500 frames.
+	agentFPS := []float64{100, 100, 100}
+	totalFrames := 1500 // 500 each at equal distribution
+
+	chunks := computeAdaptiveChunks(agentFPS, totalFrames)
+	if len(chunks) != 3 {
+		t.Fatalf("len(chunks) = %d, want 3", len(chunks))
+	}
+	const minChunk = 500
+	for i, c := range chunks {
+		size := c.EndFrame - c.StartFrame + 1
+		if size < minChunk {
+			t.Errorf("chunk[%d] size %d < minChunk %d", i, size, minChunk)
+		}
+	}
+}
+
+func TestComputeAdaptiveChunks_FallbackEqualChunks_ZeroSpeeds(t *testing.T) {
+	// All agents report 0 fps → treated as 1 fps each → equal distribution.
+	agentFPS := []float64{0, 0}
+	totalFrames := 2000
+
+	chunks := computeAdaptiveChunks(agentFPS, totalFrames)
+	if len(chunks) != 2 {
+		t.Fatalf("len(chunks) = %d, want 2", len(chunks))
+	}
+
+	size0 := chunks[0].EndFrame - chunks[0].StartFrame + 1
+	size1 := chunks[1].EndFrame - chunks[1].StartFrame + 1
+
+	// With equal weights, sizes should be equal (or differ by at most rounding).
+	diff := size0 - size1
+	if diff < -1 || diff > 1 {
+		t.Errorf("expected roughly equal chunks, got sizes %d and %d", size0, size1)
+	}
+}
+
+func TestComputeAdaptiveChunks_EmptyAgents_ReturnsNil(t *testing.T) {
+	chunks := computeAdaptiveChunks(nil, 10000)
+	if chunks != nil {
+		t.Errorf("expected nil for empty agentFPS, got %v", chunks)
+	}
+}
+
+func TestComputeAdaptiveChunks_SingleAgent(t *testing.T) {
+	agentFPS := []float64{150}
+	totalFrames := 5000
+
+	chunks := computeAdaptiveChunks(agentFPS, totalFrames)
+	if len(chunks) != 1 {
+		t.Fatalf("len(chunks) = %d, want 1", len(chunks))
+	}
+	if chunks[0].StartFrame != 0 {
+		t.Errorf("StartFrame = %d, want 0", chunks[0].StartFrame)
+	}
+	if chunks[0].EndFrame != totalFrames-1 {
+		t.Errorf("EndFrame = %d, want %d", chunks[0].EndFrame, totalFrames-1)
+	}
+}

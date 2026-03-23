@@ -436,3 +436,322 @@ type deleteTemplateErrStore struct{ *stubStore }
 func (s *deleteTemplateErrStore) DeleteTemplate(_ context.Context, _ string) error {
 	return errors.New("db failure")
 }
+
+// ---------------------------------------------------------------------------
+// handleListTemplateVersions
+// ---------------------------------------------------------------------------
+
+func TestHandleListTemplateVersions_Success(t *testing.T) {
+	store := &listVersionsStore{
+		stubStore: &stubStore{},
+		versions: []*db.TemplateVersion{
+			{ID: "v1", TemplateID: "t1", Version: 1, Content: "# v1"},
+			{ID: "v2", TemplateID: "t1", Version: 2, Content: "# v2"},
+		},
+	}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates/t1/versions", nil)
+	req.SetPathValue("id", "t1")
+	srv.handleListTemplateVersions(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var body struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	decodeJSON(t, rr, &body)
+	if len(body.Data) != 2 {
+		t.Errorf("len(data) = %d, want 2", len(body.Data))
+	}
+}
+
+func TestHandleListTemplateVersions_StoreError(t *testing.T) {
+	store := &listVersionsErrStore{stubStore: &stubStore{}}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates/t1/versions", nil)
+	req.SetPathValue("id", "t1")
+	srv.handleListTemplateVersions(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// handleGetTemplateVersion
+// ---------------------------------------------------------------------------
+
+func TestHandleGetTemplateVersion_Success(t *testing.T) {
+	store := &getVersionStore{
+		stubStore: &stubStore{},
+		version:   &db.TemplateVersion{ID: "v1", TemplateID: "t1", Version: 1, Content: "# v1"},
+	}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates/t1/versions/1", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "1")
+	srv.handleGetTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var body struct {
+		Data db.TemplateVersion `json:"data"`
+	}
+	decodeJSON(t, rr, &body)
+	if body.Data.Version != 1 {
+		t.Errorf("data.version = %d, want 1", body.Data.Version)
+	}
+}
+
+func TestHandleGetTemplateVersion_NotFound(t *testing.T) {
+	store := &getVersionNotFoundStore{stubStore: &stubStore{}}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates/t1/versions/99", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "99")
+	srv.handleGetTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+func TestHandleGetTemplateVersion_BadVersionParam(t *testing.T) {
+	srv := newTestServer(&stubStore{})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/templates/t1/versions/abc", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "abc")
+	srv.handleGetTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// handleRevertTemplateVersion
+// ---------------------------------------------------------------------------
+
+func TestHandleRevertTemplateVersion_Success(t *testing.T) {
+	oldContent := "# old content"
+	newContent := "# reverted content"
+	store := &revertVersionStore{
+		stubStore: &stubStore{},
+		version:   &db.TemplateVersion{ID: "v1", TemplateID: "t1", Version: 1, Content: oldContent},
+		tmpl:      &db.Template{ID: "t1", Name: "T", Type: "avs", Extension: "avs", Content: newContent},
+	}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/versions/1/revert", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "1")
+	srv.handleRevertTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleRevertTemplateVersion_VersionNotFound(t *testing.T) {
+	store := &revertVersionNotFoundStore{stubStore: &stubStore{}}
+	srv := newTestServer(store)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/versions/999/revert", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "999")
+	srv.handleRevertTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+func TestHandleRevertTemplateVersion_BadVersionParam(t *testing.T) {
+	srv := newTestServer(&stubStore{})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/versions/bad/revert", nil)
+	req.SetPathValue("id", "t1")
+	req.SetPathValue("version", "bad")
+	srv.handleRevertTemplateVersion(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// handlePreviewTemplate
+// ---------------------------------------------------------------------------
+
+func TestHandlePreviewTemplate_ValidTemplate(t *testing.T) {
+	store := &previewTemplateStore{
+		stubStore: &stubStore{},
+		tmpl: &db.Template{
+			ID:        "t1",
+			Name:      "Preview",
+			Type:      "bat",
+			Extension: "bat",
+			Content:   `@echo Hello {{index . "CUSTOM_VAR"}}`,
+		},
+	}
+	srv := newTestServer(store)
+
+	body := `{"variables": {"CUSTOM_VAR": "World"}}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/preview", bytes.NewBufferString(body))
+	req.SetPathValue("id", "t1")
+	srv.handlePreviewTemplate(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Content string `json:"content"`
+		} `json:"data"`
+	}
+	decodeJSON(t, rr, &resp)
+	if resp.Data.Content == "" {
+		t.Error("expected non-empty content in preview response")
+	}
+}
+
+func TestHandlePreviewTemplate_InvalidTemplateSyntax(t *testing.T) {
+	store := &previewTemplateStore{
+		stubStore: &stubStore{},
+		tmpl: &db.Template{
+			ID:        "t1",
+			Name:      "Bad",
+			Type:      "bat",
+			Extension: "bat",
+			Content:   `{{unclosed`,
+		},
+	}
+	srv := newTestServer(store)
+
+	body := `{}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/preview", bytes.NewBufferString(body))
+	req.SetPathValue("id", "t1")
+	srv.handlePreviewTemplate(rr, req)
+
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rr.Code)
+	}
+}
+
+func TestHandlePreviewTemplate_TemplateNotFound(t *testing.T) {
+	store := &previewTemplateNotFoundStore{stubStore: &stubStore{}}
+	srv := newTestServer(store)
+
+	body := `{}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/missing/preview", bytes.NewBufferString(body))
+	req.SetPathValue("id", "missing")
+	srv.handlePreviewTemplate(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+func TestHandlePreviewTemplate_InvalidJSON(t *testing.T) {
+	srv := newTestServer(&stubStore{})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/t1/preview", bytes.NewBufferString("not-json"))
+	req.SetPathValue("id", "t1")
+	srv.handlePreviewTemplate(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Store stubs for template versioning / preview tests
+// ---------------------------------------------------------------------------
+
+type listVersionsStore struct {
+	*stubStore
+	versions []*db.TemplateVersion
+}
+
+func (s *listVersionsStore) ListTemplateVersions(_ context.Context, _ string) ([]*db.TemplateVersion, error) {
+	return s.versions, nil
+}
+
+type listVersionsErrStore struct{ *stubStore }
+
+func (s *listVersionsErrStore) ListTemplateVersions(_ context.Context, _ string) ([]*db.TemplateVersion, error) {
+	return nil, errors.New("db failure")
+}
+
+type getVersionStore struct {
+	*stubStore
+	version *db.TemplateVersion
+}
+
+func (s *getVersionStore) GetTemplateVersion(_ context.Context, _ string, _ int) (*db.TemplateVersion, error) {
+	return s.version, nil
+}
+
+type getVersionNotFoundStore struct{ *stubStore }
+
+func (s *getVersionNotFoundStore) GetTemplateVersion(_ context.Context, _ string, _ int) (*db.TemplateVersion, error) {
+	return nil, db.ErrNotFound
+}
+
+type revertVersionStore struct {
+	*stubStore
+	version *db.TemplateVersion
+	tmpl    *db.Template
+}
+
+func (s *revertVersionStore) GetTemplateVersion(_ context.Context, _ string, _ int) (*db.TemplateVersion, error) {
+	return s.version, nil
+}
+
+func (s *revertVersionStore) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return s.tmpl, nil
+}
+
+func (s *revertVersionStore) UpdateTemplate(_ context.Context, _ db.UpdateTemplateParams) error {
+	return nil
+}
+
+type revertVersionNotFoundStore struct{ *stubStore }
+
+func (s *revertVersionNotFoundStore) GetTemplateVersion(_ context.Context, _ string, _ int) (*db.TemplateVersion, error) {
+	return nil, db.ErrNotFound
+}
+
+type previewTemplateStore struct {
+	*stubStore
+	tmpl *db.Template
+}
+
+func (s *previewTemplateStore) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return s.tmpl, nil
+}
+
+type previewTemplateNotFoundStore struct{ *stubStore }
+
+func (s *previewTemplateNotFoundStore) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return nil, db.ErrNotFound
+}

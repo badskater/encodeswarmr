@@ -351,3 +351,91 @@ func (s *updateNotifPrefsErrStore) GetUserByID(ctx context.Context, id string) (
 func (s *updateNotifPrefsErrStore) UpsertNotificationPrefs(_ context.Context, _ db.UpsertNotificationPrefsParams) error {
 	return errTestDB
 }
+
+// ---------------------------------------------------------------------------
+// TestHandleTestEmail
+// ---------------------------------------------------------------------------
+
+func TestHandleTestEmail(t *testing.T) {
+	t.Run("missing to returns 422", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+		// s.email is nil; the handler checks 'to' first before the nil check.
+		// Actually the handler checks 'to' before checking s.email, so we get 422.
+		body := `{"to": ""}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notifications/test-email", bytes.NewBufferString(body))
+		srv.handleTestEmail(rr, req)
+
+		if rr.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", rr.Code)
+		}
+	})
+
+	t.Run("invalid JSON returns 400", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notifications/test-email", bytes.NewBufferString("not-json"))
+		srv.handleTestEmail(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", rr.Code)
+		}
+	})
+
+	t.Run("no SMTP configured returns 503", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+		// s.email is nil by default in newTestServer.
+		body := `{"to": "someone@example.com"}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/notifications/test-email", bytes.NewBufferString(body))
+		srv.handleTestEmail(rr, req)
+
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want 503", rr.Code)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleUpdateNotificationPrefs_WithEmailFields
+// ---------------------------------------------------------------------------
+
+func TestHandleUpdateNotificationPrefs_WithEmailFields(t *testing.T) {
+	now := time.Now()
+	user := &db.User{ID: "u1", Username: "alice", Role: "admin"}
+	savedPrefs := &db.NotificationPrefs{
+		ID:           "np1",
+		UserID:       "u1",
+		NotifyEmail:  true,
+		EmailAddress: "alice@example.com",
+	}
+	store := &updateNotifPrefsStore{
+		notifAuthStore: &notifAuthStore{
+			stubStore: &stubStore{},
+			session:   &db.Session{Token: "tok", UserID: "u1", ExpiresAt: now.Add(time.Hour)},
+			user:      user,
+		},
+		savedPrefs: savedPrefs,
+	}
+	srv := newNotificationsTestServer(store)
+
+	body := `{"notify_email":true,"email_address":"alice@example.com"}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/notifications", bytes.NewBufferString(body))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	srv.auth.Middleware(http.HandlerFunc(srv.handleUpdateNotificationPrefs)).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var resp struct {
+		Data db.NotificationPrefs `json:"data"`
+	}
+	decodeJSON(t, rr, &resp)
+	if !resp.Data.NotifyEmail {
+		t.Error("NotifyEmail = false, want true")
+	}
+	if resp.Data.EmailAddress != "alice@example.com" {
+		t.Errorf("EmailAddress = %q, want alice@example.com", resp.Data.EmailAddress)
+	}
+}

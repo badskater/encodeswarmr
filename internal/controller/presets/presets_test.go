@@ -227,3 +227,172 @@ func TestAll_PresetsWithinCategoryAreSorted(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// AllAudio()
+// ---------------------------------------------------------------------------
+
+func TestAllAudio_ReturnsTwelvePresets(t *testing.T) {
+	all := AllAudio()
+	if len(all) != 12 {
+		t.Errorf("AllAudio() returned %d presets, want 12", len(all))
+	}
+}
+
+func TestAllAudio_ReturnsNonNilSlice(t *testing.T) {
+	if AllAudio() == nil {
+		t.Fatal("AllAudio() returned nil slice")
+	}
+}
+
+func TestAllAudio_AllPresetsHaveRequiredFields(t *testing.T) {
+	for _, p := range AllAudio() {
+		if p.Name == "" {
+			t.Errorf("audio preset has empty Name: %+v", p)
+		}
+		if p.Category == "" {
+			t.Errorf("audio preset %q has empty Category", p.Name)
+		}
+		if p.Codec == "" {
+			t.Errorf("audio preset %q has empty Codec", p.Name)
+		}
+		if p.Params == "" {
+			t.Errorf("audio preset %q has empty Params", p.Name)
+		}
+	}
+}
+
+func TestAllAudio_NoDuplicateNames(t *testing.T) {
+	seen := map[string]int{}
+	for _, p := range AllAudio() {
+		seen[p.Name]++
+	}
+	for name, count := range seen {
+		if count > 1 {
+			t.Errorf("duplicate audio preset name %q (count=%d)", name, count)
+		}
+	}
+}
+
+func TestAllAudio_CategoryOrder(t *testing.T) {
+	// lossless must all come before surround, surround before stereo, stereo before legacy.
+	categoryOrder := []string{"lossless", "surround", "stereo", "legacy"}
+	firstIdx := map[string]int{}
+	lastIdx := map[string]int{}
+	for i, p := range AllAudio() {
+		if _, seen := firstIdx[p.Category]; !seen {
+			firstIdx[p.Category] = i
+		}
+		lastIdx[p.Category] = i
+	}
+	for i := 0; i < len(categoryOrder)-1; i++ {
+		catA := categoryOrder[i]
+		catB := categoryOrder[i+1]
+		if la, ok := lastIdx[catA]; ok {
+			if fb, ok2 := firstIdx[catB]; ok2 {
+				if la > fb {
+					t.Errorf("category %q appears after first item of category %q", catA, catB)
+				}
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetAudio()
+// ---------------------------------------------------------------------------
+
+func TestGetAudio_KnownPreset(t *testing.T) {
+	p := GetAudio("FLAC Lossless")
+	if p == nil {
+		t.Fatal("GetAudio(\"FLAC Lossless\") returned nil")
+	}
+	if p.Codec != "flac" {
+		t.Errorf("Codec = %q, want flac", p.Codec)
+	}
+	if p.Category != "lossless" {
+		t.Errorf("Category = %q, want lossless", p.Category)
+	}
+}
+
+func TestGetAudio_UnknownPreset_ReturnsNil(t *testing.T) {
+	if p := GetAudio("no such preset"); p != nil {
+		t.Errorf("GetAudio(unknown) = %v, want nil", p)
+	}
+}
+
+func TestGetAudio_AllPresetsRetrievable(t *testing.T) {
+	for _, p := range AllAudio() {
+		got := GetAudio(p.Name)
+		if got == nil {
+			t.Errorf("GetAudio(%q) returned nil but preset is in AllAudio()", p.Name)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Audio codec names — each must be a valid ffmpeg codec string
+// ---------------------------------------------------------------------------
+
+func TestAllAudio_ValidFfmpegCodecNames(t *testing.T) {
+	// Known valid ffmpeg audio codec names used in this project.
+	validCodecs := map[string]bool{
+		"flac":        true,
+		"pcm_s24le":   true,
+		"copy":        true,
+		"libopus":     true,
+		"aac":         true,
+		"libfdk_aac":  true,
+		"libmp3lame":  true,
+		"libvorbis":   true,
+		"ac3":         true,
+		"eac3":        true,
+		"dca":         true,
+	}
+
+	for _, p := range AllAudio() {
+		if !validCodecs[p.Codec] {
+			t.Errorf("audio preset %q has unrecognised ffmpeg codec %q", p.Name, p.Codec)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Specific audio preset values
+// ---------------------------------------------------------------------------
+
+func TestAudioPreset_SpecificValues(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantCodec string
+		wantCat   string
+	}{
+		{"FLAC Lossless", "flac", "lossless"},
+		{"PCM 24-bit", "pcm_s24le", "lossless"},
+		{"TrueHD (Dolby Atmos passthrough)", "copy", "lossless"},
+		{"Opus 128k", "libopus", "stereo"},
+		{"Opus 320k", "libopus", "stereo"},
+		{"AAC-LC 256k", "aac", "stereo"},
+		{"AAC-HE v2 64k", "libfdk_aac", "stereo"},
+		{"MP3 320k", "libmp3lame", "legacy"},
+		{"Vorbis 192k", "libvorbis", "legacy"},
+		{"AC3 640k (Dolby Digital)", "ac3", "surround"},
+		{"EAC3 1536k (Dolby Digital Plus)", "eac3", "surround"},
+		{"DTS 1536k", "dca", "surround"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := GetAudio(tt.name)
+			if p == nil {
+				t.Fatalf("GetAudio(%q) returned nil", tt.name)
+			}
+			if p.Codec != tt.wantCodec {
+				t.Errorf("Codec = %q, want %q", p.Codec, tt.wantCodec)
+			}
+			if p.Category != tt.wantCat {
+				t.Errorf("Category = %q, want %q", p.Category, tt.wantCat)
+			}
+		})
+	}
+}
