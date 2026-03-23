@@ -2613,3 +2613,501 @@ func TestDeleteFlow_NotFound(t *testing.T) {
 		t.Fatal("expected ErrNotFound")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// column helpers for Phase 7 types
+// ---------------------------------------------------------------------------
+
+func notifPrefCols() []string {
+	return []string{
+		"id", "user_id",
+		"notify_on_job_complete", "notify_on_job_failed",
+		"notify_on_agent_stale", "webhook_filter_user_only",
+		"email_address", "notify_email",
+		"created_at", "updated_at",
+	}
+}
+
+func notifPrefRow(id, userID, email string) *pgxmock.Rows {
+	return pgxmock.NewRows(notifPrefCols()).
+		AddRow(id, userID, true, true, false, false, email, true, now, now)
+}
+
+func templateVersionCols() []string {
+	return []string{"id", "template_id", "version", "content", "created_at", "created_by"}
+}
+
+func templateVersionRow(id, templateID string, version int) *pgxmock.Rows {
+	return pgxmock.NewRows(templateVersionCols()).
+		AddRow(id, templateID, version, ":: script content", now, nil)
+}
+
+func encodingStatsCols() []string {
+	return []string{
+		"id", "codec", "resolution", "preset",
+		"avg_fps", "avg_size_per_min", "sample_count", "fps_stddev", "updated_at",
+	}
+}
+
+func encodingStatsRow(id, codec, resolution, preset string) *pgxmock.Rows {
+	return pgxmock.NewRows(encodingStatsCols()).
+		AddRow(id, codec, resolution, preset, 15.0, 120.5, 10, 2.3, now)
+}
+
+// ---------------------------------------------------------------------------
+// ListUsersWithEmailNotifications
+// ---------------------------------------------------------------------------
+
+func TestListUsersWithEmailNotifications_Success(t *testing.T) {
+	s, mock := newMock(t)
+	rows := pgxmock.NewRows(notifPrefCols()).
+		AddRow("np1", "uid1", true, true, false, false, "alice@example.com", true, now, now).
+		AddRow("np2", "uid2", false, true, false, false, "bob@example.com", true, now, now)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM notification_preferences`)).
+		WillReturnRows(rows)
+	prefs, err := s.ListUsersWithEmailNotifications(context.Background())
+	if err != nil || len(prefs) != 2 {
+		t.Fatalf("err=%v len=%d", err, len(prefs))
+	}
+	if prefs[0].EmailAddress != "alice@example.com" {
+		t.Errorf("EmailAddress = %q, want alice@example.com", prefs[0].EmailAddress)
+	}
+}
+
+func TestListUsersWithEmailNotifications_Empty(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM notification_preferences`)).
+		WillReturnRows(pgxmock.NewRows(notifPrefCols()))
+	prefs, err := s.ListUsersWithEmailNotifications(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(prefs) != 0 {
+		t.Errorf("len=%d, want 0", len(prefs))
+	}
+}
+
+func TestListUsersWithEmailNotifications_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM notification_preferences`)).
+		WillReturnError(errors.New("db error"))
+	_, err := s.ListUsersWithEmailNotifications(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UnblockDependentJobs
+// ---------------------------------------------------------------------------
+
+func TestUnblockDependentJobs_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE jobs SET status = 'queued'`)).
+		WithArgs("j-completed").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 2))
+	if err := s.UnblockDependentJobs(context.Background(), "j-completed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUnblockDependentJobs_NoDependents_NoError(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE jobs SET status = 'queued'`)).
+		WithArgs("j-no-deps").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+	if err := s.UnblockDependentJobs(context.Background(), "j-no-deps"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnblockDependentJobs_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE jobs SET status = 'queued'`)).
+		WithArgs(anyArg).
+		WillReturnError(errors.New("db error"))
+	if err := s.UnblockDependentJobs(context.Background(), "j1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListJobsByChainGroup
+// ---------------------------------------------------------------------------
+
+func TestListJobsByChainGroup_Success(t *testing.T) {
+	s, mock := newMock(t)
+	rows := pgxmock.NewRows(jobCols()).
+		AddRow("j1", "s1", "queued", "encode", 0, []string{},
+			0, 0, 0, 0, 0,
+			[]byte(`{}`), nil, 0, nil, strPtr("cg1"),
+			nil, nil, now, now,
+			`\\nas\video.mkv`).
+		AddRow("j2", "s2", "running", "encode", 0, []string{},
+			0, 0, 0, 0, 0,
+			[]byte(`{}`), nil, 0, nil, strPtr("cg1"),
+			nil, nil, now, now,
+			`\\nas\video2.mkv`)
+	mock.ExpectQuery(`WHERE j.chain_group`).
+		WithArgs("cg1").
+		WillReturnRows(rows)
+	jobs, err := s.ListJobsByChainGroup(context.Background(), "cg1")
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("err=%v len=%d", err, len(jobs))
+	}
+}
+
+func TestListJobsByChainGroup_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`WHERE j.chain_group`).
+		WithArgs(anyArg).
+		WillReturnError(errors.New("db error"))
+	_, err := s.ListJobsByChainGroup(context.Background(), "cg1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ArchiveOldJobs
+// ---------------------------------------------------------------------------
+
+func TestArchiveOldJobs_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectBegin()
+	// Archive task logs (INSERT ... SELECT)
+	mock.ExpectExec(`INSERT INTO task_log_archive`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("INSERT", 0))
+	// Delete task logs
+	mock.ExpectExec(`DELETE FROM task_logs`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+	// Archive tasks (INSERT ... SELECT)
+	mock.ExpectExec(`INSERT INTO task_archive`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("INSERT", 0))
+	// Delete tasks
+	mock.ExpectExec(`DELETE FROM tasks`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+	// Archive jobs (INSERT ... SELECT), rows affected = 3
+	mock.ExpectExec(`INSERT INTO job_archive`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("INSERT", 3))
+	// Delete archived jobs from active table
+	mock.ExpectExec(`DELETE FROM jobs`).
+		WithArgs(anyArg).
+		WillReturnResult(pgxmock.NewResult("DELETE", 3))
+	mock.ExpectCommit()
+
+	count, err := s.ArchiveOldJobs(context.Background(), 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("ArchiveOldJobs: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("count = %d, want 3", count)
+	}
+}
+
+func TestArchiveOldJobs_BeginError(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectBegin().WillReturnError(errors.New("begin failed"))
+	_, err := s.ArchiveOldJobs(context.Background(), 24*time.Hour)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListArchivedJobs
+// ---------------------------------------------------------------------------
+
+func TestListArchivedJobs_Success(t *testing.T) {
+	s, mock := newMock(t)
+	// Count query: no filter args.
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(int64(1)))
+	// List query: arg is pageSize+1 (51 for PageSize=50).
+	// scanJob reads 21 columns, so use jobRow helper.
+	mock.ExpectQuery(`FROM   job_archive`).
+		WithArgs(51).
+		WillReturnRows(jobRow("j1", "s1"))
+	jobs, total, err := s.ListArchivedJobs(context.Background(), ListJobsFilter{PageSize: 50})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if total != 1 || len(jobs) != 1 {
+		t.Errorf("total=%d len=%d, want total=1 len=1", total, len(jobs))
+	}
+}
+
+func TestListArchivedJobs_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`SELECT COUNT`).
+		WillReturnError(errors.New("db error"))
+	_, _, err := s.ListArchivedJobs(context.Background(), ListJobsFilter{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ExportJobs
+// ---------------------------------------------------------------------------
+
+func TestExportJobs_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM jobs`).
+		WillReturnRows(jobRow("j1", "s1"))
+	jobs, err := s.ExportJobs(context.Background(), ExportJobsFilter{})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("err=%v len=%d", err, len(jobs))
+	}
+}
+
+func TestExportJobs_WithStatusFilter(t *testing.T) {
+	s, mock := newMock(t)
+	// When Status is set, the first arg is the status value.
+	mock.ExpectQuery(`FROM jobs`).
+		WithArgs("completed").
+		WillReturnRows(jobRow("j1", "s1"))
+	jobs, err := s.ExportJobs(context.Background(), ExportJobsFilter{Status: "completed"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("err=%v len=%d", err, len(jobs))
+	}
+}
+
+func TestExportJobs_NoRows(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM jobs`).
+		WillReturnRows(pgxmock.NewRows(jobCols()))
+	jobs, err := s.ExportJobs(context.Background(), ExportJobsFilter{})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("err=%v len=%d, want 0", err, len(jobs))
+	}
+}
+
+func TestExportJobs_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(`FROM jobs`).
+		WillReturnError(errors.New("db error"))
+	_, err := s.ExportJobs(context.Background(), ExportJobsFilter{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CreateTemplateVersion
+// ---------------------------------------------------------------------------
+
+func TestCreateTemplateVersion_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO template_versions`)).
+		WithArgs("tmpl1", 1, ":: content", anyArg).
+		WillReturnRows(templateVersionRow("tv1", "tmpl1", 1))
+	v, err := s.CreateTemplateVersion(context.Background(), CreateTemplateVersionParams{
+		TemplateID: "tmpl1",
+		Version:    1,
+		Content:    ":: content",
+	})
+	if err != nil || v.ID != "tv1" {
+		t.Fatalf("err=%v v=%v", err, v)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCreateTemplateVersion_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO template_versions`)).
+		WithArgs(anyArg, anyArg, anyArg, anyArg).
+		WillReturnError(errors.New("db error"))
+	_, err := s.CreateTemplateVersion(context.Background(), CreateTemplateVersionParams{
+		TemplateID: "tmpl1", Version: 1, Content: "x",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListTemplateVersions
+// ---------------------------------------------------------------------------
+
+func TestListTemplateVersions_Success(t *testing.T) {
+	s, mock := newMock(t)
+	rows := pgxmock.NewRows(templateVersionCols()).
+		AddRow("tv2", "tmpl1", 2, ":: v2", now, nil).
+		AddRow("tv1", "tmpl1", 1, ":: v1", now, nil)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM template_versions WHERE template_id`)).
+		WithArgs("tmpl1").
+		WillReturnRows(rows)
+	versions, err := s.ListTemplateVersions(context.Background(), "tmpl1")
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("err=%v len=%d", err, len(versions))
+	}
+	if versions[0].Version != 2 {
+		t.Errorf("versions[0].Version = %d, want 2 (descending order)", versions[0].Version)
+	}
+}
+
+func TestListTemplateVersions_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM template_versions WHERE template_id`)).
+		WithArgs(anyArg).
+		WillReturnError(errors.New("db error"))
+	_, err := s.ListTemplateVersions(context.Background(), "tmpl1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetTemplateVersion
+// ---------------------------------------------------------------------------
+
+func TestGetTemplateVersion_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM template_versions WHERE template_id`)).
+		WithArgs("tmpl1", 3).
+		WillReturnRows(templateVersionRow("tv3", "tmpl1", 3))
+	v, err := s.GetTemplateVersion(context.Background(), "tmpl1", 3)
+	if err != nil || v.Version != 3 {
+		t.Fatalf("err=%v v=%v", err, v)
+	}
+}
+
+func TestGetTemplateVersion_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM template_versions WHERE template_id`)).
+		WithArgs("tmpl1", 99).
+		WillReturnRows(pgxmock.NewRows(templateVersionCols()))
+	_, err := s.GetTemplateVersion(context.Background(), "tmpl1", 99)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PreemptTask
+// ---------------------------------------------------------------------------
+
+func TestPreemptTask_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(`UPDATE tasks`).
+		WithArgs("t1").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	if err := s.PreemptTask(context.Background(), "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPreemptTask_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(`UPDATE tasks`).
+		WithArgs("missing").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 0))
+	if !errors.Is(s.PreemptTask(context.Background(), "missing"), ErrNotFound) {
+		t.Fatal("expected ErrNotFound")
+	}
+}
+
+func TestPreemptTask_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(`UPDATE tasks`).
+		WithArgs(anyArg).
+		WillReturnError(errors.New("db error"))
+	if err := s.PreemptTask(context.Background(), "t1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UpsertEncodingStats
+// ---------------------------------------------------------------------------
+
+func TestUpsertEncodingStats_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO encoding_stats`)).
+		WithArgs("x265", "1920x1080", "slow", 15.0, 200.0).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	if err := s.UpsertEncodingStats(context.Background(), UpsertEncodingStatsParams{
+		Codec:         "x265",
+		Resolution:    "1920x1080",
+		Preset:        "slow",
+		NewFPS:        15.0,
+		NewSizePerMin: 200.0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestUpsertEncodingStats_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO encoding_stats`)).
+		WithArgs(anyArg, anyArg, anyArg, anyArg, anyArg).
+		WillReturnError(errors.New("db error"))
+	if err := s.UpsertEncodingStats(context.Background(), UpsertEncodingStatsParams{
+		Codec: "x265", Resolution: "1920x1080", Preset: "slow",
+	}); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetEncodingStats
+// ---------------------------------------------------------------------------
+
+func TestGetEncodingStats_Success(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM encoding_stats WHERE codec`)).
+		WithArgs("x265", "1920x1080", "slow").
+		WillReturnRows(encodingStatsRow("es1", "x265", "1920x1080", "slow"))
+	es, err := s.GetEncodingStats(context.Background(), "x265", "1920x1080", "slow")
+	if err != nil || es.Codec != "x265" {
+		t.Fatalf("err=%v es=%v", err, es)
+	}
+	if es.AvgFPS != 15.0 {
+		t.Errorf("AvgFPS = %v, want 15.0", es.AvgFPS)
+	}
+}
+
+func TestGetEncodingStats_NotFound(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM encoding_stats WHERE codec`)).
+		WithArgs("x264", "1920x1080", "fast").
+		WillReturnRows(pgxmock.NewRows(encodingStatsCols()))
+	_, err := s.GetEncodingStats(context.Background(), "x264", "1920x1080", "fast")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestGetEncodingStats_Error(t *testing.T) {
+	s, mock := newMock(t)
+	mock.ExpectQuery(regexp.QuoteMeta(`FROM encoding_stats WHERE codec`)).
+		WithArgs(anyArg, anyArg, anyArg).
+		WillReturnError(errors.New("db error"))
+	_, err := s.GetEncodingStats(context.Background(), "x265", "1080p", "slow")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+func strPtr(s string) *string { return &s }
