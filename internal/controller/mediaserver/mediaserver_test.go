@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -327,15 +328,15 @@ func TestEmby_RefreshLibrary_HTTP4xx_ReturnsError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTriggerAutoRefresh_OnlyRefreshesNamedServers(t *testing.T) {
-	var plexCalled, jellyfinCalled int
+	var plexCalled, jellyfinCalled atomic.Int32
 	tsA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		plexCalled++
+		plexCalled.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer tsA.Close()
 
 	tsB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jellyfinCalled++
+		jellyfinCalled.Add(1)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer tsB.Close()
@@ -350,24 +351,24 @@ func TestTriggerAutoRefresh_OnlyRefreshesNamedServers(t *testing.T) {
 	m.TriggerAutoRefresh(context.Background(), []string{"PlexA"})
 	time.Sleep(200 * time.Millisecond)
 
-	if plexCalled != 1 {
-		t.Errorf("plexCalled = %d, want 1", plexCalled)
+	if plexCalled.Load() != 1 {
+		t.Errorf("plexCalled = %d, want 1", plexCalled.Load())
 	}
-	if jellyfinCalled != 0 {
-		t.Errorf("jellyfinCalled = %d, want 0 (not in auto-refresh list)", jellyfinCalled)
+	if jellyfinCalled.Load() != 0 {
+		t.Errorf("jellyfinCalled = %d, want 0 (not in auto-refresh list)", jellyfinCalled.Load())
 	}
 }
 
 func TestTriggerAutoRefresh_EmptyNames_RefreshesAll(t *testing.T) {
-	var plexCalled, jellyfinCalled int
+	var plexCalled, jellyfinCalled atomic.Int32
 	tsA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		plexCalled++
+		plexCalled.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer tsA.Close()
 
 	tsB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jellyfinCalled++
+		jellyfinCalled.Add(1)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer tsB.Close()
@@ -382,11 +383,11 @@ func TestTriggerAutoRefresh_EmptyNames_RefreshesAll(t *testing.T) {
 	m.TriggerAutoRefresh(context.Background(), []string{})
 	time.Sleep(200 * time.Millisecond)
 
-	if plexCalled != 1 {
-		t.Errorf("plexCalled = %d, want 1", plexCalled)
+	if plexCalled.Load() != 1 {
+		t.Errorf("plexCalled = %d, want 1", plexCalled.Load())
 	}
-	if jellyfinCalled != 1 {
-		t.Errorf("jellyfinCalled = %d, want 1", jellyfinCalled)
+	if jellyfinCalled.Load() != 1 {
+		t.Errorf("jellyfinCalled = %d, want 1", jellyfinCalled.Load())
 	}
 }
 
