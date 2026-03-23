@@ -26,6 +26,7 @@ type Config struct {
 	Archive      ArchiveConfig       `mapstructure:"archive"`
 	Tracing      TracingConfig       `mapstructure:"tracing"`
 	WatchFolders []WatchFolderConfig `mapstructure:"watch_folders"`
+	FileManager  FileManagerConfig   `mapstructure:"file_manager"`
 }
 
 
@@ -127,6 +128,10 @@ type AnalysisConfig struct {
 	// Concurrency limits simultaneous controller-side analysis processes.
 	// 0 = unlimited.
 	Concurrency int `mapstructure:"concurrency"`
+	// ThumbnailDir is the base directory where source preview thumbnails are
+	// stored.  Each source gets a subdirectory named by its UUID.
+	// Defaults to /var/lib/encodeswarmr/thumbnails.
+	ThumbnailDir string `mapstructure:"thumbnail_dir"`
 	// PathMappings seeds the DB with path mappings on startup.
 	// Use the API/UI to manage them at runtime.
 	PathMappings []PathMappingConfig `mapstructure:"path_mappings"`
@@ -223,6 +228,13 @@ type WatchFolderConfig struct {
 	// Enabled controls whether this folder is actively polled.
 	Enabled bool `mapstructure:"enabled"`
 }
+// FileManagerConfig controls the server-side file manager feature.
+type FileManagerConfig struct {
+	// AllowedPaths is the list of base directories the file manager may access.
+	// Requests for paths outside these directories are rejected with 403.
+	// Example: ["/mnt/nas/media", "/mnt/nas/output"]
+	AllowedPaths []string `mapstructure:"allowed_paths"`
+}
 
 // TracingConfig controls OpenTelemetry distributed tracing.
 type TracingConfig struct {
@@ -279,6 +291,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("analysis.ffprobe_bin", "")
 	v.SetDefault("analysis.dovi_tool_bin", "")
 	v.SetDefault("analysis.concurrency", 2)
+	v.SetDefault("analysis.thumbnail_dir", "/var/lib/encodeswarmr/thumbnails")
 	v.SetDefault("smtp.port", 587)
 	v.SetDefault("smtp.tls_enabled", false)
 	v.SetDefault("smtp.starttls", true)

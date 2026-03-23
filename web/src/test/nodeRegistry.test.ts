@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { NODE_REGISTRY, NODE_REGISTRY_MAP, NODE_BY_CATEGORY, CATEGORY_ORDER, CATEGORY_LABELS } from '../flow/nodeRegistry'
 
-const EXPECTED_CATEGORIES = ['input', 'encoding', 'analysis', 'condition', 'audio', 'output', 'notification', 'template', 'flow']
+const EXPECTED_CATEGORIES = ['input', 'encoding', 'analysis', 'condition', 'audio', 'output', 'notification', 'template', 'flow', 'subtitle']
 
 describe('nodeRegistry', () => {
-  it('has 37 node templates registered', () => {
-    expect(NODE_REGISTRY.length).toBe(37)
+  it('has 41 node templates registered', () => {
+    expect(NODE_REGISTRY.length).toBe(41)
   })
 
   it('each node has required fields: type, label, category, icon', () => {
@@ -54,8 +54,8 @@ describe('nodeRegistry', () => {
     }
   })
 
-  it('CATEGORY_ORDER contains all 9 categories', () => {
-    expect(CATEGORY_ORDER.length).toBe(9)
+  it('CATEGORY_ORDER contains all 10 categories', () => {
+    expect(CATEGORY_ORDER.length).toBe(10)
     for (const cat of EXPECTED_CATEGORIES) {
       expect(CATEGORY_ORDER).toContain(cat)
     }

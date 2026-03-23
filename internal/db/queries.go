@@ -367,20 +367,20 @@ func (s *pgStore) CreateSource(ctx context.Context, p CreateSourceParams) (*Sour
 		INSERT INTO sources (filename, unc_path, size_bytes, detected_by, cloud_uri)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-		          cloud_uri, hdr_type, dv_profile, created_at, updated_at`
+		          cloud_uri, hdr_type, dv_profile, thumbnails, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, p.Filename, p.UNCPath, p.SizeBytes, p.DetectedBy, p.CloudURI)
 	return scanSource(row)
 }
 
 func (s *pgStore) GetSourceByID(ctx context.Context, id string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources WHERE id = $1`
+	                  cloud_uri, hdr_type, dv_profile, thumbnails, created_at, updated_at FROM sources WHERE id = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, id))
 }
 
 func (s *pgStore) GetSourceByUNCPath(ctx context.Context, uncPath string) (*Source, error) {
 	const q = `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	                  cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources WHERE unc_path = $1`
+	                  cloud_uri, hdr_type, dv_profile, thumbnails, created_at, updated_at FROM sources WHERE unc_path = $1`
 	return scanSource(s.pool.QueryRow(ctx, q, uncPath))
 }
 
@@ -402,7 +402,7 @@ func (s *pgStore) ListSources(ctx context.Context, f ListSourcesFilter) ([]*Sour
 	}
 
 	q := `SELECT id, filename, unc_path, size_bytes, detected_by, state, vmaf_score,
-	             cloud_uri, hdr_type, dv_profile, created_at, updated_at FROM sources`
+	             cloud_uri, hdr_type, dv_profile, thumbnails, created_at, updated_at FROM sources`
 	args := []any{}
 	argN := 1
 
@@ -438,6 +438,22 @@ func (s *pgStore) ListSources(ctx context.Context, f ListSourcesFilter) ([]*Sour
 		out = append(out, src)
 	}
 	return out, total, rows.Err()
+}
+
+func (s *pgStore) UpdateSourceThumbnails(ctx context.Context, p UpdateSourceThumbnailsParams) error {
+	thumbsJSON, err := json.Marshal(p.Thumbnails)
+	if err != nil {
+		return fmt.Errorf("db: marshal thumbnails: %w", err)
+	}
+	const q = `UPDATE sources SET thumbnails = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, thumbsJSON)
+	if err != nil {
+		return fmt.Errorf("db: update source thumbnails: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *pgStore) UpdateSourceState(ctx context.Context, id, state string) error {
@@ -484,11 +500,13 @@ func (s *pgStore) DeleteSource(ctx context.Context, id string) error {
 
 func scanSource(row pgx.Row) (*Source, error) {
 	var src Source
+	var thumbsJSON []byte
 	err := row.Scan(
 		&src.ID, &src.Filename, &src.UNCPath, &src.SizeBytes,
 		&src.DetectedBy, &src.State, &src.VMafScore,
 		&src.CloudURI,
 		&src.HDRType, &src.DVProfile,
+		&thumbsJSON,
 		&src.CreatedAt, &src.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -496,6 +514,12 @@ func scanSource(row pgx.Row) (*Source, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("db: scan source: %w", err)
+	}
+	if len(thumbsJSON) > 0 {
+		_ = json.Unmarshal(thumbsJSON, &src.Thumbnails)
+	}
+	if src.Thumbnails == nil {
+		src.Thumbnails = []string{}
 	}
 	return &src, nil
 }

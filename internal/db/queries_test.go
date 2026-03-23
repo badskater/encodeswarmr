@@ -103,14 +103,14 @@ func agentRow(id, name string) *pgxmock.Rows {
 func sourceCols() []string {
 	return []string{
 		"id", "filename", "unc_path", "size_bytes", "detected_by",
-		"state", "vmaf_score", "cloud_uri", "hdr_type", "dv_profile", "created_at", "updated_at",
+		"state", "vmaf_score", "cloud_uri", "hdr_type", "dv_profile", "thumbnails", "created_at", "updated_at",
 	}
 }
 
 func sourceRow(id, filename string) *pgxmock.Rows {
 	return pgxmock.NewRows(sourceCols()).
 		AddRow(id, filename, `\\nas\share\`+filename, int64(1024*1024*1024),
-			nil, "new", nil, nil, "", 0, now, now)
+			nil, "new", nil, nil, "", 0, nil, now, now)
 }
 
 func jobCols() []string {
@@ -706,8 +706,8 @@ func TestListSources_NoFilter(t *testing.T) {
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(int64(2)))
 	// list query — last arg is pageSize limit
 	rows := pgxmock.NewRows(sourceCols()).
-		AddRow("src1", "a.mkv", `\\nas\a.mkv`, int64(1024), nil, "new", nil, nil, "", 0, now, now).
-		AddRow("src2", "b.mkv", `\\nas\b.mkv`, int64(2048), nil, "new", nil, nil, "", 0, now, now)
+		AddRow("src1", "a.mkv", `\\nas\a.mkv`, int64(1024), nil, "new", nil, nil, "", 0, nil, now, now).
+		AddRow("src2", "b.mkv", `\\nas\b.mkv`, int64(2048), nil, "new", nil, nil, "", 0, nil, now, now)
 	mock.ExpectQuery(`SELECT id`).WithArgs(anyArg).WillReturnRows(rows)
 
 	srcs, total, err := s.ListSources(context.Background(), ListSourcesFilter{})

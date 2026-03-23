@@ -70,10 +70,11 @@ func (Stub) CreateSource(_ context.Context, _ db.CreateSourceParams) (*db.Source
 func (Stub) GetSourceByID(_ context.Context, _ string) (*db.Source, error)                          { return nil, nil }
 func (Stub) GetSourceByUNCPath(_ context.Context, _ string) (*db.Source, error)                     { return nil, nil }
 func (Stub) ListSources(_ context.Context, _ db.ListSourcesFilter) ([]*db.Source, int64, error)     { return nil, 0, nil }
-func (Stub) UpdateSourceState(_ context.Context, _, _ string) error                                 { return nil }
-func (Stub) UpdateSourceVMAF(_ context.Context, _ string, _ float64) error                          { return nil }
-func (Stub) UpdateSourceHDR(_ context.Context, _ db.UpdateSourceHDRParams) error                    { return nil }
-func (Stub) DeleteSource(_ context.Context, _ string) error                                         { return nil }
+func (Stub) UpdateSourceState(_ context.Context, _, _ string) error                                         { return nil }
+func (Stub) UpdateSourceVMAF(_ context.Context, _ string, _ float64) error                                  { return nil }
+func (Stub) UpdateSourceHDR(_ context.Context, _ db.UpdateSourceHDRParams) error                            { return nil }
+func (Stub) UpdateSourceThumbnails(_ context.Context, _ db.UpdateSourceThumbnailsParams) error              { return nil }
+func (Stub) DeleteSource(_ context.Context, _ string) error                                                  { return nil }
 
 // --- Jobs ---
 func (Stub) CreateJob(_ context.Context, _ db.CreateJobParams) (*db.Job, error)                  { return nil, nil }

@@ -114,7 +114,33 @@ export interface Source {
   cloud_uri: string | null
   hdr_type: string
   dv_profile: number
+  thumbnails: string[]
   created_at: string
+}
+
+// SubtitleTrack describes a single subtitle stream in a media file.
+export interface SubtitleTrack {
+  index: number
+  language: string
+  codec: string
+  title: string
+}
+
+// FileEntry describes a file or directory in the file manager.
+export interface FileEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number
+  mod_time: string
+  ext: string
+  is_video: boolean
+}
+
+// FileInfo extends FileEntry with optional codec information.
+export interface FileInfo extends FileEntry {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  codec_info?: Record<string, any> | null
 }
 
 export interface Template {

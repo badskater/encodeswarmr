@@ -396,6 +396,111 @@ function ConfigFields({
         />
       )
 
+    case 'subtitle_extract':
+      return (
+        <>
+          <NumberField
+            label="Subtitle track index (0-based)"
+            value={Number(config.track_index ?? 0)}
+            onChange={v => set('track_index', v)}
+            min={0}
+          />
+          <SelectField
+            label="Output format"
+            value={String(config.format ?? 'srt')}
+            options={[
+              { value: 'srt', label: 'SRT (.srt)' },
+              { value: 'ass', label: 'ASS/SSA (.ass)' },
+              { value: 'vtt', label: 'WebVTT (.vtt)' },
+            ]}
+            onChange={v => set('format', v)}
+          />
+        </>
+      )
+
+    case 'subtitle_convert':
+      return (
+        <>
+          <SelectField
+            label="Input format"
+            value={String(config.input_format ?? 'srt')}
+            options={[
+              { value: 'srt', label: 'SRT' },
+              { value: 'ass', label: 'ASS/SSA' },
+              { value: 'vtt', label: 'WebVTT' },
+            ]}
+            onChange={v => set('input_format', v)}
+          />
+          <SelectField
+            label="Output format"
+            value={String(config.output_format ?? 'ass')}
+            options={[
+              { value: 'srt', label: 'SRT' },
+              { value: 'ass', label: 'ASS/SSA' },
+              { value: 'vtt', label: 'WebVTT' },
+            ]}
+            onChange={v => set('output_format', v)}
+          />
+        </>
+      )
+
+    case 'subtitle_embed':
+      return (
+        <>
+          <TextField
+            label="Subtitle file path"
+            value={String(config.subtitle_path ?? '')}
+            onChange={v => set('subtitle_path', v)}
+            placeholder="\\\\NAS\\subs\\movie.srt"
+          />
+          <TextField
+            label="Language code (ISO 639-2)"
+            value={String(config.language ?? 'eng')}
+            onChange={v => set('language', v)}
+            placeholder="eng"
+          />
+          <div>
+            <label className="flex items-center gap-2 text-xs text-th-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(config.default_track)}
+                onChange={e => set('default_track', e.target.checked)}
+                className="accent-blue-600"
+              />
+              Set as default subtitle track
+            </label>
+          </div>
+        </>
+      )
+
+    case 'subtitle_burn':
+      return (
+        <>
+          <TextField
+            label="Subtitle file path"
+            value={String(config.subtitle_path ?? '')}
+            onChange={v => set('subtitle_path', v)}
+            placeholder="\\\\NAS\\subs\\movie.srt"
+          />
+          <NumberField
+            label="Font size (px)"
+            value={Number(config.font_size ?? 24)}
+            onChange={v => set('font_size', v)}
+            min={8}
+            max={96}
+          />
+          <SelectField
+            label="Position"
+            value={String(config.position ?? 'bottom')}
+            options={[
+              { value: 'bottom', label: 'Bottom center' },
+              { value: 'top', label: 'Top center' },
+            ]}
+            onChange={v => set('position', v)}
+          />
+        </>
+      )
+
     case 'output_move':
     case 'output_copy':
       return (

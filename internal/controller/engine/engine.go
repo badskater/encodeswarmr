@@ -29,6 +29,12 @@ type AnalysisRunner interface {
 	RunAudio(ctx context.Context, job *db.Job, source *db.Source) error
 }
 
+// ThumbnailRunner generates source preview thumbnails on the controller.
+type ThumbnailRunner interface {
+	GenerateThumbnails(ctx context.Context, sourcePath, outputDir string, count int) ([]string, error)
+	TranslatePath(ctx context.Context, sourcePath string) (string, error)
+}
+
 // ConcatRunner executes the final ffmpeg concat on the controller after
 // all chunk encode tasks complete.
 type ConcatRunner interface {
@@ -50,6 +56,8 @@ type Engine struct {
 	analysis    AnalysisRunner     // optional; nil falls back to agent dispatch
 	concat      ConcatRunner       // optional; nil falls back to agent dispatch
 	vmafTarget  VMAFTargetRunner   // optional; handles encode_vmaf_target flow nodes
+	thumbnails  ThumbnailRunner    // optional; nil disables thumbnail auto-generation
+	thumbnailDir string            // base directory for storing thumbnail files
 	webhooks    FlowWebhookEmitter // optional; enables webhook nodes in flows
 	autoScaling *AutoScalingHook   // optional; nil disables auto-scaling checks
 	// paused is 1 when dispatching is paused, 0 when running.
@@ -79,6 +87,13 @@ func (e *Engine) SetAnalysisRunner(r AnalysisRunner) {
 // dispatched to an agent.
 func (e *Engine) SetConcatRunner(r ConcatRunner) {
 	e.concat = r
+}
+
+// SetThumbnailRunner attaches a thumbnail runner and base directory.  When set,
+// thumbnails are generated automatically after analysis jobs complete.
+func (e *Engine) SetThumbnailRunner(r ThumbnailRunner, dir string) {
+	e.thumbnails = r
+	e.thumbnailDir = dir
 }
 
 // SetAutoScalingHook attaches an auto-scaling hook. When set, the engine
