@@ -33,14 +33,15 @@ type LogPublisher interface {
 // Server implements the AgentService gRPC server.
 type Server struct {
 	pb.UnimplementedAgentServiceServer
-	store          db.Store
-	cfg            *config.GRPCConfig
-	agentCfg       *config.AgentConfig
-	validationCfg  engine.ValidationConfig
-	logger         *slog.Logger
-	webhooks       *webhooks.Service
-	concatRunner   engine.ConcatRunner       // optional; triggers controller-side concat
-	logPublisher   LogPublisher              // optional; pushes log entries to WebSocket clients
+	store           db.Store
+	cfg             *config.GRPCConfig
+	agentCfg        *config.AgentConfig
+	validationCfg   engine.ValidationConfig
+	logger          *slog.Logger
+	webhooks        *webhooks.Service
+	concatRunner    engine.ConcatRunner       // optional; triggers controller-side concat
+	vmafRunner      engine.VMAFTargetRunner   // optional; triggers controller-side VMAF target encode
+	logPublisher    LogPublisher              // optional; pushes log entries to WebSocket clients
 }
 
 // New creates a new gRPC Server.
@@ -66,6 +67,10 @@ func (s *Server) SetConcatRunner(r engine.ConcatRunner) { s.concatRunner = r }
 // SetLogPublisher attaches a real-time log publisher so StreamLogs pushes
 // entries to WebSocket subscribers immediately after DB insertion.
 func (s *Server) SetLogPublisher(p LogPublisher) { s.logPublisher = p }
+// SetVMAFTargetRunner attaches a controller-side VMAF target runner.  When set,
+// encode_vmaf_target flow tasks run on the controller using an iterative
+// binary-search CRF encode loop after their predecessor tasks complete.
+func (s *Server) SetVMAFTargetRunner(r engine.VMAFTargetRunner) { s.vmafRunner = r }
 
 // Serve starts the gRPC server and blocks until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context) error {

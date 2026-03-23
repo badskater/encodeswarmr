@@ -186,6 +186,74 @@ func (e *Engine) expandFlowJob(ctx context.Context, job *db.Job) error {
 			// Condition nodes do not create DB tasks; the FlowEngine already
 			// evaluated the branch and pruned the graph accordingly.
 			continue
+
+		case "encode_twopass", "encode_twopass_x264":
+			// Two-pass encoding creates two sequential tasks.
+			// Pass 1 analyses the source; Pass 2 encodes to the target bitrate.
+			// The stats file path is deterministic and shared between both passes.
+			statsFile := fmt.Sprintf("%s/%s_pass1_stats", job.EncodeConfig.OutputRoot+"/"+job.ID, job.ID)
+
+			// Determine codec for ffmpeg library name.
+			codec := vars["codec"]
+			if step.NodeType == "encode_twopass_x264" {
+				codec = "x264"
+			}
+			libCodec := "libx265"
+			if codec == "x264" {
+				libCodec = "libx264"
+			}
+
+			pass1Vars := copyStringMap(vars)
+			pass1Vars["twopass_pass"] = "1"
+			pass1Vars["twopass_lib_codec"] = libCodec
+			pass1Vars["twopass_stats_file"] = statsFile
+			pass1Vars["twopass_bitrate"] = vars["bitrate"]
+
+			if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+				JobID:      job.ID,
+				ChunkIndex: taskIndex,
+				TaskType:   db.TaskTypeTwoPassPass1,
+				SourcePath: source.UNCPath,
+				Variables:  pass1Vars,
+			}); err != nil {
+				return failJob(fmt.Errorf("engine: expand flow job two-pass pass1 step %d: %w", taskIndex, err))
+			}
+			taskIndex++
+
+			pass2Vars := copyStringMap(vars)
+			pass2Vars["twopass_pass"] = "2"
+			pass2Vars["twopass_lib_codec"] = libCodec
+			pass2Vars["twopass_stats_file"] = statsFile
+			pass2Vars["twopass_bitrate"] = vars["bitrate"]
+
+			if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+				JobID:      job.ID,
+				ChunkIndex: taskIndex,
+				TaskType:   db.TaskTypeTwoPassPass2,
+				SourcePath: source.UNCPath,
+				Variables:  pass2Vars,
+			}); err != nil {
+				return failJob(fmt.Errorf("engine: expand flow job two-pass pass2 step %d: %w", taskIndex, err))
+			}
+			taskIndex++
+			// Both tasks created; skip the generic task creation below.
+			continue
+
+		case "encode_vmaf_target":
+			// VMAF target encoding runs on the controller (like concat).
+			// Create a single vmaf_target task; the controller runner handles
+			// the iterative binary-search encode loop.
+			if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
+				JobID:      job.ID,
+				ChunkIndex: taskIndex,
+				TaskType:   db.TaskTypeVMAFTarget,
+				SourcePath: source.UNCPath,
+				Variables:  vars,
+			}); err != nil {
+				return failJob(fmt.Errorf("engine: expand flow job vmaf_target step %d: %w", taskIndex, err))
+			}
+			taskIndex++
+			continue
 		}
 
 		if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
@@ -531,6 +599,19 @@ func (e *Engine) expandMergeJob(ctx context.Context, job *db.Job) error {
 		return fmt.Errorf("engine: update job status for merge job %s: %w", job.ID, err)
 	}
 	return nil
+}
+
+// copyStringMap returns a shallow copy of a string→string map.
+// Used to create independent variable maps for two-pass task pairs.
+func copyStringMap(src map[string]string) map[string]string {
+	if src == nil {
+		return map[string]string{}
+	}
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // expandSingleTaskJob creates a single task for analysis or audio jobs.

@@ -320,6 +320,61 @@ func (s *Server) checkJobCompletion(ctx context.Context, jobID string) error {
 		}
 	}
 
+	// Controller-side VMAF target: a pending vmaf_target task can be claimed
+	// once no other tasks in the job are still running.
+	if s.vmafRunner != nil && job.TasksRunning == 0 && job.TasksPending > 0 {
+		tasks, err := s.store.ListTasksByJob(ctx, jobID)
+		if err != nil {
+			return status.Errorf(codes.Internal, "grpc reportresult: list tasks for vmaf_target: %v", err)
+		}
+
+		var vmafTask *db.Task
+		for _, t := range tasks {
+			if t.TaskType == db.TaskTypeVMAFTarget && t.Status == "pending" {
+				vmafTask = t
+				break
+			}
+		}
+
+		if vmafTask != nil {
+			if job.TasksFailed > 0 {
+				// Predecessor tasks failed — mark vmaf_target skipped.
+				_ = s.store.FailTask(ctx, vmafTask.ID, -1, "skipped: predecessor tasks failed")
+				_ = s.store.UpdateJobTaskCounts(ctx, jobID)
+				// Fall through to terminal logic below.
+			} else {
+				// CAS: transition vmaf_target task pending→running.
+				if claimErr := s.store.ClaimConcatTask(ctx, vmafTask.ID); claimErr != nil {
+					if errors.Is(claimErr, db.ErrNotFound) {
+						return nil // another goroutine already claimed it
+					}
+					return status.Errorf(codes.Internal, "grpc reportresult: claim vmaf_target task: %v", claimErr)
+				}
+
+				// Extract config from task variables and run the iterative encode.
+				vmafCfg := engine.VMAFTargetConfigFromVars(vmafTask.Variables, job.ID, job.EncodeConfig.OutputRoot)
+				go func() {
+					runErr := s.vmafRunner.RunVMAFTarget(context.Background(), job, vmafTask, vmafCfg)
+					if runErr != nil {
+						s.logger.Error("controller vmaf_target failed",
+							slog.String("job_id", jobID),
+							slog.String("error", runErr.Error()),
+						)
+						_ = s.store.FailTask(context.Background(), vmafTask.ID, 1, runErr.Error())
+					} else {
+						_ = s.store.CompleteTask(context.Background(), db.CompleteTaskParams{
+							ID:       vmafTask.ID,
+							ExitCode: 0,
+						})
+					}
+					_ = s.store.UpdateJobTaskCounts(context.Background(), jobID)
+					_ = s.checkJobCompletion(context.Background(), jobID)
+				}()
+				return nil // don't fall through to job completion yet
+			}
+		}
+	}
+
 	if job.TasksPending > 0 || job.TasksRunning > 0 {
 		return nil
 	}

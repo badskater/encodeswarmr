@@ -48,6 +48,7 @@ type Engine struct {
 	logger      *slog.Logger
 	analysis    AnalysisRunner     // optional; nil falls back to agent dispatch
 	concat      ConcatRunner       // optional; nil falls back to agent dispatch
+	vmafTarget  VMAFTargetRunner   // optional; handles encode_vmaf_target flow nodes
 	webhooks    FlowWebhookEmitter // optional; enables webhook nodes in flows
 	autoScaling *AutoScalingHook   // optional; nil disables auto-scaling checks
 }
@@ -81,6 +82,13 @@ func (e *Engine) SetConcatRunner(r ConcatRunner) {
 // the hook when thresholds are crossed.
 func (e *Engine) SetAutoScalingHook(h *AutoScalingHook) {
 	e.autoScaling = h
+}
+
+// SetVMAFTargetRunner attaches a controller-side VMAF target runner.  When set,
+// encode_vmaf_target flow nodes run on the controller using an iterative
+// binary-search CRF encode loop instead of being dispatched to an agent.
+func (e *Engine) SetVMAFTargetRunner(r VMAFTargetRunner) {
+	e.vmafTarget = r
 }
 
 // SetWebhookEmitter attaches a webhook emitter so flow webhook nodes can fire
