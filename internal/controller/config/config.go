@@ -9,22 +9,23 @@ import (
 
 // Config is the root controller configuration.
 type Config struct {
-	Server      ServerConfig      `mapstructure:"server"`
-	Database    DatabaseConfig    `mapstructure:"database"`
-	GRPC        GRPCConfig        `mapstructure:"grpc"`
-	Auth        AuthConfig        `mapstructure:"auth"`
-	Logging     LoggingConfig     `mapstructure:"logging"`
-	Agent       AgentConfig       `mapstructure:"agent"`
-	Webhooks    WebhooksConfig    `mapstructure:"webhooks"`
-	TLS         TLSConfig         `mapstructure:"tls"`
-	Upgrade     UpgradeConfig     `mapstructure:"upgrade"`
-	VNC         VNCConfig         `mapstructure:"vnc"`
-	Analysis    AnalysisConfig    `mapstructure:"analysis"`
-	SMTP         SMTPConfig          `mapstructure:"smtp"`
-	AutoScaling  AutoScalingConfig   `mapstructure:"auto_scaling"`
-	Validation   ValidationConfig    `mapstructure:"validation"`
-	Archive      ArchiveConfig       `mapstructure:"archive"`
-	Tracing      TracingConfig       `mapstructure:"tracing"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
+	Auth          AuthConfig          `mapstructure:"auth"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	Agent         AgentConfig         `mapstructure:"agent"`
+	Webhooks      WebhooksConfig      `mapstructure:"webhooks"`
+	TLS           TLSConfig           `mapstructure:"tls"`
+	Upgrade       UpgradeConfig       `mapstructure:"upgrade"`
+	VNC           VNCConfig           `mapstructure:"vnc"`
+	Analysis      AnalysisConfig      `mapstructure:"analysis"`
+	SMTP          SMTPConfig          `mapstructure:"smtp"`
+	AutoScaling   AutoScalingConfig   `mapstructure:"auto_scaling"`
+	Validation    ValidationConfig    `mapstructure:"validation"`
+	Archive       ArchiveConfig       `mapstructure:"archive"`
+	Tracing       TracingConfig       `mapstructure:"tracing"`
+	Notifications NotificationsConfig `mapstructure:"notifications"`
 }
 
 
@@ -198,6 +199,35 @@ type ArchiveConfig struct {
 	RetentionDays int `mapstructure:"retention_days"`
 }
 
+// NotificationsConfig groups the optional push notification channel settings.
+type NotificationsConfig struct {
+	Telegram NotificationTelegramConfig `mapstructure:"telegram"`
+	Pushover NotificationPushoverConfig `mapstructure:"pushover"`
+	Ntfy     NotificationNtfyConfig     `mapstructure:"ntfy"`
+}
+
+// NotificationTelegramConfig holds credentials for the Telegram Bot API.
+type NotificationTelegramConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	BotToken string `mapstructure:"bot_token"`
+	ChatID   string `mapstructure:"chat_id"`
+}
+
+// NotificationPushoverConfig holds credentials for the Pushover API.
+type NotificationPushoverConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	AppToken string `mapstructure:"app_token"`
+	UserKey  string `mapstructure:"user_key"`
+	Priority int    `mapstructure:"priority"`
+}
+
+// NotificationNtfyConfig holds settings for an ntfy server.
+type NotificationNtfyConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	ServerURL string `mapstructure:"server_url"`
+	Topic     string `mapstructure:"topic"`
+}
+
 // TracingConfig controls OpenTelemetry distributed tracing.
 type TracingConfig struct {
 	// Enabled controls whether tracing is active.  Defaults to false.
@@ -267,6 +297,11 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("tracing.enabled", false)
 	v.SetDefault("tracing.endpoint", "localhost:4317")
 	v.SetDefault("tracing.sample_rate", 0.1)
+	v.SetDefault("notifications.telegram.enabled", false)
+	v.SetDefault("notifications.pushover.enabled", false)
+	v.SetDefault("notifications.pushover.priority", 0)
+	v.SetDefault("notifications.ntfy.enabled", false)
+	v.SetDefault("notifications.ntfy.server_url", "https://ntfy.sh")
 
 	v.AutomaticEnv()
 

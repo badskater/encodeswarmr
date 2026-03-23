@@ -94,6 +94,54 @@ func (s *Server) handleUpdateNotificationPrefs(w http.ResponseWriter, r *http.Re
 	writeJSON(w, r, http.StatusOK, prefs)
 }
 
+// handleTestTelegram sends a test message via Telegram to verify the bot configuration.
+// POST /api/v1/notifications/test-telegram  (admin only)
+func (s *Server) handleTestTelegram(w http.ResponseWriter, r *http.Request) {
+	if s.telegram == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "Telegram Not Configured",
+			"telegram is not enabled; set notifications.telegram.enabled in the controller config")
+		return
+	}
+	if err := s.telegram.Send("*Test — EncodeSwarmr*\nTelegram notifications are working correctly."); err != nil {
+		s.logger.Warn("test-telegram: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "Telegram Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleTestPushover sends a test message via Pushover to verify configuration.
+// POST /api/v1/notifications/test-pushover  (admin only)
+func (s *Server) handleTestPushover(w http.ResponseWriter, r *http.Request) {
+	if s.pushover == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "Pushover Not Configured",
+			"pushover is not enabled; set notifications.pushover.enabled in the controller config")
+		return
+	}
+	if err := s.pushover.Send("Test — EncodeSwarmr: Pushover notifications are working correctly."); err != nil {
+		s.logger.Warn("test-pushover: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "Pushover Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleTestNtfy sends a test message via ntfy to verify configuration.
+// POST /api/v1/notifications/test-ntfy  (admin only)
+func (s *Server) handleTestNtfy(w http.ResponseWriter, r *http.Request) {
+	if s.ntfy == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "ntfy Not Configured",
+			"ntfy is not enabled; set notifications.ntfy.enabled in the controller config")
+		return
+	}
+	if err := s.ntfy.Send("Test — EncodeSwarmr", "ntfy notifications are working correctly."); err != nil {
+		s.logger.Warn("test-ntfy: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "ntfy Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleTestEmail sends a test email to verify SMTP configuration.
 // POST /api/v1/notifications/test-email  (admin only)
 func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {

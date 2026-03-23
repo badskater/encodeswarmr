@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
-import type { Source, Template, Job } from '../types'
+import type { Source, Template, Job, EncodingProfile } from '../types'
 import type { Flow } from '../types/flow'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
@@ -35,6 +35,8 @@ export default function CreateJob() {
   const [flows, setFlows] = useState<Flow[]>([])
   const [useFlow, setUseFlow] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState('')
+  const [profiles, setProfiles] = useState<EncodingProfile[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState('')
 
   const [sourceId, setSourceId] = useState('')
   const [jobType, setJobType] = useState('encode')
@@ -62,12 +64,26 @@ export default function CreateJob() {
   const [audioChannels, setAudioChannels] = useState(0)
   const [audioSampleRate, setAudioSampleRate] = useState(0)
 
+  const handleLoadProfile = (profileId: string) => {
+    setSelectedProfileId(profileId)
+    if (!profileId) return
+    const p = profiles.find(pr => pr.id === profileId)
+    if (!p) return
+    if (p.run_template_id) setRunTemplateId(p.run_template_id)
+    if (p.frameserver_template_id) setFsTemplateId(p.frameserver_template_id)
+    if (p.output_extension) setOutputExt(p.output_extension)
+    if (p.output_path_pattern) setOutputRoot(p.output_path_pattern)
+    if (p.target_tags?.length) setTargetTags(p.target_tags.join(', '))
+    if (p.priority) setPriority(p.priority)
+  }
+
   useEffect(() => {
-    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listJobs()])
-      .then(([s, t, fl, j]) => {
+    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listJobs(), api.listEncodingProfiles()])
+      .then(([s, t, fl, j, pr]) => {
         setSources(s)
         setTemplates(t)
         setFlows(fl)
+        setProfiles(pr ?? [])
         // Only show active jobs for "chain after" selection
         setJobs(j.filter((j: Job) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'cancelled'))
       })
@@ -204,6 +220,24 @@ export default function CreateJob() {
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
       <form onSubmit={handleSubmit} className="bg-th-surface rounded-lg shadow p-4 space-y-4">
+
+        {/* Load from Profile */}
+        {profiles.length > 0 && (
+          <div className="flex items-center gap-3 p-3 rounded-lg border border-th-border bg-th-surface-muted">
+            <label className="text-sm font-medium text-th-text whitespace-nowrap">Load from Profile</label>
+            <select
+              value={selectedProfileId}
+              onChange={e => handleLoadProfile(e.target.value)}
+              className="flex-1 rounded border border-th-input-border bg-th-input px-3 py-1.5 text-sm text-th-text focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">— select a profile —</option>
+              {profiles.filter(p => p.enabled).map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-th-text-muted">Pre-fills template, output, and tag settings.</p>
+          </div>
+        )}
 
         {/* Use Flow toggle */}
         <div className="flex items-center gap-3 p-3 rounded-lg border border-th-border bg-th-surface-muted">

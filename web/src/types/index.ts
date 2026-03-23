@@ -317,3 +317,46 @@ export interface AutoScalingSettings {
   scale_down_threshold: number
   cooldown_seconds: number
 }
+
+// AgentHealth is the response from GET /api/v1/agents/{id}/health
+export interface AgentHealth {
+  agent_id: string
+  status: string
+  uptime_seconds: number
+  cpu_usage_pct: number
+  memory_usage_pct: number
+  gpu: {
+    name: string
+    utilization_pct: number
+  }
+  disk: {
+    work_dir_free_gb: number
+    work_dir_total_gb: number
+  }
+  encoding_stats: {
+    total_tasks_completed: number
+    avg_fps: number
+    total_frames_encoded: number
+    error_rate_pct: number
+  }
+  last_heartbeat: string | null
+  last_task_completed: string | null
+}
+
+// EncodingProfile is a row from the encoding_profiles table.
+export interface EncodingProfile {
+  id: string
+  name: string
+  description: string
+  run_template_id: string
+  frameserver_template_id: string
+  audio_codec: string
+  audio_bitrate: string
+  output_extension: string
+  output_path_pattern: string
+  target_tags: string[]
+  priority: number
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}

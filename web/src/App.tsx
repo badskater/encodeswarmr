@@ -14,6 +14,8 @@ import CreateJobChain from './pages/CreateJobChain'
 import JobDetail from './pages/JobDetail'
 import TaskDetail from './pages/TaskDetail'
 import Agents from './pages/Agents'
+import AgentDetail from './pages/AgentDetail'
+import EncodingProfiles from './pages/admin/EncodingProfiles'
 import Templates from './pages/admin/Templates'
 import Users from './pages/admin/Users'
 import Webhooks from './pages/admin/Webhooks'
@@ -96,6 +98,7 @@ function App() {
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />
+        <Route path="/agents/:id" element={<AgentDetail />} />
         <Route path="/audio-convert" element={<AudioConvert />} />
         <Route path="/flows" element={<Flows />} />
         <Route path="/flows/editor" element={<FlowEditor />} />
@@ -113,6 +116,7 @@ function App() {
             <Route path="/admin/theme" element={<ThemeSettings />} />
             <Route path="/admin/notifications" element={<NotificationSettings />} />
             <Route path="/admin/auto-scaling" element={<AutoScaling />} />
+            <Route path="/admin/encoding-profiles" element={<EncodingProfiles />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

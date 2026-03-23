@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import * as api from '../../api/client'
 import type { NotificationPrefs } from '../../types'
 
+type TestState = 'idle' | 'testing' | 'ok' | 'error'
+
 const DEFAULT_PREFS: NotificationPrefs = {
   id: '',
   user_id: '',
@@ -23,6 +25,12 @@ export default function NotificationSettings() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [testResult, setTestResult] = useState('')
+  const [telegramState, setTelegramState] = useState<TestState>('idle')
+  const [telegramMsg, setTelegramMsg] = useState('')
+  const [pushoverState, setPushoverState] = useState<TestState>('idle')
+  const [pushoverMsg, setPushoverMsg] = useState('')
+  const [ntfyState, setNtfyState] = useState<TestState>('idle')
+  const [ntfyMsg, setNtfyMsg] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +88,45 @@ export default function NotificationSettings() {
   const toggle = (field: keyof NotificationPrefs) => {
     setPrefs(prev => ({ ...prev, [field]: !prev[field] }))
     setSuccess('')
+  }
+
+  const handleTestTelegram = async () => {
+    setTelegramState('testing')
+    setTelegramMsg('')
+    try {
+      await api.testTelegram()
+      setTelegramState('ok')
+      setTelegramMsg('Test message sent to Telegram.')
+    } catch (e: unknown) {
+      setTelegramState('error')
+      setTelegramMsg(e instanceof Error ? e.message : 'Test failed.')
+    }
+  }
+
+  const handleTestPushover = async () => {
+    setPushoverState('testing')
+    setPushoverMsg('')
+    try {
+      await api.testPushover()
+      setPushoverState('ok')
+      setPushoverMsg('Test message sent via Pushover.')
+    } catch (e: unknown) {
+      setPushoverState('error')
+      setPushoverMsg(e instanceof Error ? e.message : 'Test failed.')
+    }
+  }
+
+  const handleTestNtfy = async () => {
+    setNtfyState('testing')
+    setNtfyMsg('')
+    try {
+      await api.testNtfy()
+      setNtfyState('ok')
+      setNtfyMsg('Test message sent to ntfy topic.')
+    } catch (e: unknown) {
+      setNtfyState('error')
+      setNtfyMsg(e instanceof Error ? e.message : 'Test failed.')
+    }
   }
 
   if (loading) return <p className="text-th-text-muted">Loading…</p>
@@ -166,6 +213,78 @@ export default function NotificationSettings() {
           <p className="text-xs text-th-text-muted">
             Requires SMTP to be configured on the controller. Use the Test button to verify delivery.
           </p>
+        </div>
+      </section>
+
+      {/* Telegram */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-th-text">Telegram</h2>
+          <p className="text-xs text-th-text-muted mt-0.5">
+            Requires <code className="font-mono">notifications.telegram</code> to be configured on the controller.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleTestTelegram}
+            disabled={telegramState === 'testing'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {telegramState === 'testing' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {telegramMsg && (
+            <p className={`text-xs ${telegramState === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
+              {telegramMsg}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Pushover */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-th-text">Pushover</h2>
+          <p className="text-xs text-th-text-muted mt-0.5">
+            Requires <code className="font-mono">notifications.pushover</code> to be configured on the controller.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleTestPushover}
+            disabled={pushoverState === 'testing'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {pushoverState === 'testing' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {pushoverMsg && (
+            <p className={`text-xs ${pushoverState === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
+              {pushoverMsg}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ntfy */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-th-text">ntfy</h2>
+          <p className="text-xs text-th-text-muted mt-0.5">
+            Requires <code className="font-mono">notifications.ntfy</code> to be configured on the controller.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleTestNtfy}
+            disabled={ntfyState === 'testing'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {ntfyState === 'testing' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {ntfyMsg && (
+            <p className={`text-xs ${ntfyState === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
+              {ntfyMsg}
+            </p>
+          )}
         </div>
       </section>
 

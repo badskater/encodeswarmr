@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Agent } from '../types'
 import StatusBadge from '../components/StatusBadge'
@@ -153,13 +154,15 @@ export default function Agents() {
                     className="rounded border-th-input-border"
                   />
                 </td>
-                <td
-                  className="px-4 py-2 font-medium text-th-text cursor-pointer hover:underline"
-                  title="Click to toggle resource utilisation graph"
-                  onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
-                >
-                  {a.name}
-                  <span className="ml-1 text-xs text-th-text-muted">{expandedMetrics === a.id ? '▲' : '▼'}</span>
+                <td className="px-4 py-2 font-medium text-th-text">
+                  <Link to={`/agents/${a.id}`} className="hover:underline">{a.name}</Link>
+                  <button
+                    className="ml-1 text-xs text-th-text-muted hover:text-th-text"
+                    title="Toggle resource utilisation graph"
+                    onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
+                  >
+                    {expandedMetrics === a.id ? '▲' : '▼'}
+                  </button>
                 </td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.hostname}</td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.ip_address}</td>

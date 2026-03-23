@@ -144,6 +144,39 @@ func runServer(ctx context.Context, cfgPath string) error {
 		whSvc.SetEmailSender(emailSender)
 		logger.Info("email notifications enabled", "smtp_host", cfg.SMTP.Host)
 	}
+
+	// Attach push notification channel senders when configured.
+	telegramSender := notifications.NewTelegramSender(notifications.TelegramChannelConfig{
+		Enabled:  cfg.Notifications.Telegram.Enabled,
+		BotToken: cfg.Notifications.Telegram.BotToken,
+		ChatID:   cfg.Notifications.Telegram.ChatID,
+	}, logger)
+	if telegramSender != nil {
+		whSvc.SetTelegramSender(telegramSender)
+		logger.Info("telegram notifications enabled")
+	}
+
+	pushoverSender := notifications.NewPushoverSender(notifications.PushoverChannelConfig{
+		Enabled:  cfg.Notifications.Pushover.Enabled,
+		AppToken: cfg.Notifications.Pushover.AppToken,
+		UserKey:  cfg.Notifications.Pushover.UserKey,
+		Priority: cfg.Notifications.Pushover.Priority,
+	}, logger)
+	if pushoverSender != nil {
+		whSvc.SetPushoverSender(pushoverSender)
+		logger.Info("pushover notifications enabled")
+	}
+
+	ntfySender := notifications.NewNtfySender(notifications.NtfyChannelConfig{
+		Enabled:   cfg.Notifications.Ntfy.Enabled,
+		ServerURL: cfg.Notifications.Ntfy.ServerURL,
+		Topic:     cfg.Notifications.Ntfy.Topic,
+	}, logger)
+	if ntfySender != nil {
+		whSvc.SetNtfySender(ntfySender)
+		logger.Info("ntfy notifications enabled", "topic", cfg.Notifications.Ntfy.Topic)
+	}
+
 	whSvc.Start(ctx)
 	logger.Info("webhook delivery service started", "workers", cfg.Webhooks.WorkerCount)
 

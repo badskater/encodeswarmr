@@ -65,6 +65,24 @@ webhooks:
   delivery_timeout: 10s
   max_retries: 3
 
+# Push notification channels — dispatched alongside webhooks for job.completed,
+# job.failed, and agent.stale events.  All channels are opt-in (disabled by default).
+# Store tokens/keys via environment variables; never hardcode them here.
+notifications:
+  telegram:
+    enabled: false
+    bot_token: ""     # set CONTROLLER_NOTIFICATIONS_TELEGRAM_BOT_TOKEN env var
+    chat_id: ""       # Telegram chat/channel ID (e.g. "-1001234567890")
+  pushover:
+    enabled: false
+    app_token: ""     # set CONTROLLER_NOTIFICATIONS_PUSHOVER_APP_TOKEN env var
+    user_key: ""      # set CONTROLLER_NOTIFICATIONS_PUSHOVER_USER_KEY env var
+    priority: 0       # -2 (lowest) to 2 (emergency); 0 = normal
+  ntfy:
+    enabled: false
+    server_url: "https://ntfy.sh"  # override for self-hosted ntfy
+    topic: ""         # ntfy topic name (keep secret to restrict access)
+
 vnc:
   novnc_base_url: ""  # Default: unpkg CDN. Set for air-gapped: "/static/novnc"
 

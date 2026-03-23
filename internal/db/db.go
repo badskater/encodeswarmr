@@ -214,6 +214,19 @@ type Store interface {
 	// --- Agent FPS for adaptive chunking ---
 	GetAgentAvgFPS(ctx context.Context, agentID string) (float64, error)
 
+	// --- Agent health ---
+	// GetAgentEncodingStats returns aggregated task statistics for an agent.
+	GetAgentEncodingStats(ctx context.Context, agentID string) (*AgentEncodingStats, error)
+	// ListRecentTasksByAgent returns the most-recent n tasks for a given agent.
+	ListRecentTasksByAgent(ctx context.Context, agentID string, limit int) ([]*Task, error)
+
+	// --- Encoding Profiles ---
+	CreateEncodingProfile(ctx context.Context, p CreateEncodingProfileParams) (*EncodingProfile, error)
+	GetEncodingProfileByID(ctx context.Context, id string) (*EncodingProfile, error)
+	ListEncodingProfiles(ctx context.Context) ([]*EncodingProfile, error)
+	UpdateEncodingProfile(ctx context.Context, p UpdateEncodingProfileParams) (*EncodingProfile, error)
+	DeleteEncodingProfile(ctx context.Context, id string) error
+
 	// --- Dashboard metrics ---
 	GetThroughputStats(ctx context.Context, hours int) ([]*ThroughputPoint, error)
 	GetQueueStats(ctx context.Context) (*QueueStats, error)

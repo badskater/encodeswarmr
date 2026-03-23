@@ -7,6 +7,7 @@ package webhooks
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -35,11 +36,14 @@ type delivery struct {
 
 // Service manages webhook event routing and delivery.
 type Service struct {
-	store  db.Store
-	cfg    Config
-	logger *slog.Logger
-	queue  chan delivery
-	email  *notifications.EmailSender // nil when email is not configured
+	store    db.Store
+	cfg      Config
+	logger   *slog.Logger
+	queue    chan delivery
+	email    *notifications.EmailSender    // nil when email is not configured
+	telegram *notifications.TelegramSender // nil when Telegram is not configured
+	pushover *notifications.PushoverSender // nil when Pushover is not configured
+	ntfy     *notifications.NtfySender     // nil when ntfy is not configured
 }
 
 // New creates a new Service. Call Start to begin background workers.
@@ -61,6 +65,21 @@ func New(store db.Store, cfg Config, logger *slog.Logger) *Service {
 // Call this before Start.
 func (s *Service) SetEmailSender(e *notifications.EmailSender) {
 	s.email = e
+}
+
+// SetTelegramSender attaches a TelegramSender. Call this before Start.
+func (s *Service) SetTelegramSender(t *notifications.TelegramSender) {
+	s.telegram = t
+}
+
+// SetPushoverSender attaches a PushoverSender. Call this before Start.
+func (s *Service) SetPushoverSender(p *notifications.PushoverSender) {
+	s.pushover = p
+}
+
+// SetNtfySender attaches an NtfySender. Call this before Start.
+func (s *Service) SetNtfySender(n *notifications.NtfySender) {
+	s.ntfy = n
 }
 
 // Start launches WorkerCount background delivery workers.
@@ -109,6 +128,11 @@ func (s *Service) Emit(ctx context.Context, event Event) {
 	// Dispatch email notifications asynchronously if email is configured.
 	if s.email != nil {
 		go s.dispatchEmails(ctx, event)
+	}
+
+	// Dispatch push notification channels asynchronously.
+	if s.telegram != nil || s.pushover != nil || s.ntfy != nil {
+		go s.dispatchChannels(event)
 	}
 }
 
@@ -178,6 +202,71 @@ func (s *Service) dispatchEmails(ctx context.Context, event Event) {
 			)
 		}
 	}
+}
+
+// dispatchChannels sends push notifications to all configured channels for
+// the given event. Only job.completed, job.failed, and agent.stale events
+// are dispatched; other event types are silently ignored.
+func (s *Service) dispatchChannels(event Event) {
+	title, message := channelMessage(event)
+	if title == "" {
+		return // unsupported event type
+	}
+
+	if s.telegram != nil {
+		if err := s.telegram.Send(fmt.Sprintf("*%s*\n%s", title, message)); err != nil {
+			s.logger.Warn("channels: telegram send failed",
+				slog.String("event", event.Type),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+	if s.pushover != nil {
+		if err := s.pushover.Send(fmt.Sprintf("%s — %s", title, message)); err != nil {
+			s.logger.Warn("channels: pushover send failed",
+				slog.String("event", event.Type),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+	if s.ntfy != nil {
+		if err := s.ntfy.Send(title, message); err != nil {
+			s.logger.Warn("channels: ntfy send failed",
+				slog.String("event", event.Type),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+}
+
+// channelMessage returns the title and plain-text message body for an event.
+// Returns empty strings for event types that should not be broadcast.
+func channelMessage(event Event) (title, message string) {
+	jobID, _ := event.Payload["job_id"].(string)
+	sourcePath, _ := event.Payload["source_path"].(string)
+	agentName, _ := event.Payload["agent_name"].(string)
+	detail, _ := event.Payload["error"].(string)
+
+	switch event.Type {
+	case "job.completed":
+		title = "Job Completed — EncodeSwarmr"
+		message = fmt.Sprintf("Job %s completed successfully.", jobID)
+		if sourcePath != "" {
+			message += fmt.Sprintf(" Source: %s", sourcePath)
+		}
+	case "job.failed":
+		title = "Job Failed — EncodeSwarmr"
+		message = fmt.Sprintf("Job %s failed.", jobID)
+		if detail != "" {
+			message += fmt.Sprintf(" Error: %s", detail)
+		}
+	case "agent.stale":
+		title = "Agent Offline — EncodeSwarmr"
+		message = fmt.Sprintf("Agent %s has stopped sending heartbeats and has been marked offline.", agentName)
+	default:
+		return "", ""
+	}
+	return title, message
 }
 
 // worker reads deliveries from the queue and sends them.

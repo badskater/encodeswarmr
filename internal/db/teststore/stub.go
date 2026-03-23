@@ -199,6 +199,27 @@ func (Stub) GetEncodingStats(_ context.Context, _, _, _ string) (*db.EncodingSta
 // --- Agent FPS ---
 func (Stub) GetAgentAvgFPS(_ context.Context, _ string) (float64, error) { return 0, nil }
 
+// --- Agent Health ---
+func (Stub) GetAgentEncodingStats(_ context.Context, _ string) (*db.AgentEncodingStats, error) {
+	return &db.AgentEncodingStats{}, nil
+}
+func (Stub) ListRecentTasksByAgent(_ context.Context, _ string, _ int) ([]*db.Task, error) {
+	return nil, nil
+}
+
+// --- Encoding Profiles ---
+func (Stub) CreateEncodingProfile(_ context.Context, _ db.CreateEncodingProfileParams) (*db.EncodingProfile, error) {
+	return nil, nil
+}
+func (Stub) GetEncodingProfileByID(_ context.Context, _ string) (*db.EncodingProfile, error) {
+	return nil, nil
+}
+func (Stub) ListEncodingProfiles(_ context.Context) ([]*db.EncodingProfile, error) { return nil, nil }
+func (Stub) UpdateEncodingProfile(_ context.Context, _ db.UpdateEncodingProfileParams) (*db.EncodingProfile, error) {
+	return nil, nil
+}
+func (Stub) DeleteEncodingProfile(_ context.Context, _ string) error { return nil }
+
 // --- Dashboard metrics ---
 func (Stub) GetThroughputStats(_ context.Context, _ int) ([]*db.ThroughputPoint, error) { return nil, nil }
 func (Stub) GetQueueStats(_ context.Context) (*db.QueueStats, error)                    { return nil, nil }

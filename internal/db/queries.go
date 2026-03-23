@@ -2729,6 +2729,67 @@ func (s *pgStore) GetEncodingStats(ctx context.Context, codec, resolution, prese
 // Agent FPS (adaptive chunking)
 // ---------------------------------------------------------------------------
 
+// GetAgentEncodingStats returns aggregated task statistics for the given agent:
+// total tasks completed, average FPS (last 20), total frames encoded, error rate,
+// and the time of the most-recent completed task.
+func (s *pgStore) GetAgentEncodingStats(ctx context.Context, agentID string) (*AgentEncodingStats, error) {
+	const q = `
+		SELECT
+		    COUNT(*) FILTER (WHERE status = 'completed') AS total_completed,
+		    COALESCE(
+		        (SELECT AVG(avg_fps)
+		         FROM (SELECT avg_fps FROM tasks WHERE agent_id = $1 AND status = 'completed'
+		                                          AND avg_fps IS NOT NULL AND avg_fps > 0
+		               ORDER BY completed_at DESC LIMIT 20) sub),
+		        0
+		    ) AS avg_fps,
+		    COALESCE(SUM(frames_encoded) FILTER (WHERE status = 'completed'), 0) AS total_frames,
+		    CASE
+		        WHEN COUNT(*) FILTER (WHERE status IN ('completed','failed')) > 0
+		        THEN (COUNT(*) FILTER (WHERE status = 'failed') * 100.0 /
+		              COUNT(*) FILTER (WHERE status IN ('completed','failed')))
+		        ELSE 0
+		    END AS error_rate_pct,
+		    MAX(completed_at) FILTER (WHERE status = 'completed') AS last_task_completed
+		FROM tasks
+		WHERE agent_id = $1`
+	var st AgentEncodingStats
+	row := s.pool.QueryRow(ctx, q, agentID)
+	if err := row.Scan(&st.TotalTasksCompleted, &st.AvgFPS, &st.TotalFramesEncoded, &st.ErrorRatePct, &st.LastTaskCompletedAt); err != nil {
+		return nil, fmt.Errorf("db: get agent encoding stats: %w", err)
+	}
+	return &st, nil
+}
+
+// ListRecentTasksByAgent returns the most-recent limit tasks (any status) that
+// were claimed by the given agent, ordered by creation time descending.
+func (s *pgStore) ListRecentTasksByAgent(ctx context.Context, agentID string, limit int) ([]*Task, error) {
+	const q = `
+		SELECT id, job_id, chunk_index, task_type, status, agent_id,
+		       script_dir, source_path, output_path, variables,
+		       exit_code, frames_encoded, avg_fps, output_size, duration_sec,
+		       vmaf_score, psnr, ssim, error_msg, retry_count, retry_after,
+		       preemptible, preempted_at, started_at, completed_at, created_at, updated_at
+		FROM tasks
+		WHERE agent_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2`
+	rows, err := s.pool.Query(ctx, q, agentID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("db: list recent tasks by agent: %w", err)
+	}
+	defer rows.Close()
+	var out []*Task
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // GetAgentAvgFPS returns the average encoding FPS of the most-recent 20
 // completed encode tasks executed by the given agent.  Returns 0 when no
 // history is available.
@@ -2750,4 +2811,104 @@ func (s *pgStore) GetAgentAvgFPS(ctx context.Context, agentID string) (float64, 
 		return 0, fmt.Errorf("db: get agent avg fps: %w", err)
 	}
 	return fps, nil
+}
+
+// ---------------------------------------------------------------------------
+// Encoding Profiles
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateEncodingProfile(ctx context.Context, p CreateEncodingProfileParams) (*EncodingProfile, error) {
+	const q = `
+		INSERT INTO encoding_profiles
+		    (name, description, run_template_id, frameserver_template_id,
+		     audio_codec, audio_bitrate, output_extension, output_path_pattern,
+		     target_tags, priority, enabled)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING id, name, description, run_template_id, frameserver_template_id,
+		          audio_codec, audio_bitrate, output_extension, output_path_pattern,
+		          target_tags, priority, enabled, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q,
+		p.Name, p.Description, p.RunTemplateID, p.FrameserverTemplateID,
+		p.AudioCodec, p.AudioBitrate, p.OutputExtension, p.OutputPathPattern,
+		p.TargetTags, p.Priority, p.Enabled,
+	)
+	return scanEncodingProfile(row)
+}
+
+func (s *pgStore) GetEncodingProfileByID(ctx context.Context, id string) (*EncodingProfile, error) {
+	const q = `
+		SELECT id, name, description, run_template_id, frameserver_template_id,
+		       audio_codec, audio_bitrate, output_extension, output_path_pattern,
+		       target_tags, priority, enabled, created_at, updated_at
+		FROM encoding_profiles WHERE id = $1`
+	return scanEncodingProfile(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListEncodingProfiles(ctx context.Context) ([]*EncodingProfile, error) {
+	const q = `
+		SELECT id, name, description, run_template_id, frameserver_template_id,
+		       audio_codec, audio_bitrate, output_extension, output_path_pattern,
+		       target_tags, priority, enabled, created_at, updated_at
+		FROM encoding_profiles ORDER BY name`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list encoding profiles: %w", err)
+	}
+	defer rows.Close()
+	var out []*EncodingProfile
+	for rows.Next() {
+		ep, err := scanEncodingProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ep)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateEncodingProfile(ctx context.Context, p UpdateEncodingProfileParams) (*EncodingProfile, error) {
+	const q = `
+		UPDATE encoding_profiles
+		SET name = $2, description = $3, run_template_id = $4,
+		    frameserver_template_id = $5, audio_codec = $6, audio_bitrate = $7,
+		    output_extension = $8, output_path_pattern = $9, target_tags = $10,
+		    priority = $11, enabled = $12, updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, description, run_template_id, frameserver_template_id,
+		          audio_codec, audio_bitrate, output_extension, output_path_pattern,
+		          target_tags, priority, enabled, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q,
+		p.ID, p.Name, p.Description, p.RunTemplateID, p.FrameserverTemplateID,
+		p.AudioCodec, p.AudioBitrate, p.OutputExtension, p.OutputPathPattern,
+		p.TargetTags, p.Priority, p.Enabled,
+	)
+	return scanEncodingProfile(row)
+}
+
+func (s *pgStore) DeleteEncodingProfile(ctx context.Context, id string) error {
+	const q = `DELETE FROM encoding_profiles WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete encoding profile: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanEncodingProfile(row pgx.Row) (*EncodingProfile, error) {
+	var ep EncodingProfile
+	err := row.Scan(
+		&ep.ID, &ep.Name, &ep.Description, &ep.RunTemplateID, &ep.FrameserverTemplateID,
+		&ep.AudioCodec, &ep.AudioBitrate, &ep.OutputExtension, &ep.OutputPathPattern,
+		&ep.TargetTags, &ep.Priority, &ep.Enabled, &ep.CreatedAt, &ep.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan encoding profile: %w", err)
+	}
+	return &ep, nil
 }

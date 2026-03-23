@@ -746,3 +746,63 @@ type UpsertEncodingStatsParams struct {
 	NewFPS        float64
 	NewSizePerMin float64
 }
+
+// AgentEncodingStats holds aggregated task performance statistics for one agent.
+type AgentEncodingStats struct {
+	TotalTasksCompleted int64   `json:"total_tasks_completed"`
+	AvgFPS              float64 `json:"avg_fps"`
+	TotalFramesEncoded  int64   `json:"total_frames_encoded"`
+	ErrorRatePct        float64 `json:"error_rate_pct"`
+	LastTaskCompletedAt *time.Time `json:"last_task_completed,omitempty"`
+}
+
+// EncodingProfile is a row from the encoding_profiles table.
+// It bundles a run template, frameserver template, audio codec settings,
+// output path pattern, and target tags into a single named selection.
+type EncodingProfile struct {
+	ID                    string     `json:"id"`
+	Name                  string     `json:"name"`
+	Description           string     `json:"description,omitempty"`
+	RunTemplateID         string     `json:"run_template_id"`
+	FrameserverTemplateID string     `json:"frameserver_template_id,omitempty"`
+	AudioCodec            string     `json:"audio_codec,omitempty"`
+	AudioBitrate          string     `json:"audio_bitrate,omitempty"`
+	OutputExtension       string     `json:"output_extension,omitempty"`
+	OutputPathPattern     string     `json:"output_path_pattern,omitempty"`
+	TargetTags            []string   `json:"target_tags"`
+	Priority              int        `json:"priority"`
+	Enabled               bool       `json:"enabled"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+// CreateEncodingProfileParams holds values for inserting a new encoding_profiles row.
+type CreateEncodingProfileParams struct {
+	Name                  string
+	Description           string
+	RunTemplateID         string
+	FrameserverTemplateID string
+	AudioCodec            string
+	AudioBitrate          string
+	OutputExtension       string
+	OutputPathPattern     string
+	TargetTags            []string
+	Priority              int
+	Enabled               bool
+}
+
+// UpdateEncodingProfileParams holds values for updating an existing encoding_profiles row.
+type UpdateEncodingProfileParams struct {
+	ID                    string
+	Name                  string
+	Description           string
+	RunTemplateID         string
+	FrameserverTemplateID string
+	AudioCodec            string
+	AudioBitrate          string
+	OutputExtension       string
+	OutputPathPattern     string
+	TargetTags            []string
+	Priority              int
+	Enabled               bool
+}

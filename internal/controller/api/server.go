@@ -30,8 +30,11 @@ type Server struct {
 	hub          *Hub
 	leader       *ha.Leader
 	plugins      *plugins.Registry
-	email        *notifications.EmailSender // nil when SMTP is not configured
-	autoScaling  *engine.AutoScalingHook    // nil when auto-scaling is disabled
+	email        *notifications.EmailSender    // nil when SMTP is not configured
+	telegram     *notifications.TelegramSender // nil when Telegram is not configured
+	pushover     *notifications.PushoverSender // nil when Pushover is not configured
+	ntfy         *notifications.NtfySender     // nil when ntfy is not configured
+	autoScaling  *engine.AutoScalingHook       // nil when auto-scaling is disabled
 }
 
 // New creates and configures a new HTTP API server.
@@ -43,16 +46,32 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	}
 
 	s := &Server{
-		store:        store,
-		auth:         authSvc,
-		cfg:          cfg,
-		logger:       logger,
-		webhooks:     wh,
-		hub:          NewHub(logger),
-		leader:       ldr,
-		plugins:      pluginReg,
-		email:        notifications.NewEmailSender(cfg.SMTP, logger),
-		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
+		store:    store,
+		auth:     authSvc,
+		cfg:      cfg,
+		logger:   logger,
+		webhooks: wh,
+		hub:      NewHub(logger),
+		leader:   ldr,
+		plugins:  pluginReg,
+		email:    notifications.NewEmailSender(cfg.SMTP, logger),
+		telegram: notifications.NewTelegramSender(notifications.TelegramChannelConfig{
+			Enabled:  cfg.Notifications.Telegram.Enabled,
+			BotToken: cfg.Notifications.Telegram.BotToken,
+			ChatID:   cfg.Notifications.Telegram.ChatID,
+		}, logger),
+		pushover: notifications.NewPushoverSender(notifications.PushoverChannelConfig{
+			Enabled:  cfg.Notifications.Pushover.Enabled,
+			AppToken: cfg.Notifications.Pushover.AppToken,
+			UserKey:  cfg.Notifications.Pushover.UserKey,
+			Priority: cfg.Notifications.Pushover.Priority,
+		}, logger),
+		ntfy: notifications.NewNtfySender(notifications.NtfyChannelConfig{
+			Enabled:   cfg.Notifications.Ntfy.Enabled,
+			ServerURL: cfg.Notifications.Ntfy.ServerURL,
+			Topic:     cfg.Notifications.Ntfy.Topic,
+		}, logger),
+		autoScaling: engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
 	}
 
 	mux := http.NewServeMux()
@@ -173,6 +192,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
 	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
 	mux.Handle("GET /api/v1/agents/{id}/metrics", viewer(s.handleGetAgentMetrics))
+	mux.Handle("GET /api/v1/agents/{id}/health", viewer(s.handleGetAgentHealth))
+	mux.Handle("GET /api/v1/agents/{id}/recent-tasks", viewer(s.handleListAgentRecentTasks))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 	mux.Handle("POST /api/v1/agents/{id}/upgrade", admin(s.handleRequestAgentUpgrade))
@@ -254,6 +275,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/me/notifications", viewer(s.handleGetNotificationPrefs))
 	mux.Handle("PUT /api/v1/me/notifications", viewer(s.handleUpdateNotificationPrefs))
 	mux.Handle("POST /api/v1/notifications/test-email", admin(s.handleTestEmail))
+	mux.Handle("POST /api/v1/notifications/test-telegram", admin(s.handleTestTelegram))
+	mux.Handle("POST /api/v1/notifications/test-pushover", admin(s.handleTestPushover))
+	mux.Handle("POST /api/v1/notifications/test-ntfy", admin(s.handleTestNtfy))
 
 	// --- Auto-Scaling Settings ---
 	mux.Handle("GET /api/v1/settings/auto-scaling", admin(s.handleGetAutoScaling))
@@ -267,6 +291,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))
 	mux.Handle("GET /api/v1/presets/{name}", viewer(s.handleGetPreset))
 	mux.Handle("GET /api/v1/presets/audio", viewer(s.handleListAudioPresets))
+
+	// --- Encoding Profiles ---
+	mux.Handle("GET /api/v1/encoding-profiles", viewer(s.handleListEncodingProfiles))
+	mux.Handle("GET /api/v1/encoding-profiles/{id}", viewer(s.handleGetEncodingProfile))
+	mux.Handle("POST /api/v1/encoding-profiles", admin(s.handleCreateEncodingProfile))
+	mux.Handle("PUT /api/v1/encoding-profiles/{id}", admin(s.handleUpdateEncodingProfile))
+	mux.Handle("DELETE /api/v1/encoding-profiles/{id}", admin(s.handleDeleteEncodingProfile))
 
 	// --- Cost Estimation ---
 	mux.Handle("POST /api/v1/estimate", viewer(s.handleEstimate))

@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AgentHealth, EncodingProfile } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -198,6 +198,9 @@ export const getAgent = (id: string) => request<Agent>(`/agents/${id}`)
 export const drainAgent = (id: string) => request<void>(`/agents/${id}/drain`, { method: 'POST' })
 
 export const approveAgent = (id: string) => request<void>(`/agents/${id}/approve`, { method: 'POST' })
+
+export const requestAgentUpgrade = (id: string) =>
+  request<{ ok: boolean }>(`/agents/${id}/upgrade`, { method: 'POST' })
 
 // Sources
 export const listSources = (params?: { state?: string; cursor?: string; page_size?: number }) =>
@@ -401,6 +404,15 @@ export const testEmail = (to: string) =>
     body: JSON.stringify({ to }),
   })
 
+export const testTelegram = () =>
+  request<{ ok: boolean }>('/notifications/test-telegram', { method: 'POST', body: '{}' })
+
+export const testPushover = () =>
+  request<{ ok: boolean }>('/notifications/test-pushover', { method: 'POST', body: '{}' })
+
+export const testNtfy = () =>
+  request<{ ok: boolean }>('/notifications/test-ntfy', { method: 'POST', body: '{}' })
+
 // Auto-Scaling Settings
 export const getAutoScaling = () =>
   request<AutoScalingSettings>('/settings/auto-scaling')
@@ -413,3 +425,32 @@ export const updateAutoScaling = (body: Partial<AutoScalingSettings>) =>
 
 export const testAutoScalingWebhook = () =>
   request<{ ok: boolean; url: string }>('/settings/auto-scaling/test', { method: 'POST' })
+
+// Agent health deep-dive
+export const getAgentHealth = (id: string) =>
+  request<AgentHealth>(`/agents/${id}/health`)
+
+export const listAgentRecentTasks = (id: string) =>
+  request<Task[]>(`/agents/${id}/recent-tasks`)
+
+// Encoding Profiles
+export const listEncodingProfiles = () =>
+  request<EncodingProfile[]>('/encoding-profiles')
+
+export const getEncodingProfile = (id: string) =>
+  request<EncodingProfile>(`/encoding-profiles/${id}`)
+
+export const createEncodingProfile = (body: Partial<EncodingProfile>) =>
+  request<EncodingProfile>('/encoding-profiles', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+
+export const updateEncodingProfile = (id: string, body: Partial<EncodingProfile>) =>
+  request<EncodingProfile>(`/encoding-profiles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+
+export const deleteEncodingProfile = (id: string) =>
+  request<{ ok: boolean }>(`/encoding-profiles/${id}`, { method: 'DELETE' })
