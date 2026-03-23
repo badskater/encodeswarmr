@@ -746,3 +746,64 @@ type UpsertEncodingStatsParams struct {
 	NewFPS        float64
 	NewSizePerMin float64
 }
+
+// ---------------------------------------------------------------------------
+// Encoding Rules
+// ---------------------------------------------------------------------------
+
+// EncodingRule is a row from the encoding_rules table.
+// Rules are evaluated when a job is created to suggest a template, audio codec,
+// and priority. Rules never auto-apply — the user always confirms.
+type EncodingRule struct {
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Priority   int               `json:"priority"`
+	Conditions []RuleCondition   `json:"conditions"`
+	Actions    RuleAction        `json:"actions"`
+	Enabled    bool              `json:"enabled"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
+}
+
+// RuleCondition specifies a single match criterion.
+// Field values: resolution, hdr_type, codec, file_size_gb, duration_min.
+// Operator values: eq, neq, gt, lt, gte, lte, contains, in.
+type RuleCondition struct {
+	Field    string `json:"field"`
+	Operator string `json:"operator"`
+	Value    string `json:"value"`
+}
+
+// RuleAction describes what to suggest when a rule matches.
+type RuleAction struct {
+	SuggestTemplateID string   `json:"suggest_template_id,omitempty"`
+	SuggestAudioCodec string   `json:"suggest_audio_codec,omitempty"`
+	SuggestPriority   int      `json:"suggest_priority,omitempty"`
+	SuggestTags       []string `json:"suggest_tags,omitempty"`
+}
+
+// CreateEncodingRuleParams holds values for inserting a new encoding_rules row.
+type CreateEncodingRuleParams struct {
+	Name       string
+	Priority   int
+	Conditions []RuleCondition
+	Actions    RuleAction
+	Enabled    bool
+}
+
+// UpdateEncodingRuleParams holds values for updating an existing encoding_rules row.
+type UpdateEncodingRuleParams struct {
+	ID         string
+	Name       string
+	Priority   int
+	Conditions []RuleCondition
+	Actions    RuleAction
+	Enabled    bool
+}
+
+// UpdateSourceWatchParams updates watch-folder-specific fields on a source.
+type UpdateSourceWatchParams struct {
+	ID          string
+	WatchFolder string
+	Category    string
+}

@@ -413,3 +413,94 @@ export const updateAutoScaling = (body: Partial<AutoScalingSettings>) =>
 
 export const testAutoScalingWebhook = () =>
   request<{ ok: boolean; url: string }>('/settings/auto-scaling/test', { method: 'POST' })
+
+// Watch Folders
+export interface WatchFolder {
+  name: string
+  path: string
+  windows_path: string
+  file_patterns: string[]
+  poll_interval: string
+  auto_analyze: boolean
+  move_after_analysis?: string
+  enabled: boolean
+  last_scan?: string | null
+}
+
+export const listWatchFolders = () => request<WatchFolder[]>('/watch-folders')
+
+export const toggleWatchFolder = (name: string, enabled: boolean) =>
+  request<{ name: string; enabled: boolean }>(
+    `/watch-folders/${encodeURIComponent(name)}/${enabled ? 'enable' : 'disable'}`,
+    { method: 'PUT' },
+  )
+
+export const scanWatchFolder = (name: string) =>
+  request<{ name: string; status: string }>(
+    `/watch-folders/${encodeURIComponent(name)}/scan`,
+    { method: 'POST' },
+  )
+
+// Encoding Rules
+export interface RuleCondition {
+  field: string
+  operator: string
+  value: string
+}
+
+export interface RuleAction {
+  suggest_template_id?: string
+  suggest_audio_codec?: string
+  suggest_priority?: number
+  suggest_tags?: string[]
+}
+
+export interface EncodingRule {
+  id: string
+  name: string
+  priority: number
+  conditions: RuleCondition[]
+  actions: RuleAction
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export const listEncodingRules = () => request<EncodingRule[]>('/encoding-rules')
+
+export const getEncodingRule = (id: string) => request<EncodingRule>(`/encoding-rules/${id}`)
+
+export const createEncodingRule = (body: Partial<EncodingRule>) =>
+  request<EncodingRule>('/encoding-rules', { method: 'POST', body: JSON.stringify(body) })
+
+export const updateEncodingRule = (id: string, body: Partial<EncodingRule>) =>
+  request<EncodingRule>(`/encoding-rules/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const deleteEncodingRule = (id: string) =>
+  request<void>(`/encoding-rules/${id}`, { method: 'DELETE' })
+
+export interface EvaluateRulesRequest {
+  source_id?: string
+  resolution?: string
+  hdr_type?: string
+  codec?: string
+  file_size_gb?: number
+  duration_min?: number
+}
+
+export interface EvaluateRulesResponse {
+  matched: boolean
+  suggestion: RuleAction | null
+}
+
+export const evaluateEncodingRules = (body: EvaluateRulesRequest) =>
+  request<EvaluateRulesResponse>('/encoding-rules/evaluate', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+
+// Task Log WebSocket streaming URL helper
+export const getTaskLogStreamURL = (taskId: string, afterId?: number) => {
+  const base = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/tasks/${taskId}/logs/stream`
+  return afterId != null ? `${base}?after_id=${afterId}` : base
+}

@@ -22,6 +22,14 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+// LogPublisher is implemented by the API layer to push new task log entries
+// to connected WebSocket clients in real-time.
+type LogPublisher interface {
+	// PublishTaskLog sends a log entry to any WebSocket clients subscribed to
+	// the given task ID.
+	PublishTaskLog(taskID string, entry any)
+}
+
 // Server implements the AgentService gRPC server.
 type Server struct {
 	pb.UnimplementedAgentServiceServer
@@ -32,6 +40,7 @@ type Server struct {
 	logger         *slog.Logger
 	webhooks       *webhooks.Service
 	concatRunner   engine.ConcatRunner       // optional; triggers controller-side concat
+	logPublisher   LogPublisher              // optional; pushes log entries to WebSocket clients
 }
 
 // New creates a new gRPC Server.
@@ -53,6 +62,10 @@ func (s *Server) SetValidationConfig(cfg engine.ValidationConfig) { s.validation
 // the final ffmpeg concat step runs on the controller after all chunk tasks
 // complete instead of being dispatched to an agent.
 func (s *Server) SetConcatRunner(r engine.ConcatRunner) { s.concatRunner = r }
+
+// SetLogPublisher attaches a real-time log publisher so StreamLogs pushes
+// entries to WebSocket subscribers immediately after DB insertion.
+func (s *Server) SetLogPublisher(p LogPublisher) { s.logPublisher = p }
 
 // Serve starts the gRPC server and blocks until ctx is cancelled.
 func (s *Server) Serve(ctx context.Context) error {

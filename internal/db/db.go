@@ -219,6 +219,16 @@ type Store interface {
 	GetQueueStats(ctx context.Context) (*QueueStats, error)
 	GetRecentActivity(ctx context.Context, limit int) ([]*ActivityEvent, error)
 
+	// --- Encoding Rules ---
+	CreateEncodingRule(ctx context.Context, p CreateEncodingRuleParams) (*EncodingRule, error)
+	GetEncodingRuleByID(ctx context.Context, id string) (*EncodingRule, error)
+	ListEncodingRules(ctx context.Context) ([]*EncodingRule, error)
+	UpdateEncodingRule(ctx context.Context, p UpdateEncodingRuleParams) (*EncodingRule, error)
+	DeleteEncodingRule(ctx context.Context, id string) error
+
+	// --- Sources (watch folder extensions) ---
+	UpdateSourceWatch(ctx context.Context, p UpdateSourceWatchParams) error
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }

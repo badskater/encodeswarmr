@@ -217,5 +217,15 @@ func (Stub) ListArchivedJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job,
 func (Stub) ExportJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)                  { return nil, nil }
 func (Stub) ExportArchivedJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)          { return nil, nil }
 
+// --- Encoding Rules ---
+func (Stub) CreateEncodingRule(_ context.Context, _ db.CreateEncodingRuleParams) (*db.EncodingRule, error) { return nil, nil }
+func (Stub) GetEncodingRuleByID(_ context.Context, _ string) (*db.EncodingRule, error)                     { return nil, nil }
+func (Stub) ListEncodingRules(_ context.Context) ([]*db.EncodingRule, error)                               { return nil, nil }
+func (Stub) UpdateEncodingRule(_ context.Context, _ db.UpdateEncodingRuleParams) (*db.EncodingRule, error) { return nil, nil }
+func (Stub) DeleteEncodingRule(_ context.Context, _ string) error                                          { return nil }
+
+// --- Sources (watch folder extensions) ---
+func (Stub) UpdateSourceWatch(_ context.Context, _ db.UpdateSourceWatchParams) error { return nil }
+
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }
