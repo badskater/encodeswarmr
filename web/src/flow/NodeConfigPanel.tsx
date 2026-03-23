@@ -145,6 +145,11 @@ const X265_PROFILES = ['main', 'main10', 'mainstillpicture', 'main444-8', 'main4
 const X264_PROFILES = ['baseline', 'main', 'high', 'high10', 'high422', 'high444']
 const NVENC_PRESETS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
 
+const TWOPASS_CODEC_OPTIONS = [
+  { value: 'x265', label: 'x265 (HEVC)' },
+  { value: 'x264', label: 'x264 (H.264)' },
+]
+
 function ConfigFields({
   nodeType,
   config,
@@ -529,6 +534,152 @@ function ConfigFields({
           onChange={v => set('seconds', v)}
           min={0}
         />
+      )
+
+    case 'encode_twopass': {
+      const codec = String(config.codec ?? 'x265')
+      const presetOptions = codec === 'x264'
+        ? X264_PRESETS.map(p => ({ value: p, label: p }))
+        : X265_PRESETS.map(p => ({ value: p, label: p }))
+      const profileOptions = codec === 'x264'
+        ? X264_PROFILES.map(p => ({ value: p, label: p }))
+        : X265_PROFILES.map(p => ({ value: p, label: p }))
+      return (
+        <>
+          <SelectField
+            label="Codec"
+            value={codec}
+            options={TWOPASS_CODEC_OPTIONS}
+            onChange={v => set('codec', v)}
+          />
+          <NumberField
+            label="Target bitrate (kbps)"
+            value={Number(config.bitrate ?? 4000)}
+            onChange={v => set('bitrate', v)}
+            min={100}
+            step={100}
+          />
+          <SelectField
+            label="Preset"
+            value={String(config.preset ?? 'slow')}
+            options={presetOptions}
+            onChange={v => set('preset', v)}
+          />
+          <SelectField
+            label="Profile"
+            value={String(config.profile ?? 'main10')}
+            options={profileOptions}
+            onChange={v => set('profile', v)}
+          />
+        </>
+      )
+    }
+
+    case 'encode_twopass_x264':
+      return (
+        <>
+          <NumberField
+            label="Target bitrate (kbps)"
+            value={Number(config.bitrate ?? 6000)}
+            onChange={v => set('bitrate', v)}
+            min={100}
+            step={100}
+          />
+          <SelectField
+            label="Preset"
+            value={String(config.preset ?? 'medium')}
+            options={X264_PRESETS.map(p => ({ value: p, label: p }))}
+            onChange={v => set('preset', v)}
+          />
+          <SelectField
+            label="Profile"
+            value={String(config.profile ?? 'high')}
+            options={X264_PROFILES.map(p => ({ value: p, label: p }))}
+            onChange={v => set('profile', v)}
+          />
+        </>
+      )
+
+    case 'encode_vmaf_target': {
+      const targetVmaf = Number(config.target_vmaf ?? 95)
+      return (
+        <>
+          <div>
+            <label className="block text-xs text-th-text-muted mb-1">
+              Target VMAF — <span className="font-semibold text-th-text">{targetVmaf}</span>{' '}
+              <span className="opacity-60">(higher = better quality)</span>
+            </label>
+            <input
+              type="range"
+              min={80}
+              max={100}
+              step={1}
+              value={targetVmaf}
+              onChange={e => set('target_vmaf', Number(e.target.value))}
+              className="w-full accent-teal-500"
+            />
+            <div className="flex justify-between text-xs text-th-text-subtle mt-0.5">
+              <span>80 minimum</span>
+              <span>100 lossless</span>
+            </div>
+          </div>
+          <SelectField
+            label="Codec"
+            value={String(config.codec ?? 'x265')}
+            options={TWOPASS_CODEC_OPTIONS}
+            onChange={v => set('codec', v)}
+          />
+          <SelectField
+            label="Preset"
+            value={String(config.preset ?? 'slow')}
+            options={X265_PRESETS.map(p => ({ value: p, label: p }))}
+            onChange={v => set('preset', v)}
+          />
+          <NumberField
+            label="CRF minimum (best quality)"
+            value={Number(config.crf_min ?? 15)}
+            onChange={v => set('crf_min', v)}
+            min={0}
+            max={51}
+          />
+          <NumberField
+            label="CRF maximum (smallest file)"
+            value={Number(config.crf_max ?? 28)}
+            onChange={v => set('crf_max', v)}
+            min={0}
+            max={51}
+          />
+          <NumberField
+            label="Max iterations"
+            value={Number(config.max_iterations ?? 5)}
+            onChange={v => set('max_iterations', v)}
+            min={1}
+            max={20}
+          />
+        </>
+      )
+    }
+
+    case 'analyze_vmaf':
+      return (
+        <>
+          <SelectField
+            label="VMAF model"
+            value={String(config.model ?? 'vmaf_v0.6.1')}
+            options={[
+              { value: 'vmaf_v0.6.1', label: 'vmaf_v0.6.1 (default)' },
+              { value: 'vmaf_4k_v0.6.1', label: 'vmaf_4k_v0.6.1 (4K)' },
+              { value: 'vmaf_b_v0.6.3', label: 'vmaf_b_v0.6.3 (phone)' },
+            ]}
+            onChange={v => set('model', v)}
+          />
+          <TextField
+            label="Reference path (optional — A/B compare)"
+            value={String(config.reference_path ?? '')}
+            onChange={v => set('reference_path', v)}
+            placeholder="Leave blank to compare against source"
+          />
+        </>
       )
 
     case 'input_file':

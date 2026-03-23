@@ -156,8 +156,11 @@ type Job struct {
 // TaskType constants identify the role of a task within a job.
 // The empty string (TaskTypeEncode) is the default for backward compatibility.
 const (
-	TaskTypeEncode = ""       // standard per-chunk encode task
-	TaskTypeConcat = "concat" // post-encode ffmpeg segment merge task
+	TaskTypeEncode      = ""              // standard per-chunk encode task
+	TaskTypeConcat      = "concat"        // post-encode ffmpeg segment merge task
+	TaskTypeTwoPassPass1 = "twopass_p1"  // two-pass encode — analysis pass (pass 1)
+	TaskTypeTwoPassPass2 = "twopass_p2"  // two-pass encode — encode pass (pass 2)
+	TaskTypeVMAFTarget  = "vmaf_target"  // iterative VMAF-targeted CRF encode
 )
 
 // Task is a row from the tasks table.
