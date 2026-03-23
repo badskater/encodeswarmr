@@ -116,6 +116,13 @@ func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 		if err := s.store.CompleteTask(ctx, p); err != nil {
 			return status.Errorf(codes.Internal, "grpc reportresult: complete task: %v", err)
 		}
+
+		// Update running encoding statistics for cost-estimation learning.
+		// Best-effort only — do not fail the RPC on stats errors.
+		if p.AvgFPS > 0 {
+			s.upsertEncodingStats(ctx, req, p)
+		}
+
 		return nil
 	}
 
@@ -136,6 +143,39 @@ func (s *Server) processResult(ctx context.Context, req *pb.TaskResult) error {
 		)
 	}
 	return nil
+}
+
+// upsertEncodingStats records encoding performance data for cost-estimation
+// learning.  It is best-effort; errors are only logged.
+func (s *Server) upsertEncodingStats(ctx context.Context, req *pb.TaskResult, p db.CompleteTaskParams) {
+	job, err := s.store.GetJobByID(ctx, req.GetJobId())
+	if err != nil {
+		return // can't determine codec/preset without the job
+	}
+
+	// Derive codec from EncodeConfig extra vars or job type.
+	codec := job.EncodeConfig.ExtraVars["codec"]
+	if codec == "" {
+		codec = job.JobType
+	}
+	preset := job.EncodeConfig.ExtraVars["preset"]
+	resolution := job.EncodeConfig.ExtraVars["resolution"]
+
+	// Compute size per minute: output_size (bytes) / duration_sec * 60.
+	var sizePerMin float64
+	if p.DurationSec > 0 && p.OutputSize > 0 {
+		sizePerMin = float64(p.OutputSize) / float64(p.DurationSec) * 60.0
+	}
+
+	if err := s.store.UpsertEncodingStats(ctx, db.UpsertEncodingStatsParams{
+		Codec:         codec,
+		Resolution:    resolution,
+		Preset:        preset,
+		NewFPS:        p.AvgFPS,
+		NewSizePerMin: sizePerMin,
+	}); err != nil {
+		s.logger.Warn("upsert encoding stats", "error", err)
+	}
 }
 
 // maybeRetryTask checks whether a failed task should be automatically retried

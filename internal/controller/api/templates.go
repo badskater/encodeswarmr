@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/badskater/encodeswarmr/internal/controller/engine"
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
@@ -84,7 +87,41 @@ func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.UpdateTemplate(r.Context(), db.UpdateTemplateParams{
+	// Before updating, snapshot the current content as a new version row.
+	ctx := r.Context()
+	existing, err := s.store.GetTemplateByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "template not found")
+			return
+		}
+		s.logger.Error("get template before version snapshot", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	latestVer, err := s.store.GetLatestTemplateVersion(ctx, id)
+	if err != nil {
+		s.logger.Error("get latest template version", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	// Archive old content only if the content is actually changing.
+	if req.Content != "" && req.Content != existing.Content {
+		userID := userIDFromContext(r.Context())
+		if _, verErr := s.store.CreateTemplateVersion(ctx, db.CreateTemplateVersionParams{
+			TemplateID: id,
+			Version:    latestVer + 1,
+			Content:    existing.Content,
+			CreatedBy:  userID,
+		}); verErr != nil {
+			s.logger.Error("create template version snapshot", "err", verErr)
+			// Non-fatal — proceed with the update.
+		}
+	}
+
+	if err := s.store.UpdateTemplate(ctx, db.UpdateTemplateParams{
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
@@ -99,13 +136,117 @@ func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := s.store.GetTemplateByID(r.Context(), id)
+	tmpl, err := s.store.GetTemplateByID(ctx, id)
 	if err != nil {
 		s.logger.Error("get template after update", "err", err)
 		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
 		return
 	}
 	writeJSON(w, r, http.StatusOK, tmpl)
+}
+
+func (s *Server) handleListTemplateVersions(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	versions, err := s.store.ListTemplateVersions(r.Context(), id)
+	if err != nil {
+		s.logger.Error("list template versions", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, versions)
+}
+
+func (s *Server) handleGetTemplateVersion(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	versionStr := r.PathValue("version")
+	version, err := strconv.Atoi(versionStr)
+	if err != nil || version < 1 {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "version must be a positive integer")
+		return
+	}
+	v, err := s.store.GetTemplateVersion(r.Context(), id, version)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "version not found")
+			return
+		}
+		s.logger.Error("get template version", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, v)
+}
+
+func (s *Server) handleRevertTemplateVersion(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	versionStr := r.PathValue("version")
+	version, err := strconv.Atoi(versionStr)
+	if err != nil || version < 1 {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "version must be a positive integer")
+		return
+	}
+	ctx := r.Context()
+	v, err := s.store.GetTemplateVersion(ctx, id, version)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "version not found")
+			return
+		}
+		s.logger.Error("get template version for revert", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	// Snapshot the current content before reverting.
+	existing, getErr := s.store.GetTemplateByID(ctx, id)
+	if getErr != nil {
+		if errors.Is(getErr, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "template not found")
+			return
+		}
+		s.logger.Error("get template for revert", "err", getErr)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	if existing.Content != v.Content {
+		latestVer, _ := s.store.GetLatestTemplateVersion(ctx, id)
+		userID := userIDFromContext(ctx)
+		_, _ = s.store.CreateTemplateVersion(ctx, db.CreateTemplateVersionParams{
+			TemplateID: id,
+			Version:    latestVer + 1,
+			Content:    existing.Content,
+			CreatedBy:  userID,
+		})
+	}
+
+	if err := s.store.UpdateTemplate(ctx, db.UpdateTemplateParams{
+		ID:          id,
+		Name:        existing.Name,
+		Description: existing.Description,
+		Content:     v.Content,
+	}); err != nil {
+		s.logger.Error("revert template", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	tmpl, err := s.store.GetTemplateByID(ctx, id)
+	if err != nil {
+		s.logger.Error("get template after revert", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, tmpl)
+}
+
+// userIDFromContext extracts the authenticated user ID from the request context,
+// returning nil if not present (unauthenticated path).
+func userIDFromContext(ctx context.Context) *string {
+	if claims, ok := auth.FromContext(ctx); ok && claims.UserID != "" {
+		id := claims.UserID
+		return &id
+	}
+	return nil
 }
 
 func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {

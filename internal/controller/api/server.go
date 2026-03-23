@@ -170,6 +170,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/tasks/{id}/logs", viewer(s.handleListTaskLogs))
 	mux.Handle("GET /api/v1/tasks/{id}/logs/tail", viewer(s.handleTailTaskLogs))
 	mux.Handle("GET /api/v1/tasks/{id}/logs/download", operator(s.handleDownloadTaskLogs))
+	mux.Handle("POST /api/v1/tasks/{id}/preempt", admin(s.handlePreemptTask))
 
 	// --- Agents ---
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
@@ -213,6 +214,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("PUT /api/v1/templates/{id}", admin(s.handleUpdateTemplate))
 	mux.Handle("DELETE /api/v1/templates/{id}", admin(s.handleDeleteTemplate))
 	mux.Handle("POST /api/v1/templates/{id}/preview", operator(s.handlePreviewTemplate))
+	// Template versioning
+	mux.Handle("GET /api/v1/templates/{id}/versions", viewer(s.handleListTemplateVersions))
+	mux.Handle("GET /api/v1/templates/{id}/versions/{version}", viewer(s.handleGetTemplateVersion))
+	mux.Handle("POST /api/v1/templates/{id}/revert/{version}", admin(s.handleRevertTemplateVersion))
 
 	// --- Variables ---
 	mux.Handle("GET /api/v1/variables", viewer(s.handleListVariables))

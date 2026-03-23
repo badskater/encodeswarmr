@@ -407,11 +407,19 @@ func (s *updateTemplateStore) GetTemplateByID(_ context.Context, _ string) (*db.
 
 type updateTemplateNotFoundStore struct{ *stubStore }
 
+func (s *updateTemplateNotFoundStore) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return nil, db.ErrNotFound
+}
+
 func (s *updateTemplateNotFoundStore) UpdateTemplate(_ context.Context, _ db.UpdateTemplateParams) error {
 	return db.ErrNotFound
 }
 
 type updateTemplateErrStore struct{ *stubStore }
+
+func (s *updateTemplateErrStore) GetTemplateByID(_ context.Context, _ string) (*db.Template, error) {
+	return &db.Template{ID: "t1", Name: "X", Content: "old"}, nil
+}
 
 func (s *updateTemplateErrStore) UpdateTemplate(_ context.Context, _ db.UpdateTemplateParams) error {
 	return errors.New("db failure")

@@ -2,8 +2,10 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 
 	"github.com/badskater/encodeswarmr/internal/db"
 )
@@ -92,7 +94,25 @@ func (e *Engine) expandFlowJob(ctx context.Context, job *db.Job) error {
 		return cause
 	}
 
-	for i, step := range steps {
+	// Load source once — most steps need it.
+	source, srcErr := e.store.GetSourceByID(ctx, job.SourceID)
+	if srcErr != nil {
+		return failJob(fmt.Errorf("engine: expand flow job get source: %w", srcErr))
+	}
+
+	// Load source analysis summary for condition evaluation.
+	var analysisSummary map[string]any
+	if ars, err := e.store.ListAnalysisResults(ctx, job.SourceID); err == nil {
+		for _, ar := range ars {
+			if len(ar.Summary) > 0 {
+				_ = json.Unmarshal(ar.Summary, &analysisSummary)
+				break
+			}
+		}
+	}
+
+	taskIndex := 0
+	for _, step := range steps {
 		vars := make(map[string]string)
 		for k, v := range step.Config {
 			if s, ok := v.(string); ok {
@@ -102,32 +122,82 @@ func (e *Engine) expandFlowJob(ctx context.Context, job *db.Job) error {
 		vars["flow_node_id"] = step.NodeID
 		vars["flow_node_type"] = step.NodeType
 
-		// Log webhook steps rather than creating a DB task — webhook delivery
-		// will be wired in a subsequent iteration.
-		if step.NodeType == "webhook" {
-			e.logger.Info("engine: flow webhook step (pending delivery wiring)",
-				"job_id", job.ID,
-				"flow_id", flowID,
-				"node_id", step.NodeID,
-				slog.Any("config", step.Config),
-			)
+		switch step.NodeType {
+		case "notify_webhook", "webhook":
+			// Fire the webhook notification immediately during expansion.
+			if e.webhooks != nil {
+				eventType := "flow.notify"
+				if et, ok := step.Config["event_type"].(string); ok && et != "" {
+					eventType = et
+				}
+				payload := map[string]any{
+					"job_id":      job.ID,
+					"source_id":   job.SourceID,
+					"flow_id":     flowID,
+					"node_id":     step.NodeID,
+					"source_path": source.UNCPath,
+				}
+				for k, v := range step.Config {
+					payload[k] = v
+				}
+				e.webhooks.EmitRaw(ctx, eventType, payload)
+			} else {
+				e.logger.Info("engine: flow webhook step (no emitter configured)",
+					"job_id", job.ID, "node_id", step.NodeID,
+					slog.Any("config", step.Config),
+				)
+			}
+			// Webhook nodes do not create DB tasks.
 			continue
-		}
 
-		source, srcErr := e.store.GetSourceByID(ctx, job.SourceID)
-		if srcErr != nil {
-			return failJob(fmt.Errorf("engine: expand flow job step %d get source: %w", i, srcErr))
+		case "template_run":
+			// Look up the named template and inject its content as script_content.
+			if templateID, ok := step.Config["template_id"].(string); ok && templateID != "" {
+				if tmpl, err := e.store.GetTemplateByID(ctx, templateID); err == nil {
+					vars["script_content"] = tmpl.Content
+					vars["template_name"] = tmpl.Name
+				} else {
+					e.logger.Warn("engine: flow template_run: template not found",
+						"job_id", job.ID, "template_id", templateID, "error", err)
+				}
+			}
+
+		case "audio_flac", "audio_opus", "audio_aac":
+			// Map audio node types to ffmpeg audio arguments.
+			audioArgs := map[string]string{
+				"audio_flac": "-vn -c:a flac",
+				"audio_opus": "-vn -c:a libopus -b:a 128k",
+				"audio_aac":  "-vn -c:a aac -b:a 192k -profile:a aac_low",
+			}
+			vars["audio_ffmpeg_args"] = audioArgs[step.NodeType]
+			vars["ffmpeg_audio_codec"] = step.NodeType[len("audio_"):]
+
+		case "condition":
+			// Evaluate real condition using source analysis data.
+			if analysisSummary != nil {
+				condKey, _ := step.Config["field"].(string)
+				if condKey != "" {
+					if val, exists := analysisSummary[condKey]; exists {
+						vars["condition_field"] = condKey
+						vars["condition_value"] = fmt.Sprintf("%v", val)
+					}
+				}
+			}
+			// Condition nodes do not create DB tasks; the FlowEngine already
+			// evaluated the branch and pruned the graph accordingly.
+			continue
 		}
 
 		if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
 			JobID:      job.ID,
-			ChunkIndex: i,
+			ChunkIndex: taskIndex,
 			TaskType:   db.TaskTypeEncode,
 			SourcePath: source.UNCPath,
 			Variables:  vars,
 		}); err != nil {
-			return failJob(fmt.Errorf("engine: expand flow job create task step %d: %w", i, err))
+			return failJob(fmt.Errorf("engine: expand flow job create task step %d: %w", taskIndex, err))
 		}
+		taskIndex++
 	}
 
 	if err := e.store.UpdateJobTaskCounts(ctx, job.ID); err != nil {
@@ -199,9 +269,108 @@ func isControllerAnalysisJob(jobType string) bool {
 	return false
 }
 
+// computeAdaptiveChunks distributes totalFrames among the given agents
+// proportionally to their historical avg_fps.  Each chunk is clamped to
+// [minChunk, maxChunk].  Falls back to equal-sized chunks when no agent speed
+// data is available.
+func computeAdaptiveChunks(agentFPS []float64, totalFrames int) []db.ChunkBoundary {
+	const minChunk = 500
+	n := len(agentFPS)
+	if n == 0 {
+		return nil
+	}
+	maxChunk := totalFrames / 2
+	if maxChunk < minChunk {
+		maxChunk = minChunk
+	}
+
+	// Total FPS sum for weight calculation.
+	total := 0.0
+	for _, fps := range agentFPS {
+		if fps <= 0 {
+			fps = 1 // treat unknown/zero as minimum weight
+		}
+		total += fps
+	}
+
+	boundaries := make([]db.ChunkBoundary, 0, n)
+	start := 0
+	remaining := totalFrames
+	for i, fps := range agentFPS {
+		if i == n-1 {
+			// Give remaining frames to last agent to avoid rounding gaps.
+			boundaries = append(boundaries, db.ChunkBoundary{StartFrame: start, EndFrame: start + remaining - 1})
+			break
+		}
+		w := fps
+		if w <= 0 {
+			w = 1
+		}
+		size := int(math.Round(float64(totalFrames) * w / total))
+		if size < minChunk {
+			size = minChunk
+		}
+		if size > maxChunk {
+			size = maxChunk
+		}
+		if size > remaining-minChunk {
+			size = remaining - minChunk
+		}
+		boundaries = append(boundaries, db.ChunkBoundary{StartFrame: start, EndFrame: start + size - 1})
+		start += size
+		remaining -= size
+	}
+	return boundaries
+}
+
 // expandEncodeJob creates tasks for a multi-chunk encode job and appends a
 // final concat task that merges the chunk outputs once all chunks complete.
 func (e *Engine) expandEncodeJob(ctx context.Context, job *db.Job) error {
+	// If adaptive chunking is requested, recompute chunk boundaries based on
+	// each available agent's historical encoding speed.
+	if cc := job.EncodeConfig.ChunkingConfig; cc != nil && cc.AdaptiveChunking {
+		agents, err := e.store.ListAgents(ctx)
+		if err != nil {
+			e.logger.Warn("engine: adaptive chunking: list agents failed, using fixed boundaries",
+				"job_id", job.ID, "error", err)
+		} else {
+			var fpsList []float64
+			for _, a := range agents {
+				if a.Status != "idle" && a.Status != "busy" {
+					continue
+				}
+				fps, err := e.store.GetAgentAvgFPS(ctx, a.ID)
+				if err != nil {
+					fps = 0
+				}
+				fpsList = append(fpsList, fps)
+			}
+			if len(fpsList) > 0 {
+				// Determine total frames from existing boundaries.
+				totalFrames := 0
+				for _, b := range job.EncodeConfig.ChunkBoundaries {
+					if b.EndFrame+1 > totalFrames {
+						totalFrames = b.EndFrame + 1
+					}
+				}
+				if totalFrames == 0 && cc.ChunkSizeFrames > 0 && len(job.EncodeConfig.ChunkBoundaries) > 0 {
+					totalFrames = job.EncodeConfig.ChunkBoundaries[len(job.EncodeConfig.ChunkBoundaries)-1].EndFrame + 1
+				}
+				if totalFrames > 0 {
+					newBounds := computeAdaptiveChunks(fpsList, totalFrames)
+					if len(newBounds) > 0 {
+						job.EncodeConfig.ChunkBoundaries = newBounds
+						e.logger.Info("engine: adaptive chunking applied",
+							"job_id", job.ID,
+							"chunks", len(newBounds),
+							"agents", len(fpsList),
+						)
+					}
+				}
+			}
+		}
+	}
+
 	if len(job.EncodeConfig.ChunkBoundaries) == 0 {
 		e.logger.Error("engine: encode job has no chunk boundaries, skipping",
 			"job_id", job.ID,

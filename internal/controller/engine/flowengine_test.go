@@ -418,7 +418,7 @@ func TestEvaluateCondition(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := evaluateCondition(tc.cfg)
+			got := evaluateCondition(tc.cfg, nil)
 			if got != tc.want {
 				t.Errorf("evaluateCondition(%v) = %v, want %v", tc.cfg, got, tc.want)
 			}

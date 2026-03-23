@@ -34,6 +34,12 @@ type ConcatRunner interface {
 	RunConcat(ctx context.Context, job *db.Job, chunkPaths []string, outputPath string) error
 }
 
+// FlowWebhookEmitter is the minimal interface the engine needs to fire webhook
+// events from flow nodes.
+type FlowWebhookEmitter interface {
+	EmitRaw(ctx context.Context, eventType string, payload map[string]any)
+}
+
 // Engine orchestrates job expansion and stale-agent detection on a timer.
 type Engine struct {
 	store       db.Store
@@ -42,6 +48,7 @@ type Engine struct {
 	logger      *slog.Logger
 	analysis    AnalysisRunner     // optional; nil falls back to agent dispatch
 	concat      ConcatRunner       // optional; nil falls back to agent dispatch
+	webhooks    FlowWebhookEmitter // optional; enables webhook nodes in flows
 	autoScaling *AutoScalingHook   // optional; nil disables auto-scaling checks
 }
 
@@ -74,6 +81,12 @@ func (e *Engine) SetConcatRunner(r ConcatRunner) {
 // the hook when thresholds are crossed.
 func (e *Engine) SetAutoScalingHook(h *AutoScalingHook) {
 	e.autoScaling = h
+}
+
+// SetWebhookEmitter attaches a webhook emitter so flow webhook nodes can fire
+// actual notifications instead of being silently skipped.
+func (e *Engine) SetWebhookEmitter(w FlowWebhookEmitter) {
+	e.webhooks = w
 }
 
 // Start launches the background dispatch loop in a goroutine.

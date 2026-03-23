@@ -33,9 +33,13 @@ type ChunkBoundary struct {
 // ChunkingConfig carries the scene-based chunking parameters set in the job
 // creation UI.
 type ChunkingConfig struct {
-	EnableChunking  bool `json:"enable_chunking"`
-	ChunkSizeFrames int  `json:"chunk_size_frames"`
-	OverlapFrames   int  `json:"overlap_frames"`
+	EnableChunking   bool `json:"enable_chunking"`
+	ChunkSizeFrames  int  `json:"chunk_size_frames"`
+	OverlapFrames    int  `json:"overlap_frames"`
+	// AdaptiveChunking, when true, ignores ChunkSizeFrames and instead
+	// distributes frames proportionally to each available agent's historical
+	// avg_fps so faster agents receive larger chunks.
+	AdaptiveChunking bool `json:"adaptive_chunking,omitempty"`
 }
 
 // The model types here mirror the database rows returned by queries.
@@ -182,14 +186,20 @@ type Task struct {
 	RetryCount  int        `json:"retry_count"`
 	// RetryAfter is the earliest time this task is eligible to be claimed.
 	// nil means it can be claimed immediately.
-	RetryAfter  *time.Time `json:"retry_after,omitempty"`
+	RetryAfter    *time.Time `json:"retry_after,omitempty"`
 	// ErrorCategory is a computed field populated by the API layer (not stored
 	// in the database). Values: "transient", "permanent", "unknown", or "".
 	ErrorCategory string    `json:"error_category,omitempty"`
-	StartedAt   *time.Time `json:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	// Preemptible indicates the task may be interrupted to allow a higher-priority
+	// task to run on the same agent.  Defaults to true.
+	Preemptible   bool       `json:"preemptible"`
+	// PreemptedAt is set when the task was interrupted mid-run.  The task
+	// returns to "pending" and may be resumed later.
+	PreemptedAt   *time.Time `json:"preempted_at,omitempty"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // TaskLog is a row from the task_logs table.
@@ -692,4 +702,47 @@ type ExportJobsFilter struct {
 	From time.Time
 	// To is the inclusive end of the created_at range. Zero means no upper bound.
 	To time.Time
+}
+
+// TemplateVersion is a row from the template_versions table.
+// It holds an archived snapshot of a template's content before an update.
+type TemplateVersion struct {
+	ID         string    `json:"id"`
+	TemplateID string    `json:"template_id"`
+	Version    int       `json:"version"`
+	Content    string    `json:"content"`
+	CreatedAt  time.Time `json:"created_at"`
+	CreatedBy  *string   `json:"created_by,omitempty"`
+}
+
+// CreateTemplateVersionParams holds values for inserting a template_versions row.
+type CreateTemplateVersionParams struct {
+	TemplateID string
+	Version    int
+	Content    string
+	CreatedBy  *string
+}
+
+// EncodingStats is a row from the encoding_stats table.
+// It holds aggregated encode performance metrics per (codec, resolution, preset)
+// combination and is upserted after each completed encode task.
+type EncodingStats struct {
+	ID             string    `json:"id"`
+	Codec          string    `json:"codec"`
+	Resolution     string    `json:"resolution"`
+	Preset         string    `json:"preset"`
+	AvgFPS         float64   `json:"avg_fps"`
+	AvgSizePerMin  float64   `json:"avg_size_per_min"`
+	SampleCount    int       `json:"sample_count"`
+	FPSStddev      float64   `json:"fps_stddev"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// UpsertEncodingStatsParams holds values for upserting an encoding_stats row.
+type UpsertEncodingStatsParams struct {
+	Codec         string
+	Resolution    string
+	Preset        string
+	NewFPS        float64
+	NewSizePerMin float64
 }

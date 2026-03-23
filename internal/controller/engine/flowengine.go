@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 
 	"github.com/badskater/encodeswarmr/internal/db"
 )
@@ -60,11 +62,25 @@ type flowEdge struct {
 // walks the edges in order, evaluates condition nodes, and returns the
 // resulting ordered list of TaskSteps.  The sourceID is passed through to
 // any input node's config so callers can map it back to a source record.
+//
+// Condition nodes are evaluated against live source analysis data when
+// available, so branches are resolved at expansion time rather than deferred.
 func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID string) ([]TaskStep, error) {
 	// 1. Parse graph JSON.
 	var g flowGraph
 	if err := json.Unmarshal(flow.Graph, &g); err != nil {
 		return nil, fmt.Errorf("flowengine: parse graph for flow %s: %w", flow.ID, err)
+	}
+
+	// Load source analysis summary for condition evaluation.
+	analysisSummary := map[string]any{}
+	if ars, err := fe.store.ListAnalysisResults(ctx, sourceID); err == nil {
+		for _, ar := range ars {
+			if len(ar.Summary) > 0 {
+				_ = json.Unmarshal(ar.Summary, &analysisSummary)
+				break
+			}
+		}
 	}
 
 	if len(g.Nodes) == 0 {
@@ -123,7 +139,7 @@ func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID s
 
 		// 4. For condition nodes: evaluate and follow only the matching branch.
 		if node.Type == "condition" {
-			result := evaluateCondition(cfg)
+			result := evaluateCondition(cfg, analysisSummary)
 			handle := "false"
 			if result {
 				handle = "true"
@@ -176,8 +192,28 @@ func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID s
 // evaluateCondition inspects a condition node's config map and returns the
 // boolean result.  Supported keys:
 //   - "expression": a string that is tested for truthiness ("true", "1", non-empty)
-//   - "operator" + "left" + "right": simple string comparison ("eq", "neq", "gt", "lt")
-func evaluateCondition(cfg map[string]any) bool {
+//   - "operator" + "left" + "right": simple string or numeric comparison
+//     ("eq", "neq", "gt", "lt", "gte", "lte")
+//   - "field" + "operator" + "value": compare a field from source analysis
+//     data (file_size, resolution, codec, total_frames, …) against a literal
+//
+// analysisSummary is the parsed summary JSON from the source analysis result.
+// It may be nil/empty when no analysis data is available.
+func evaluateCondition(cfg map[string]any, analysisSummary map[string]any) bool {
+	// Field-based condition: look up a source analysis field.
+	if field, ok := cfg["field"].(string); ok && field != "" {
+		op, _ := cfg["operator"].(string)
+		wantStr, _ := cfg["value"].(string)
+		if analysisSummary != nil {
+			if rawVal, exists := analysisSummary[field]; exists {
+				got := fmt.Sprintf("%v", rawVal)
+				return compareStrings(op, got, wantStr)
+			}
+		}
+		// Field not in analysis data — treat as false.
+		return false
+	}
+
 	// Simple expression truthiness check.
 	if expr, ok := cfg["expression"]; ok {
 		switch v := expr.(type) {
@@ -190,10 +226,46 @@ func evaluateCondition(cfg map[string]any) bool {
 		}
 	}
 
-	// Operator-based comparison.
-	op, _ := cfg["operator"].(string)
-	left, _ := cfg["left"].(string)
-	right, _ := cfg["right"].(string)
+	// Operator-based comparison of literal left/right strings.
+	// Only attempt this when at least one of the operator keys is present.
+	_, hasOp := cfg["operator"]
+	_, hasLeft := cfg["left"]
+	_, hasRight := cfg["right"]
+	if hasOp || hasLeft || hasRight {
+		op, _ := cfg["operator"].(string)
+		left, _ := cfg["left"].(string)
+		right, _ := cfg["right"].(string)
+		return compareStrings(op, left, right)
+	}
+
+	// Default: treat non-empty config as true (legacy behaviour for
+	// condition nodes that carry only metadata fields like "label").
+	return len(cfg) > 0
+}
+
+// compareStrings compares two string values using the given operator.
+// Numeric comparison is attempted first; falls back to lexicographic order.
+func compareStrings(op, left, right string) bool {
+	// Try numeric comparison.
+	lf, lErr := strconv.ParseFloat(strings.TrimSpace(left), 64)
+	rf, rErr := strconv.ParseFloat(strings.TrimSpace(right), 64)
+	if lErr == nil && rErr == nil {
+		switch op {
+		case "eq":
+			return lf == rf
+		case "neq":
+			return lf != rf
+		case "gt":
+			return lf > rf
+		case "lt":
+			return lf < rf
+		case "gte":
+			return lf >= rf
+		case "lte":
+			return lf <= rf
+		}
+	}
+	// String comparison fallback.
 	switch op {
 	case "eq":
 		return left == right
@@ -203,10 +275,15 @@ func evaluateCondition(cfg map[string]any) bool {
 		return left > right
 	case "lt":
 		return left < right
+	case "gte":
+		return left >= right
+	case "lte":
+		return left <= right
 	}
-
-	// Default: treat non-empty config as true.
-	return len(cfg) > 0
+	// No recognized operator: treat as truthy if left is non-empty.
+	// This preserves the legacy behaviour where a condition node with any
+	// non-empty config (e.g. just a label) evaluated to true.
+	return left != "" || right != ""
 }
 
 // copyData returns a shallow copy of a node data map to prevent mutation of

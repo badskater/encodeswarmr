@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "encodeswarmr.fullname" . }}-config
+  labels:
+    {{- include "encodeswarmr.labels" . | nindent 4 }}
+data:
+  controller.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: {{ .Values.controller.httpPort }}
+    grpc:
+      host: "0.0.0.0"
+      port: {{ .Values.controller.grpcPort }}
+    logging:
+      level: info
+      format: json
+    agent:
+      auto_approve: false
+      heartbeat_timeout: 90s
+      dispatch_interval: 10s
+      script_base_dir: /data/scripts
+    tracing:
+      enabled: {{ .Values.tracing.enabled }}
+      endpoint: {{ .Values.tracing.endpoint | quote }}
+      sample_rate: {{ .Values.tracing.sampleRate }}
+  agent.yaml: |
+    controller:
+      address: {{ include "encodeswarmr.fullname" . }}-controller:{{ .Values.controller.grpcPort }}
+    logging:
+      level: info
+      format: json
