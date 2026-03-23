@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as api from '../api/client'
-import type { Source, Template, Job } from '../types'
+import type { Source, Template, Job, AgentPool } from '../types'
 import type { Flow } from '../types/flow'
 import ChunkBoundaryPreview from '../components/ChunkBoundaryPreview'
 
@@ -33,6 +33,7 @@ export default function CreateJob() {
   const [sceneMessage, setSceneMessage] = useState('')
 
   const [flows, setFlows] = useState<Flow[]>([])
+  const [pools, setPools] = useState<AgentPool[]>([])
   const [useFlow, setUseFlow] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState('')
 
@@ -63,11 +64,12 @@ export default function CreateJob() {
   const [audioSampleRate, setAudioSampleRate] = useState(0)
 
   useEffect(() => {
-    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listJobs()])
-      .then(([s, t, fl, j]) => {
+    Promise.all([api.listSources(), api.listTemplates(), api.listFlows(), api.listJobs(), api.listAgentPools()])
+      .then(([s, t, fl, j, p]) => {
         setSources(s)
         setTemplates(t)
         setFlows(fl)
+        setPools(p)
         // Only show active jobs for "chain after" selection
         setJobs(j.filter((j: Job) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'cancelled'))
       })
@@ -369,9 +371,39 @@ export default function CreateJob() {
         )}
 
         <div>
+          <label className="block text-xs text-th-text-muted mb-1">Target Pool (optional)</label>
+          <select
+            value=""
+            onChange={e => {
+              if (!e.target.value) return
+              const pool = pools.find(p => p.id === e.target.value)
+              if (!pool) return
+              const existing = targetTags.split(',').map(t => t.trim()).filter(Boolean)
+              const merged = Array.from(new Set([...existing, ...pool.tags]))
+              setTargetTags(merged.join(', '))
+            }}
+            className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text"
+          >
+            <option value="">Select a pool to populate tags…</option>
+            {pools.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.tags.length ? ` (${p.tags.join(', ')})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="block text-xs text-th-text-muted mb-1">Target Tags (comma-separated)</label>
           <input value={targetTags} onChange={e => setTargetTags(e.target.value)} placeholder="gpu,nvenc"
             className="w-full bg-th-input-bg border border-th-input-border rounded px-2 py-1.5 text-sm text-th-text" />
+          {targetTags && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {targetTags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                <span key={t} className="px-1.5 py-0.5 rounded text-xs bg-blue-100 text-blue-700">{t}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Run Script Template */}

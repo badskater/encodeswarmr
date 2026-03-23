@@ -1,10 +1,62 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Job } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import ProgressBar from '../components/ProgressBar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+
+// InlinePriority lets users click the priority number and type a new value.
+function InlinePriority({ job, onSaved }: { job: Job; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(String(job.priority))
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const save = async () => {
+    const n = parseInt(val, 10)
+    if (isNaN(n) || n < 0 || n > 100) { setEditing(false); return }
+    if (n === job.priority) { setEditing(false); return }
+    setSaving(true)
+    try {
+      await api.updateJobPriority(job.id, n)
+      onSaved()
+    } catch {
+      // silently ignore — user will see stale value until next refresh
+    } finally {
+      setSaving(false)
+      setEditing(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="number"
+        min={0}
+        max={100}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={save}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+        className="w-16 bg-th-input-bg border border-th-input-border rounded px-1 py-0.5 text-sm text-th-text"
+        autoFocus
+        disabled={saving}
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setVal(String(job.priority)); setEditing(true) }}
+      className="text-th-text-secondary hover:underline cursor-pointer"
+      title="Click to edit priority (0–100)"
+    >
+      {job.priority}
+    </button>
+  )
+}
 
 function basename(p: string) {
   return p.split(/[\\/]/).pop() ?? p
@@ -267,7 +319,9 @@ export default function Jobs() {
                     <td className="px-4 py-2 text-th-text-muted text-xs whitespace-nowrap cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>
                       {j.eta_human ? `~${j.eta_human}` : '—'}
                     </td>
-                    <td className="px-4 py-2 text-th-text-secondary cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{j.priority}</td>
+                    <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                      <InlinePriority job={j} onSaved={load} />
+                    </td>
                     <td className="px-4 py-2 text-th-text-muted whitespace-nowrap cursor-pointer" onClick={() => navigate(`/jobs/${j.id}`)}>{fmtDate(j.created_at)}</td>
                   </tr>
                 ))}

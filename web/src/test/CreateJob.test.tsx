@@ -34,6 +34,7 @@ vi.mock('../api/client', () => ({
   listSources: vi.fn().mockResolvedValue([]),
   listTemplates: vi.fn().mockResolvedValue([]),
   listFlows: vi.fn().mockResolvedValue([]),
+  listAgentPools: vi.fn().mockResolvedValue([]),
   listJobs: vi.fn().mockResolvedValue([]),
   listAnalysisResults: vi.fn().mockResolvedValue([]),
   listAudioPresets: vi.fn().mockResolvedValue([]),

@@ -28,6 +28,8 @@ import NotificationSettings from './pages/admin/NotificationSettings'
 import AutoScaling from './pages/admin/AutoScaling'
 import WatchFolders from './pages/admin/WatchFolders'
 import EncodingRules from './pages/admin/EncodingRules'
+import AgentPools from './pages/admin/AgentPools'
+import QueueManager from './pages/QueueManager'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
 
@@ -98,6 +100,7 @@ function App() {
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />
+        <Route path="/queue" element={<QueueManager />} />
         <Route path="/audio-convert" element={<AudioConvert />} />
         <Route path="/flows" element={<Flows />} />
         <Route path="/flows/editor" element={<FlowEditor />} />
@@ -117,6 +120,7 @@ function App() {
             <Route path="/admin/auto-scaling" element={<AutoScaling />} />
             <Route path="/admin/watch-folders" element={<WatchFolders />} />
             <Route path="/admin/encoding-rules" element={<EncodingRules />} />
+            <Route path="/admin/agent-pools" element={<AgentPools />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

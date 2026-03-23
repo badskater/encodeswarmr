@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useCallback } from 'react'
 import * as api from '../api/client'
-import type { Agent } from '../types'
+import type { Agent, AgentPool } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import AgentMetricsGraph from '../components/AgentMetricsGraph'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
@@ -14,8 +14,14 @@ function fmtDate(s: string | null) {
   return s ? new Date(s).toLocaleString() : '—'
 }
 
+// Returns the pools an agent belongs to (all pool tags must be present in agent tags).
+function getAgentPools(agent: Agent, pools: AgentPool[]): AgentPool[] {
+  return pools.filter(p => p.tags.length > 0 && p.tags.every(t => agent.tags.includes(t)))
+}
+
 export default function Agents() {
   const [agents, setAgents] = useState<Agent[]>([])
+  const [pools, setPools] = useState<AgentPool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [draining, setDraining] = useState<string | null>(null)
@@ -26,8 +32,9 @@ export default function Agents() {
 
   const load = useCallback(async () => {
     try {
-      const a = await api.listAgents()
+      const [a, p] = await Promise.all([api.listAgents(), api.listAgentPools()])
       setAgents(a)
+      setPools(p)
       setError('')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -158,8 +165,20 @@ export default function Agents() {
                   title="Click to toggle resource utilisation graph"
                   onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
                 >
-                  {a.name}
-                  <span className="ml-1 text-xs text-th-text-muted">{expandedMetrics === a.id ? '▲' : '▼'}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {a.name}
+                    {getAgentPools(a, pools).map(p => (
+                      <span
+                        key={p.id}
+                        className="px-1.5 py-0.5 rounded text-xs font-medium"
+                        style={{ backgroundColor: p.color + '22', color: p.color }}
+                        title={`Pool: ${p.name}`}
+                      >
+                        {p.name}
+                      </span>
+                    ))}
+                    <span className="ml-1 text-xs text-th-text-muted">{expandedMetrics === a.id ? '▲' : '▼'}</span>
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.hostname}</td>
                 <td className="px-4 py-2 text-th-text-secondary">{a.ip_address}</td>
@@ -255,7 +274,19 @@ export default function Agents() {
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-th-text truncate">{a.name}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className="font-medium text-th-text truncate">{a.name}</span>
+                    {getAgentPools(a, pools).map(p => (
+                      <span
+                        key={p.id}
+                        className="px-1.5 py-0.5 rounded text-xs font-medium"
+                        style={{ backgroundColor: p.color + '22', color: p.color }}
+                        title={`Pool: ${p.name}`}
+                      >
+                        {p.name}
+                      </span>
+                    ))}
+                  </div>
                   <StatusBadge status={a.status} />
                 </div>
                 <p className="text-xs text-th-text-muted mt-0.5">{a.hostname} · {a.ip_address}</p>

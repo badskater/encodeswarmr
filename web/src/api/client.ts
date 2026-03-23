@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AgentPool, QueueStatus } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -504,3 +504,42 @@ export const getTaskLogStreamURL = (taskId: string, afterId?: number) => {
   const base = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/tasks/${taskId}/logs/stream`
   return afterId != null ? `${base}?after_id=${afterId}` : base
 }
+// Agent Pools
+export const listAgentPools = () => request<AgentPool[]>('/agent-pools')
+
+export const createAgentPool = (body: { name: string; description?: string; tags?: string[]; color?: string }) =>
+  request<AgentPool>('/agent-pools', { method: 'POST', body: JSON.stringify(body) })
+
+export const updateAgentPool = (id: string, body: { name: string; description?: string; tags?: string[]; color?: string }) =>
+  request<AgentPool>(`/agent-pools/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const deleteAgentPool = (id: string) =>
+  request<void>(`/agent-pools/${id}`, { method: 'DELETE' })
+
+export const assignAgentToPool = (agentId: string, poolId: string) =>
+  request<void>(`/agents/${agentId}/pools`, { method: 'POST', body: JSON.stringify({ pool_id: poolId }) })
+
+export const removeAgentFromPool = (agentId: string, poolId: string) =>
+  request<void>(`/agents/${agentId}/pools/${poolId}`, { method: 'DELETE' })
+
+// Queue management
+export const getQueueStatus = () => request<QueueStatus>('/queue/status')
+
+export const pauseQueue = () => request<{ ok: boolean; paused: boolean }>('/queue/pause', { method: 'POST' })
+
+export const resumeQueue = () => request<{ ok: boolean; paused: boolean }>('/queue/resume', { method: 'POST' })
+
+export const updateJobPriority = (id: string, priority: number) =>
+  request<{ ok: boolean; priority: number }>(`/jobs/${id}/priority`, {
+    method: 'PUT',
+    body: JSON.stringify({ priority }),
+  })
+
+export const reorderJobs = (jobIds: string[]) =>
+  request<{ ok: boolean; updated: number }>('/jobs/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ job_ids: jobIds }),
+  })
+
+export const listPendingJobsPaged = (cursor?: string) =>
+  requestCollection<Job>(`/jobs${buildQuery({ status: 'queued', page_size: 200, cursor })}`)
