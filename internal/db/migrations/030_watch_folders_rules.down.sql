@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS encoding_rules;
+ALTER TABLE sources DROP COLUMN IF EXISTS watch_folder;
+ALTER TABLE sources DROP COLUMN IF EXISTS category;

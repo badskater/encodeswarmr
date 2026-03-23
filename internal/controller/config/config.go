@@ -25,6 +25,7 @@ type Config struct {
 	Validation   ValidationConfig    `mapstructure:"validation"`
 	Archive      ArchiveConfig       `mapstructure:"archive"`
 	Tracing      TracingConfig       `mapstructure:"tracing"`
+	WatchFolders []WatchFolderConfig `mapstructure:"watch_folders"`
 }
 
 
@@ -196,6 +197,31 @@ type ArchiveConfig struct {
 	// RetentionDays is how many days a completed/failed job is kept in the
 	// active jobs table before being moved to job_archive. Default 30.
 	RetentionDays int `mapstructure:"retention_days"`
+}
+
+// WatchFolderConfig defines a folder to monitor for new media files.
+// Watch folders trigger automatic source creation and analysis only — no
+// encoding jobs are created automatically.
+type WatchFolderConfig struct {
+	// Name is a human-readable label for this watch folder.
+	Name string `mapstructure:"name"`
+	// Path is the Linux mount path the controller polls, e.g. /mnt/nas/incoming.
+	Path string `mapstructure:"path"`
+	// WindowsPath is the corresponding UNC path stored on Source records so
+	// agents can access the file, e.g. \\NAS\incoming.
+	WindowsPath string `mapstructure:"windows_path"`
+	// FilePatterns is a list of glob patterns, e.g. ["*.mkv", "*.mp4"].
+	// An empty list defaults to ["*.mkv", "*.mp4", "*.ts", "*.avi"].
+	FilePatterns []string `mapstructure:"file_patterns"`
+	// PollInterval controls how often the folder is scanned. Default 30s.
+	PollInterval time.Duration `mapstructure:"poll_interval"`
+	// AutoAnalyze, when true, schedules analysis + HDR detect for new files.
+	AutoAnalyze bool `mapstructure:"auto_analyze"`
+	// MoveAfterAnalysis is an optional category/tag to apply to the source
+	// record after analysis jobs complete.
+	MoveAfterAnalysis string `mapstructure:"move_after_analysis"`
+	// Enabled controls whether this folder is actively polled.
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // TracingConfig controls OpenTelemetry distributed tracing.

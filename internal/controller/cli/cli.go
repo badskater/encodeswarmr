@@ -160,6 +160,8 @@ func runServer(ctx context.Context, cfgPath string) error {
 
 	// Start gRPC server.
 	grpcSrv := controllergrpc.New(store, &cfg.GRPC, &cfg.Agent, logger, whSvc)
+	// Wire real-time log streaming: gRPC pushes new entries to WebSocket clients.
+	grpcSrv.SetLogPublisher(httpSrv.LogHub())
 	grpcErrCh := make(chan error, 1)
 	go func() {
 		logger.Info("starting gRPC server", "addr", fmt.Sprintf("%s:%d", cfg.GRPC.Host, cfg.GRPC.Port))

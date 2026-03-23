@@ -2751,3 +2751,116 @@ func (s *pgStore) GetAgentAvgFPS(ctx context.Context, agentID string) (float64, 
 	}
 	return fps, nil
 }
+
+// ---------------------------------------------------------------------------
+// Encoding Rules
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateEncodingRule(ctx context.Context, p CreateEncodingRuleParams) (*EncodingRule, error) {
+	condsJSON, err := json.Marshal(p.Conditions)
+	if err != nil {
+		return nil, fmt.Errorf("db: marshal conditions: %w", err)
+	}
+	actionsJSON, err := json.Marshal(p.Actions)
+	if err != nil {
+		return nil, fmt.Errorf("db: marshal actions: %w", err)
+	}
+	const q = `
+		INSERT INTO encoding_rules (name, priority, conditions, actions, enabled)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, name, priority, conditions, actions, enabled, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Priority, condsJSON, actionsJSON, p.Enabled)
+	return scanEncodingRule(row)
+}
+
+func (s *pgStore) GetEncodingRuleByID(ctx context.Context, id string) (*EncodingRule, error) {
+	const q = `SELECT id, name, priority, conditions, actions, enabled, created_at, updated_at
+	           FROM encoding_rules WHERE id = $1`
+	return scanEncodingRule(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListEncodingRules(ctx context.Context) ([]*EncodingRule, error) {
+	const q = `SELECT id, name, priority, conditions, actions, enabled, created_at, updated_at
+	           FROM encoding_rules ORDER BY priority ASC, name ASC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list encoding rules: %w", err)
+	}
+	defer rows.Close()
+	var out []*EncodingRule
+	for rows.Next() {
+		r, err := scanEncodingRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateEncodingRule(ctx context.Context, p UpdateEncodingRuleParams) (*EncodingRule, error) {
+	condsJSON, err := json.Marshal(p.Conditions)
+	if err != nil {
+		return nil, fmt.Errorf("db: marshal conditions: %w", err)
+	}
+	actionsJSON, err := json.Marshal(p.Actions)
+	if err != nil {
+		return nil, fmt.Errorf("db: marshal actions: %w", err)
+	}
+	const q = `UPDATE encoding_rules
+	           SET name = $2, priority = $3, conditions = $4, actions = $5, enabled = $6, updated_at = now()
+	           WHERE id = $1
+	           RETURNING id, name, priority, conditions, actions, enabled, created_at, updated_at`
+	return scanEncodingRule(s.pool.QueryRow(ctx, q, p.ID, p.Name, p.Priority, condsJSON, actionsJSON, p.Enabled))
+}
+
+func (s *pgStore) DeleteEncodingRule(ctx context.Context, id string) error {
+	const q = `DELETE FROM encoding_rules WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete encoding rule: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanEncodingRule(row pgx.Row) (*EncodingRule, error) {
+	var r EncodingRule
+	var condsJSON, actionsJSON []byte
+	err := row.Scan(
+		&r.ID, &r.Name, &r.Priority, &condsJSON, &actionsJSON,
+		&r.Enabled, &r.CreatedAt, &r.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan encoding rule: %w", err)
+	}
+	if err := json.Unmarshal(condsJSON, &r.Conditions); err != nil {
+		return nil, fmt.Errorf("db: unmarshal conditions: %w", err)
+	}
+	if err := json.Unmarshal(actionsJSON, &r.Actions); err != nil {
+		return nil, fmt.Errorf("db: unmarshal actions: %w", err)
+	}
+	return &r, nil
+}
+
+// ---------------------------------------------------------------------------
+// Sources — watch folder extensions
+// ---------------------------------------------------------------------------
+
+// UpdateSourceWatch updates the watch_folder and category fields on a source.
+func (s *pgStore) UpdateSourceWatch(ctx context.Context, p UpdateSourceWatchParams) error {
+	const q = `UPDATE sources SET watch_folder = $2, category = $3, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.WatchFolder, p.Category)
+	if err != nil {
+		return fmt.Errorf("db: update source watch: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

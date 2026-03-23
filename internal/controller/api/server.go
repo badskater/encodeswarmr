@@ -15,6 +15,8 @@ import (
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
 	"github.com/badskater/encodeswarmr/internal/controller/notifications"
 	"github.com/badskater/encodeswarmr/internal/controller/plugins"
+	"github.com/badskater/encodeswarmr/internal/controller/rules"
+	"github.com/badskater/encodeswarmr/internal/controller/watcher"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
@@ -32,6 +34,9 @@ type Server struct {
 	plugins      *plugins.Registry
 	email        *notifications.EmailSender // nil when SMTP is not configured
 	autoScaling  *engine.AutoScalingHook    // nil when auto-scaling is disabled
+	watcher      *watcher.Watcher           // nil when no watch folders are configured
+	rulesEngine  *rules.Engine
+	logHub       *logStreamHub              // per-task WebSocket log streaming
 }
 
 // New creates and configures a new HTTP API server.
@@ -53,6 +58,12 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		plugins:      pluginReg,
 		email:        notifications.NewEmailSender(cfg.SMTP, logger),
 		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
+		rulesEngine:  rules.New(store, logger),
+		logHub:       newLogStreamHub(),
+	}
+	// Initialise watcher only when watch folders are configured.
+	if len(cfg.WatchFolders) > 0 {
+		s.watcher = watcher.New(cfg.WatchFolders, store, logger)
 	}
 
 	mux := http.NewServeMux()
@@ -83,10 +94,19 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	return s, nil
 }
 
+// LogHub returns the per-task log stream hub so the gRPC server can push log
+// entries to WebSocket subscribers.
+func (s *Server) LogHub() *logStreamHub { return s.logHub }
+
 // Serve starts listening and blocks until ctx is cancelled or a fatal error occurs.
 func (s *Server) Serve(ctx context.Context) error {
 	// Start WebSocket hub broadcast loop.
 	go s.hub.Run(ctx)
+
+	// Start watch folder polling when configured.
+	if s.watcher != nil {
+		s.watcher.Start(ctx)
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -289,6 +309,22 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/flows", operator(s.handleCreateFlow))
 	mux.Handle("PUT /api/v1/flows/{id}", operator(s.handleUpdateFlow))
 	mux.Handle("DELETE /api/v1/flows/{id}", admin(s.handleDeleteFlow))
+
+	// --- Watch Folders ---
+	mux.Handle("GET /api/v1/watch-folders", admin(s.handleListWatchFolders))
+	mux.Handle("PUT /api/v1/watch-folders/{name}/{action}", admin(s.handleToggleWatchFolder))
+	mux.Handle("POST /api/v1/watch-folders/{name}/scan", admin(s.handleScanWatchFolder))
+
+	// --- Encoding Rules ---
+	mux.Handle("GET /api/v1/encoding-rules", viewer(s.handleListEncodingRules))
+	mux.Handle("POST /api/v1/encoding-rules", admin(s.handleCreateEncodingRule))
+	mux.Handle("GET /api/v1/encoding-rules/{id}", viewer(s.handleGetEncodingRule))
+	mux.Handle("PUT /api/v1/encoding-rules/{id}", admin(s.handleUpdateEncodingRule))
+	mux.Handle("DELETE /api/v1/encoding-rules/{id}", admin(s.handleDeleteEncodingRule))
+	mux.Handle("POST /api/v1/encoding-rules/evaluate", operator(s.handleEvaluateEncodingRules))
+
+	// --- Task Log WebSocket Streaming ---
+	mux.Handle("GET /api/v1/tasks/{id}/logs/stream", viewer(s.handleStreamTaskLogs))
 
 	// --- Dashboard metrics ---
 	mux.Handle("GET /api/v1/metrics/throughput", viewer(s.handleThroughput))

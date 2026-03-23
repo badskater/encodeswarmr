@@ -4,6 +4,7 @@ import * as api from '../api/client'
 import type { Task, LogEntry } from '../types'
 import StatusBadge from '../components/StatusBadge'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import TaskLogViewer from '../components/TaskLogViewer'
 
 function fmtBytes(n: number) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + ' GB'
@@ -154,33 +155,49 @@ export default function TaskDetail() {
         )}
       </div>
 
-      <div className="bg-th-surface rounded-lg shadow">
-        <div className="px-4 py-3 border-b border-th-border flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-th-text-secondary">
-            Logs ({logs.length})
-            {ACTIVE_STATUSES.has(task.status) && (
-              <span className="ml-2 text-xs text-th-text-subtle animate-pulse">● live</span>
+      {/* Enhanced log viewer with WebSocket streaming for running tasks */}
+      {ACTIVE_STATUSES.has(task.status) ? (
+        <div className="bg-th-surface rounded-lg shadow overflow-hidden" style={{ height: '500px' }}>
+          <div className="px-4 py-3 border-b border-th-border">
+            <h2 className="text-sm font-semibold text-th-text-secondary">
+              Logs
+              <span className="ml-2 text-xs text-th-text-subtle animate-pulse">● live (WebSocket)</span>
+            </h2>
+          </div>
+          <div style={{ height: 'calc(500px - 45px)' }}>
+            <TaskLogViewer
+              taskId={task.id}
+              live={true}
+              afterId={logs.length > 0 ? Number(logs[logs.length - 1].id) : undefined}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="bg-th-surface rounded-lg shadow">
+          <div className="px-4 py-3 border-b border-th-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-th-text-secondary">
+              Logs ({logs.length})
+            </h2>
+          </div>
+          <div ref={logDivRef} className="bg-th-log-bg rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
+            {logs.length === 0 ? (
+              <span className="text-th-text-muted">No logs available</span>
+            ) : (
+              logs.map(entry => (
+                <div key={entry.id} className="flex gap-2 leading-5">
+                  <span className="text-th-text-muted whitespace-nowrap shrink-0">
+                    {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>
+                  <span className={`w-12 shrink-0 ${streamColors[entry.stream] ?? 'text-th-text-subtle'}`}>
+                    {entry.stream}
+                  </span>
+                  <span className="text-th-log-text break-all">{entry.message}</span>
+                </div>
+              ))
             )}
-          </h2>
+          </div>
         </div>
-        <div ref={logDivRef} className="bg-th-log-bg rounded-b-lg overflow-auto max-h-[500px] p-4 font-mono text-xs">
-          {logs.length === 0 ? (
-            <span className="text-th-text-muted">No logs available</span>
-          ) : (
-            logs.map(entry => (
-              <div key={entry.id} className="flex gap-2 leading-5">
-                <span className="text-th-text-muted whitespace-nowrap shrink-0">
-                  {new Date(entry.timestamp).toLocaleTimeString()}
-                </span>
-                <span className={`w-12 shrink-0 ${streamColors[entry.stream] ?? 'text-th-text-subtle'}`}>
-                  {entry.stream}
-                </span>
-                <span className="text-th-log-text break-all">{entry.message}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      )}
     </div>
   )
 }

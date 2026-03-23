@@ -49,6 +49,19 @@ func (s *Server) StreamLogs(stream grpc.ClientStreamingServer[pb.LogEntry, pb.Ac
 			)
 			return status.Errorf(codes.Internal, "grpc streamlogs: insert log: %v", err)
 		}
+
+		// Push to real-time WebSocket subscribers if a publisher is configured.
+		if s.logPublisher != nil {
+			s.logPublisher.PublishTaskLog(entry.GetTaskId(), db.TaskLog{
+				TaskID:   p.TaskID,
+				JobID:    p.JobID,
+				Stream:   p.Stream,
+				Level:    p.Level,
+				Message:  p.Message,
+				Metadata: p.Metadata,
+				LoggedAt: loggedAt,
+			})
+		}
 	}
 }
 
