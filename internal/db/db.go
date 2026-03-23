@@ -43,6 +43,8 @@ type Store interface {
 	MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error)
 	SetAgentUpgradeRequested(ctx context.Context, agentID string, requested bool) error
 	ClearAgentUpgradeRequested(ctx context.Context, agentID string) error
+	// UpdateAgentChannel sets the release channel for an agent.
+	UpdateAgentChannel(ctx context.Context, agentID, channel string) error
 
 	// --- Sources ---
 	CreateSource(ctx context.Context, p CreateSourceParams) (*Source, error)
@@ -136,6 +138,10 @@ type Store interface {
 	GetSessionByToken(ctx context.Context, token string) (*Session, error)
 	DeleteSession(ctx context.Context, token string) error
 	PruneExpiredSessions(ctx context.Context) error
+	// ListActiveSessions returns all non-expired sessions joined with their user.
+	ListActiveSessions(ctx context.Context) ([]*ActiveSession, error)
+	// DeleteSessionByID terminates a specific session by its display ID (SHA-256 prefix).
+	DeleteSessionByID(ctx context.Context, id string) error
 
 	// --- Enrollment Tokens ---
 	CreateEnrollmentToken(ctx context.Context, p CreateEnrollmentTokenParams) (*EnrollmentToken, error)
@@ -153,6 +159,16 @@ type Store interface {
 	// --- Audit Log ---
 	CreateAuditEntry(ctx context.Context, params CreateAuditEntryParams) error
 	ListAuditLog(ctx context.Context, limit, offset int) ([]*AuditEntry, int, error)
+	// ExportAuditLog returns all audit log entries matching the given filter.
+	// Intended for CSV/JSON export where all matching rows are needed at once.
+	ExportAuditLog(ctx context.Context, f AuditLogFilter) ([]*AuditEntry, error)
+	// GetAuditLogStats returns the total entry count and per-action breakdown.
+	GetAuditLogStats(ctx context.Context) (total int64, perAction []*AuditActionStat, err error)
+	// ListUserAuditLog returns paginated audit entries for a single user.
+	ListUserAuditLog(ctx context.Context, userID string, limit, offset int) ([]*AuditEntry, int, error)
+	// AnonymizeUserAuditLog replaces all user_id/username references with an
+	// anonymised hash in the audit_log table (GDPR right-to-erasure helper).
+	AnonymizeUserAuditLog(ctx context.Context, userID string) error
 
 	// --- Agent Metrics ---
 	InsertAgentMetric(ctx context.Context, p InsertAgentMetricParams) error
@@ -161,9 +177,14 @@ type Store interface {
 	// --- API Keys ---
 	CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIKey, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey, error)
+	// GetAPIKeyByHashWithRateLimit looks up an API key and returns it including
+	// the rate_limit column.  Used by the rate-limiting middleware.
+	GetAPIKeyByHashWithRateLimit(ctx context.Context, keyHash string) (*APIKey, error)
 	ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error)
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateAPIKeyLastUsed(ctx context.Context, id string) error
+	// UpdateAPIKeyRateLimit updates the per-key rate limit.
+	UpdateAPIKeyRateLimit(ctx context.Context, p UpdateAPIKeyRateLimitParams) error
 
 	// --- Notification Preferences ---
 	GetNotificationPrefs(ctx context.Context, userID string) (*NotificationPrefs, error)
@@ -218,6 +239,14 @@ type Store interface {
 	GetThroughputStats(ctx context.Context, hours int) ([]*ThroughputPoint, error)
 	GetQueueStats(ctx context.Context) (*QueueStats, error)
 	GetRecentActivity(ctx context.Context, limit int) ([]*ActivityEvent, error)
+
+	// --- Upgrade Binaries ---
+	// UpsertUpgradeBinary inserts or replaces the upgrade_binaries row for the
+	// given (channel, os, arch) tuple.
+	UpsertUpgradeBinary(ctx context.Context, p UpsertUpgradeBinaryParams) (*UpgradeBinary, error)
+	// ListUpgradeBinaries returns all rows from upgrade_binaries, optionally
+	// filtered by channel (empty string = all channels).
+	ListUpgradeBinaries(ctx context.Context, channel string) ([]*UpgradeBinary, error)
 
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error

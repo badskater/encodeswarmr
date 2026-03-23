@@ -26,6 +26,9 @@ import Plugins from './pages/admin/Plugins'
 import ThemeSettings from './pages/admin/ThemeSettings'
 import NotificationSettings from './pages/admin/NotificationSettings'
 import AutoScaling from './pages/admin/AutoScaling'
+import AuditExport from './pages/admin/AuditExport'
+import Sessions from './pages/admin/Sessions'
+import APIKeys from './pages/admin/APIKeys'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
 
@@ -113,6 +116,9 @@ function App() {
             <Route path="/admin/theme" element={<ThemeSettings />} />
             <Route path="/admin/notifications" element={<NotificationSettings />} />
             <Route path="/admin/auto-scaling" element={<AutoScaling />} />
+            <Route path="/admin/audit-export" element={<AuditExport />} />
+            <Route path="/admin/sessions" element={<Sessions />} />
+            <Route path="/admin/api-keys" element={<APIKeys />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

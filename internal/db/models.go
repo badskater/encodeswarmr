@@ -84,6 +84,8 @@ type Agent struct {
 	// UpgradeRequested indicates the controller has requested this agent
 	// self-upgrade on its next upgrade check poll.
 	UpgradeRequested bool       `json:"upgrade_requested"`
+	// UpdateChannel is the release channel the agent follows: stable, beta, or nightly.
+	UpdateChannel    string     `json:"update_channel"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
@@ -611,6 +613,9 @@ type APIKey struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"user_id"`
 	Name        string     `json:"name"`
+	// RateLimit is the maximum requests per second allowed for this key.
+	// 0 means use the global default (200).
+	RateLimit   int        `json:"rate_limit"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
@@ -621,7 +626,66 @@ type CreateAPIKeyParams struct {
 	UserID    string
 	Name      string
 	KeyHash   string
+	RateLimit int
 	ExpiresAt *time.Time
+}
+
+// UpdateAPIKeyRateLimitParams holds values for updating a key's rate limit.
+type UpdateAPIKeyRateLimitParams struct {
+	ID        string
+	RateLimit int
+}
+
+// UpgradeBinary is a row from the upgrade_binaries table.
+// It records metadata about a released agent binary per channel/os/arch.
+type UpgradeBinary struct {
+	ID         string    `json:"id"`
+	Channel    string    `json:"channel"`
+	Version    string    `json:"version"`
+	OS         string    `json:"os"`
+	Arch       string    `json:"arch"`
+	Filename   string    `json:"filename"`
+	SHA256     string    `json:"sha256"`
+	UploadedAt time.Time `json:"uploaded_at"`
+}
+
+// UpsertUpgradeBinaryParams holds values for inserting or replacing an upgrade binary record.
+type UpsertUpgradeBinaryParams struct {
+	Channel  string
+	Version  string
+	OS       string
+	Arch     string
+	Filename string
+	SHA256   string
+}
+
+// AuditLogFilter carries optional filters for exporting audit log entries.
+type AuditLogFilter struct {
+	// From is the inclusive start timestamp. Zero means no lower bound.
+	From time.Time
+	// To is the inclusive end timestamp. Zero means no upper bound.
+	To time.Time
+	// UserID filters to entries belonging to a specific user UUID.
+	UserID string
+	// Action filters to a specific action string (exact match).
+	Action string
+}
+
+// AuditActionStat holds aggregate counts per action type.
+type AuditActionStat struct {
+	Action string `json:"action"`
+	Count  int64  `json:"count"`
+}
+
+// ActiveSession represents an active session with user details.
+type ActiveSession struct {
+	Token      string    `json:"-"`
+	ID         string    `json:"id"` // safe display ID (SHA-256 prefix of token)
+	UserID     string    `json:"user_id"`
+	Username   string    `json:"username"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	IPAddress  string    `json:"ip_address,omitempty"`
 }
 
 // CreateScheduleParams holds values for inserting a new schedule row.

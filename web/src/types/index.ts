@@ -99,8 +99,61 @@ export interface Agent {
   amf: boolean
   // vnc_port is non-zero when the agent has VNC configured and running.
   vnc_port: number
+  // update_channel is the release channel this agent follows.
+  update_channel: 'stable' | 'beta' | 'nightly'
   last_heartbeat: string | null
   created_at: string
+}
+
+// AuditEntry is a single audit log row.
+export interface AuditEntry {
+  id: number
+  user_id: string | null
+  username: string
+  action: string
+  resource: string
+  resource_id: string
+  ip_address: string
+  logged_at: string
+}
+
+// AuditActionStat holds the aggregate count for one action type.
+export interface AuditActionStat {
+  action: string
+  count: number
+}
+
+// AuditStats is the response from GET /api/v1/audit-logs/stats.
+export interface AuditStats {
+  total: number
+  per_action: AuditActionStat[]
+}
+
+// ActiveSession represents a live user session.
+export interface ActiveSession {
+  id: string
+  user_id: string
+  username: string
+  created_at: string
+  expires_at: string
+}
+
+// APIKey represents a user API key.
+export interface APIKey {
+  id: string
+  user_id: string
+  name: string
+  rate_limit: number
+  created_at: string
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+// UpgradeChannel describes a release channel and the binaries available for it.
+export interface UpgradeChannel {
+  channel: 'stable' | 'beta' | 'nightly'
+  version: string
+  binaries: string[] // "os/arch" strings
 }
 
 export interface Source {

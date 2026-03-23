@@ -45,6 +45,9 @@ type AgentConfig struct {
 	PollInterval      time.Duration `mapstructure:"poll_interval"`
 	CleanupOnSuccess  bool          `mapstructure:"cleanup_on_success"`
 	KeepFailedJobs    int           `mapstructure:"keep_failed_jobs"`
+	// UpdateChannel is the release channel to follow when checking for agent
+	// updates.  Accepted values: stable (default), beta, nightly.
+	UpdateChannel     string        `mapstructure:"update_channel"`
 }
 
 type ToolsConfig struct {
@@ -105,6 +108,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("agent.poll_interval", "10s")
 	v.SetDefault("agent.cleanup_on_success", true)
 	v.SetDefault("agent.keep_failed_jobs", 10)
+	v.SetDefault("agent.update_channel", "stable")
 	v.SetDefault("gpu.enabled", true)
 	v.SetDefault("gpu.monitor_interval", "5s")
 	v.SetDefault("vnc.enabled", false)

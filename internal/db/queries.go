@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,7 +148,7 @@ func (s *pgStore) UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent,
 		          gpu_vendor, gpu_model, gpu_enabled,
 		          agent_version, os_version, cpu_count, ram_mib,
 		          nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-		          upgrade_requested, created_at, updated_at`
+		          upgrade_requested, update_channel, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.Name, p.Hostname, p.IPAddress, p.Tags,
 		p.GPUVendor, p.GPUModel, p.GPUEnabled,
@@ -161,7 +163,7 @@ func (s *pgStore) GetAgentByID(ctx context.Context, id string) (*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, update_channel, created_at, updated_at
 	           FROM agents WHERE id = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, id))
 }
@@ -171,7 +173,7 @@ func (s *pgStore) GetAgentByName(ctx context.Context, name string) (*Agent, erro
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, update_channel, created_at, updated_at
 	           FROM agents WHERE name = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, name))
 }
@@ -181,7 +183,7 @@ func (s *pgStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, update_channel, created_at, updated_at
 	           FROM agents ORDER BY name`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
@@ -262,7 +264,7 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 		&a.GPUVendor, &a.GPUModel, &a.GPUEnabled,
 		&a.AgentVersion, &a.OSVersion, &a.CPUCount, &a.RAMMIB,
 		&a.NVENC, &a.QSV, &a.AMF, &a.VNCPort, &a.APIKeyHash, &a.LastHeartbeat,
-		&a.UpgradeRequested, &a.CreatedAt, &a.UpdatedAt,
+		&a.UpgradeRequested, &a.UpdateChannel, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -271,6 +273,18 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 		return nil, fmt.Errorf("db: scan agent: %w", err)
 	}
 	return &a, nil
+}
+
+func (s *pgStore) UpdateAgentChannel(ctx context.Context, agentID, channel string) error {
+	const q = `UPDATE agents SET update_channel = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, agentID, channel)
+	if err != nil {
+		return fmt.Errorf("db: update agent channel: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1857,10 +1871,14 @@ func scanSchedule(row pgx.Row) (*Schedule, error) {
 
 func (s *pgStore) CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIKey, error) {
 	const q = `
-		INSERT INTO api_keys (user_id, name, key_hash, expires_at)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id, name, created_at, last_used_at, expires_at`
-	row := s.pool.QueryRow(ctx, q, p.UserID, p.Name, p.KeyHash, p.ExpiresAt)
+		INSERT INTO api_keys (user_id, name, key_hash, rate_limit, expires_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, user_id, name, rate_limit, created_at, last_used_at, expires_at`
+	rateLimit := p.RateLimit
+	if rateLimit <= 0 {
+		rateLimit = 200
+	}
+	row := s.pool.QueryRow(ctx, q, p.UserID, p.Name, p.KeyHash, rateLimit, p.ExpiresAt)
 	return scanAPIKey(row)
 }
 
@@ -1868,7 +1886,18 @@ func (s *pgStore) CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIK
 // the key has not expired (when expires_at is set).
 func (s *pgStore) GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey, error) {
 	const q = `
-		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		SELECT id, user_id, name, rate_limit, created_at, last_used_at, expires_at
+		FROM api_keys
+		WHERE key_hash = $1
+		  AND (expires_at IS NULL OR expires_at > now())`
+	return scanAPIKey(s.pool.QueryRow(ctx, q, keyHash))
+}
+
+// GetAPIKeyByHashWithRateLimit looks up an API key including rate_limit.
+// Used by the per-key rate-limiting middleware.
+func (s *pgStore) GetAPIKeyByHashWithRateLimit(ctx context.Context, keyHash string) (*APIKey, error) {
+	const q = `
+		SELECT id, user_id, name, rate_limit, created_at, last_used_at, expires_at
 		FROM api_keys
 		WHERE key_hash = $1
 		  AND (expires_at IS NULL OR expires_at > now())`
@@ -1877,7 +1906,7 @@ func (s *pgStore) GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey,
 
 func (s *pgStore) ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error) {
 	const q = `
-		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		SELECT id, user_id, name, rate_limit, created_at, last_used_at, expires_at
 		FROM api_keys
 		WHERE user_id = $1
 		ORDER BY created_at`
@@ -1902,6 +1931,18 @@ func (s *pgStore) DeleteAPIKey(ctx context.Context, id string) error {
 	ct, err := s.pool.Exec(ctx, q, id)
 	if err != nil {
 		return fmt.Errorf("db: delete api key: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgStore) UpdateAPIKeyRateLimit(ctx context.Context, p UpdateAPIKeyRateLimitParams) error {
+	const q = `UPDATE api_keys SET rate_limit = $2 WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.RateLimit)
+	if err != nil {
+		return fmt.Errorf("db: update api key rate limit: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrNotFound
@@ -2023,7 +2064,7 @@ func (s *pgStore) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {
 
 func scanAPIKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
-	err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt)
+	err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.RateLimit, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -2750,4 +2791,240 @@ func (s *pgStore) GetAgentAvgFPS(ctx context.Context, agentID string) (float64, 
 		return 0, fmt.Errorf("db: get agent avg fps: %w", err)
 	}
 	return fps, nil
+}
+
+// ---------------------------------------------------------------------------
+// Audit Log — export + compliance
+// ---------------------------------------------------------------------------
+
+// ExportAuditLog returns all audit log entries matching the given filter.
+func (s *pgStore) ExportAuditLog(ctx context.Context, f AuditLogFilter) ([]*AuditEntry, error) {
+	q := `SELECT id, user_id, username, action, resource, resource_id, detail, ip_address, logged_at
+	      FROM audit_log WHERE 1=1`
+	args := []any{}
+	i := 1
+	if !f.From.IsZero() {
+		q += fmt.Sprintf(" AND logged_at >= $%d", i)
+		args = append(args, f.From)
+		i++
+	}
+	if !f.To.IsZero() {
+		q += fmt.Sprintf(" AND logged_at <= $%d", i)
+		args = append(args, f.To)
+		i++
+	}
+	if f.UserID != "" {
+		q += fmt.Sprintf(" AND user_id = $%d", i)
+		args = append(args, f.UserID)
+		i++
+	}
+	if f.Action != "" {
+		q += fmt.Sprintf(" AND action = $%d", i)
+		args = append(args, f.Action)
+		i++
+	}
+	_ = i // suppress unused warning
+	q += " ORDER BY logged_at DESC"
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: export audit log: %w", err)
+	}
+	defer rows.Close()
+	var entries []*AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(
+			&e.ID, &e.UserID, &e.Username, &e.Action,
+			&e.Resource, &e.ResourceID, &e.Detail, &e.IPAddress, &e.LoggedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan audit entry (export): %w", err)
+		}
+		entries = append(entries, &e)
+	}
+	return entries, rows.Err()
+}
+
+// GetAuditLogStats returns the total entry count and per-action breakdown.
+func (s *pgStore) GetAuditLogStats(ctx context.Context) (int64, []*AuditActionStat, error) {
+	const countQ = `SELECT COUNT(*) FROM audit_log`
+	var total int64
+	if err := s.pool.QueryRow(ctx, countQ).Scan(&total); err != nil {
+		return 0, nil, fmt.Errorf("db: audit log count: %w", err)
+	}
+
+	const q = `SELECT action, COUNT(*) FROM audit_log GROUP BY action ORDER BY COUNT(*) DESC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return 0, nil, fmt.Errorf("db: audit log stats: %w", err)
+	}
+	defer rows.Close()
+	var stats []*AuditActionStat
+	for rows.Next() {
+		var s AuditActionStat
+		if err := rows.Scan(&s.Action, &s.Count); err != nil {
+			return 0, nil, fmt.Errorf("db: scan audit action stat: %w", err)
+		}
+		stats = append(stats, &s)
+	}
+	return total, stats, rows.Err()
+}
+
+// ListUserAuditLog returns paginated audit entries for a single user.
+func (s *pgStore) ListUserAuditLog(ctx context.Context, userID string, limit, offset int) ([]*AuditEntry, int, error) {
+	const countQ = `SELECT COUNT(*) FROM audit_log WHERE user_id = $1`
+	var total int
+	if err := s.pool.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("db: count user audit log: %w", err)
+	}
+	const q = `SELECT id, user_id, username, action, resource, resource_id, detail, ip_address, logged_at
+	           FROM audit_log WHERE user_id = $1 ORDER BY logged_at DESC LIMIT $2 OFFSET $3`
+	rows, err := s.pool.Query(ctx, q, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list user audit log: %w", err)
+	}
+	defer rows.Close()
+	var entries []*AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(
+			&e.ID, &e.UserID, &e.Username, &e.Action,
+			&e.Resource, &e.ResourceID, &e.Detail, &e.IPAddress, &e.LoggedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("db: scan user audit entry: %w", err)
+		}
+		entries = append(entries, &e)
+	}
+	return entries, total, rows.Err()
+}
+
+// AnonymizeUserAuditLog replaces user_id with NULL and sets username to a
+// SHA-256-based pseudonym for GDPR erasure.
+func (s *pgStore) AnonymizeUserAuditLog(ctx context.Context, userID string) error {
+	const q = `
+		UPDATE audit_log
+		SET user_id  = NULL,
+		    username = 'anon-' || LEFT(encode(sha256(user_id::text::bytea), 'hex'), 12)
+		WHERE user_id = $1`
+	_, err := s.pool.Exec(ctx, q, userID)
+	if err != nil {
+		return fmt.Errorf("db: anonymize user audit log: %w", err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Sessions — list + terminate by ID
+// ---------------------------------------------------------------------------
+
+// ListActiveSessions returns all non-expired sessions joined with their owner.
+func (s *pgStore) ListActiveSessions(ctx context.Context) ([]*ActiveSession, error) {
+	const q = `
+		SELECT s.token, s.user_id, u.username, s.created_at, s.expires_at
+		FROM sessions s
+		JOIN users u ON u.id = s.user_id
+		WHERE s.expires_at > now()
+		ORDER BY s.created_at DESC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list active sessions: %w", err)
+	}
+	defer rows.Close()
+	var out []*ActiveSession
+	for rows.Next() {
+		var as ActiveSession
+		var token string
+		if err := rows.Scan(&token, &as.UserID, &as.Username, &as.CreatedAt, &as.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("db: scan active session: %w", err)
+		}
+		// Derive a safe display ID from the token (first 16 hex chars of SHA-256).
+		as.ID = sessionDisplayID(token)
+		as.Token = token
+		out = append(out, &as)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSessionByID terminates the session whose display ID matches.
+// The display ID is the first 16 hex characters of SHA-256(token).
+func (s *pgStore) DeleteSessionByID(ctx context.Context, id string) error {
+	// We cannot reverse the hash, so load all sessions and find the match.
+	sessions, err := s.ListActiveSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.ID == id {
+			return s.DeleteSession(ctx, sess.Token)
+		}
+	}
+	return ErrNotFound
+}
+
+// sessionDisplayID derives a short stable ID from a session token (first 16 hex chars of SHA-256).
+func sessionDisplayID(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade Binaries
+// ---------------------------------------------------------------------------
+
+// UpsertUpgradeBinary inserts or replaces the upgrade_binaries row for
+// the given (channel, os, arch) combination.
+func (s *pgStore) UpsertUpgradeBinary(ctx context.Context, p UpsertUpgradeBinaryParams) (*UpgradeBinary, error) {
+	const q = `
+		INSERT INTO upgrade_binaries (channel, version, os, arch, filename, sha256)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (channel, os, arch) DO UPDATE SET
+		    version     = EXCLUDED.version,
+		    filename    = EXCLUDED.filename,
+		    sha256      = EXCLUDED.sha256,
+		    uploaded_at = now()
+		RETURNING id, channel, version, os, arch, filename, sha256, uploaded_at`
+	row := s.pool.QueryRow(ctx, q, p.Channel, p.Version, p.OS, p.Arch, p.Filename, p.SHA256)
+	return scanUpgradeBinary(row)
+}
+
+// ListUpgradeBinaries returns upgrade binary records, optionally filtered by channel.
+func (s *pgStore) ListUpgradeBinaries(ctx context.Context, channel string) ([]*UpgradeBinary, error) {
+	var (
+		rows pgx.Rows
+		err  error
+	)
+	if channel == "" {
+		const q = `SELECT id, channel, version, os, arch, filename, sha256, uploaded_at
+		           FROM upgrade_binaries ORDER BY channel, os, arch`
+		rows, err = s.pool.Query(ctx, q)
+	} else {
+		const q = `SELECT id, channel, version, os, arch, filename, sha256, uploaded_at
+		           FROM upgrade_binaries WHERE channel = $1 ORDER BY os, arch`
+		rows, err = s.pool.Query(ctx, q, channel)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: list upgrade binaries: %w", err)
+	}
+	defer rows.Close()
+	var out []*UpgradeBinary
+	for rows.Next() {
+		ub, err := scanUpgradeBinary(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ub)
+	}
+	return out, rows.Err()
+}
+
+func scanUpgradeBinary(row pgx.Row) (*UpgradeBinary, error) {
+	var ub UpgradeBinary
+	err := row.Scan(&ub.ID, &ub.Channel, &ub.Version, &ub.OS, &ub.Arch, &ub.Filename, &ub.SHA256, &ub.UploadedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan upgrade binary: %w", err)
+	}
+	return &ub, nil
 }

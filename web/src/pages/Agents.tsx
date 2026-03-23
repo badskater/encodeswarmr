@@ -5,6 +5,24 @@ import StatusBadge from '../components/StatusBadge'
 import AgentMetricsGraph from '../components/AgentMetricsGraph'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 
+const CHANNEL_COLOURS: Record<string, { bg: string; text: string }> = {
+  stable:  { bg: 'var(--th-badge-success-bg)',  text: 'var(--th-badge-success-text)' },
+  beta:    { bg: 'var(--th-badge-running-bg)',   text: 'var(--th-badge-running-text)' },
+  nightly: { bg: 'var(--th-badge-draining-bg)',  text: 'var(--th-badge-draining-text)' },
+}
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const c = CHANNEL_COLOURS[channel] ?? CHANNEL_COLOURS.stable
+  return (
+    <span
+      className="text-xs px-1.5 py-0.5 rounded font-medium"
+      style={{ backgroundColor: c.bg, color: c.text }}
+    >
+      {channel}
+    </span>
+  )
+}
+
 function fmtBytes(n: number) {
   if (n >= 1024) return (n / 1024).toFixed(0) + ' GB'
   return n + ' MB'
@@ -23,6 +41,7 @@ export default function Agents() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkApproving, setBulkApproving] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<string | null>(null)
+  const [changingChannel, setChangingChannel] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +79,18 @@ export default function Agents() {
       setError(e instanceof Error ? e.message : 'Failed to approve agent')
     } finally {
       setApproving(null)
+    }
+  }
+
+  const handleChannelChange = async (id: string, channel: string) => {
+    setChangingChannel(id)
+    try {
+      await api.updateAgentChannel(id, channel)
+      load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to change update channel')
+    } finally {
+      setChangingChannel(null)
     }
   }
 
@@ -136,7 +167,7 @@ export default function Agents() {
                   className="rounded border-th-input-border"
                 />
               </th>
-              {['Name', 'Hostname', 'IP', 'Status', 'CPU', 'RAM', 'GPU', 'Last Heartbeat', 'Tags', ''].map(h => (
+              {['Name', 'Hostname', 'IP', 'Status', 'CPU', 'RAM', 'GPU', 'Channel', 'Last Heartbeat', 'Tags', ''].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
@@ -172,6 +203,22 @@ export default function Agents() {
                       {a.gpu_vendor} {a.gpu_model}
                     </span>
                   ) : '—'}
+                </td>
+                <td className="px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <ChannelBadge channel={a.update_channel ?? 'stable'} />
+                    <select
+                      value={a.update_channel ?? 'stable'}
+                      disabled={changingChannel === a.id}
+                      onChange={e => handleChannelChange(a.id, e.target.value)}
+                      className="text-xs border border-th-input-border rounded bg-th-surface text-th-text px-1 py-0.5"
+                      title="Change update channel"
+                    >
+                      <option value="stable">stable</option>
+                      <option value="beta">beta</option>
+                      <option value="nightly">nightly</option>
+                    </select>
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-th-text-muted whitespace-nowrap">{fmtDate(a.last_heartbeat)}</td>
                 <td className="px-4 py-2 text-th-text-muted">
@@ -273,6 +320,21 @@ export default function Agents() {
                 <div className="col-span-2"><span className="text-th-text-muted">Tags: </span><span className="text-th-text-secondary">{a.tags.join(', ')}</span></div>
               )}
               <div className="col-span-2"><span className="text-th-text-muted">Heartbeat: </span><span className="text-th-text-secondary">{fmtDate(a.last_heartbeat)}</span></div>
+              <div className="col-span-2 flex items-center gap-1.5 mt-0.5">
+                <span className="text-th-text-muted">Channel: </span>
+                <ChannelBadge channel={a.update_channel ?? 'stable'} />
+                <select
+                  value={a.update_channel ?? 'stable'}
+                  disabled={changingChannel === a.id}
+                  onChange={e => handleChannelChange(a.id, e.target.value)}
+                  className="text-xs border border-th-input-border rounded bg-th-surface text-th-text px-1 py-0.5"
+                  title="Change update channel"
+                >
+                  <option value="stable">stable</option>
+                  <option value="beta">beta</option>
+                  <option value="nightly">nightly</option>
+                </select>
+              </div>
             </div>
 
             {/* Card actions */}

@@ -65,7 +65,7 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 	handler := s.requestIDMiddleware(
 		securityHeadersMiddleware(
 			corsMiddleware(cfg.Server.AllowedOrigins,
-				rateLimitMiddleware(
+				s.rateLimitMiddleware(
 					metricsMiddleware(
 						etagMiddleware(mux),
 					),
@@ -128,6 +128,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	// Agent upgrade — no session required (agents use API key, not session)
 	mux.HandleFunc("GET /api/v1/agent/upgrade/check", s.handleAgentUpgradeCheck)
 	mux.HandleFunc("GET /api/v1/agent/upgrade/{os}/{arch}", s.handleAgentUpgradeDownload)
+	mux.HandleFunc("GET /api/v1/upgrade-channels", s.handleListUpgradeChannels)
 
 	viewer := func(h http.HandlerFunc) http.Handler {
 		return s.auth.Middleware(auth.RequireRole("viewer", h))
@@ -176,6 +177,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 	mux.Handle("POST /api/v1/agents/{id}/upgrade", admin(s.handleRequestAgentUpgrade))
+	mux.Handle("PUT /api/v1/agents/{id}/channel", admin(s.handleUpdateAgentChannel))
 
 	// --- VNC remote desktop ---
 	// WebSocket proxy to the agent's VNC TCP port (noVNC binary framing).
@@ -245,10 +247,18 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("PUT /api/v1/users/{id}/role", admin(s.handleUpdateUserRole))
 	mux.Handle("GET /api/v1/users/me", viewer(s.handleGetMe))
 
+	// --- Sessions (admin session management) ---
+	mux.Handle("GET /api/v1/sessions", admin(s.handleListSessions))
+	mux.Handle("DELETE /api/v1/sessions/{id}", admin(s.handleTerminateSession))
+
+	// --- Upgrade binary registration ---
+	mux.Handle("POST /api/v1/upgrades/upload", admin(s.handleUploadAgentBinary))
+
 	// --- API Keys ---
 	mux.Handle("POST /api/v1/api-keys", viewer(s.handleCreateAPIKey))
 	mux.Handle("GET /api/v1/api-keys", viewer(s.handleListAPIKeys))
 	mux.Handle("DELETE /api/v1/api-keys/{id}", viewer(s.handleDeleteAPIKey))
+	mux.Handle("PUT /api/v1/api-keys/{id}", viewer(s.handleUpdateAPIKeyRateLimit))
 
 	// --- Notification Preferences (per-user) ---
 	mux.Handle("GET /api/v1/me/notifications", viewer(s.handleGetNotificationPrefs))
@@ -262,6 +272,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
+	mux.Handle("GET /api/v1/audit-logs/export", admin(s.handleExportAuditLog))
+	mux.Handle("GET /api/v1/audit-logs/stats", admin(s.handleAuditLogStats))
+	mux.Handle("GET /api/v1/users/{id}/activity", admin(s.handleUserActivity))
+	mux.Handle("DELETE /api/v1/users/{id}/data", admin(s.handleAnonymizeUserData))
 
 	// --- Encoding Presets ---
 	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))

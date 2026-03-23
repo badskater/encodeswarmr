@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -133,6 +134,58 @@ func (s *Server) handleRequestAgentUpgrade(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleUpdateAgentChannel sets the release channel for an agent.
+// Allowed channels: stable, beta, nightly.
+// PUT /api/v1/agents/{id}/channel
+func (s *Server) handleUpdateAgentChannel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	_, err := s.store.GetAgentByID(r.Context(), id)
+	if errors.Is(err, db.ErrNotFound) {
+		writeProblem(w, r, http.StatusNotFound, "Not Found", "agent not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get agent for channel update", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	var req struct {
+		Channel string `json:"channel"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if !validChannels[req.Channel] {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "channel must be stable, beta, or nightly")
+		return
+	}
+
+	if err := s.store.UpdateAgentChannel(r.Context(), id, req.Channel); err != nil {
+		s.logger.Error("update agent channel", "err", err, "agent_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	// Emit audit entry — best-effort.
+	auditParams := db.CreateAuditEntryParams{
+		Action:     "agent.channel_changed",
+		Resource:   "agent",
+		ResourceID: id,
+		IPAddress:  r.RemoteAddr,
+	}
+	if claims, ok := auth.FromContext(r.Context()); ok {
+		auditParams.UserID = &claims.UserID
+		auditParams.Username = claims.Username
+	}
+	if err := s.store.CreateAuditEntry(r.Context(), auditParams); err != nil {
+		s.logger.Warn("audit log: update agent channel", "err", err, "agent_id", id)
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "channel": req.Channel})
 }
 
 // handleGetAgentMetrics returns time-series CPU/GPU/memory samples for an agent.

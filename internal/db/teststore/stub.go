@@ -56,6 +56,7 @@ func (Stub) SetAgentAPIKey(_ context.Context, _, _ string) error                
 func (Stub) MarkStaleAgents(_ context.Context, _ time.Duration) (int64, error)                     { return 0, nil }
 func (Stub) SetAgentUpgradeRequested(_ context.Context, _ string, _ bool) error                    { return nil }
 func (Stub) ClearAgentUpgradeRequested(_ context.Context, _ string) error                          { return nil }
+func (Stub) UpdateAgentChannel(_ context.Context, _, _ string) error                               { return nil }
 
 // --- Sources ---
 func (Stub) CreateSource(_ context.Context, _ db.CreateSourceParams) (*db.Source, error)            { return nil, nil }
@@ -139,10 +140,12 @@ func (Stub) UpdatePathMapping(_ context.Context, _ db.UpdatePathMappingParams) (
 func (Stub) DeletePathMapping(_ context.Context, _ string) error                                        { return nil }
 
 // --- Sessions ---
-func (Stub) CreateSession(_ context.Context, _ db.CreateSessionParams) (*db.Session, error) { return nil, nil }
-func (Stub) GetSessionByToken(_ context.Context, _ string) (*db.Session, error)             { return nil, nil }
-func (Stub) DeleteSession(_ context.Context, _ string) error                                { return nil }
-func (Stub) PruneExpiredSessions(_ context.Context) error                                   { return nil }
+func (Stub) CreateSession(_ context.Context, _ db.CreateSessionParams) (*db.Session, error)    { return nil, nil }
+func (Stub) GetSessionByToken(_ context.Context, _ string) (*db.Session, error)                { return nil, nil }
+func (Stub) DeleteSession(_ context.Context, _ string) error                                   { return nil }
+func (Stub) PruneExpiredSessions(_ context.Context) error                                      { return nil }
+func (Stub) ListActiveSessions(_ context.Context) ([]*db.ActiveSession, error)                 { return nil, nil }
+func (Stub) DeleteSessionByID(_ context.Context, _ string) error                               { return nil }
 
 // --- Enrollment Tokens ---
 func (Stub) CreateEnrollmentToken(_ context.Context, _ db.CreateEnrollmentTokenParams) (*db.EnrollmentToken, error) { return nil, nil }
@@ -158,19 +161,25 @@ func (Stub) ListJobLogs(_ context.Context, _ db.ListJobLogsParams) ([]*db.TaskLo
 func (Stub) PruneOldTaskLogs(_ context.Context, _ time.Time) error                            { return nil }
 
 // --- Audit Log ---
-func (Stub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error               { return nil }
-func (Stub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)             { return nil, 0, nil }
+func (Stub) CreateAuditEntry(_ context.Context, _ db.CreateAuditEntryParams) error                              { return nil }
+func (Stub) ListAuditLog(_ context.Context, _, _ int) ([]*db.AuditEntry, int, error)                            { return nil, 0, nil }
+func (Stub) ExportAuditLog(_ context.Context, _ db.AuditLogFilter) ([]*db.AuditEntry, error)                    { return nil, nil }
+func (Stub) GetAuditLogStats(_ context.Context) (int64, []*db.AuditActionStat, error)                           { return 0, nil, nil }
+func (Stub) ListUserAuditLog(_ context.Context, _ string, _, _ int) ([]*db.AuditEntry, int, error)              { return nil, 0, nil }
+func (Stub) AnonymizeUserAuditLog(_ context.Context, _ string) error                                            { return nil }
 
 // --- Agent Metrics ---
 func (Stub) InsertAgentMetric(_ context.Context, _ db.InsertAgentMetricParams) error                    { return nil }
 func (Stub) ListAgentMetrics(_ context.Context, _ string, _ time.Time) ([]*db.AgentMetric, error)       { return nil, nil }
 
 // --- API Keys ---
-func (Stub) CreateAPIKey(_ context.Context, _ db.CreateAPIKeyParams) (*db.APIKey, error)  { return nil, nil }
-func (Stub) GetAPIKeyByHash(_ context.Context, _ string) (*db.APIKey, error)              { return nil, nil }
-func (Stub) ListAPIKeysByUser(_ context.Context, _ string) ([]*db.APIKey, error)          { return nil, nil }
-func (Stub) DeleteAPIKey(_ context.Context, _ string) error                               { return nil }
-func (Stub) UpdateAPIKeyLastUsed(_ context.Context, _ string) error                       { return nil }
+func (Stub) CreateAPIKey(_ context.Context, _ db.CreateAPIKeyParams) (*db.APIKey, error)              { return nil, nil }
+func (Stub) GetAPIKeyByHash(_ context.Context, _ string) (*db.APIKey, error)                          { return nil, nil }
+func (Stub) GetAPIKeyByHashWithRateLimit(_ context.Context, _ string) (*db.APIKey, error)              { return nil, nil }
+func (Stub) ListAPIKeysByUser(_ context.Context, _ string) ([]*db.APIKey, error)                      { return nil, nil }
+func (Stub) DeleteAPIKey(_ context.Context, _ string) error                                           { return nil }
+func (Stub) UpdateAPIKeyLastUsed(_ context.Context, _ string) error                                   { return nil }
+func (Stub) UpdateAPIKeyRateLimit(_ context.Context, _ db.UpdateAPIKeyRateLimitParams) error          { return nil }
 
 // --- Notification Preferences ---
 func (Stub) GetNotificationPrefs(_ context.Context, _ string) (*db.NotificationPrefs, error)             { return nil, nil }
@@ -216,6 +225,10 @@ func (Stub) ArchiveOldJobs(_ context.Context, _ time.Duration) (int64, error)   
 func (Stub) ListArchivedJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, error)       { return nil, 0, nil }
 func (Stub) ExportJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)                  { return nil, nil }
 func (Stub) ExportArchivedJobs(_ context.Context, _ db.ExportJobsFilter) ([]*db.Job, error)          { return nil, nil }
+
+// --- Upgrade Binaries ---
+func (Stub) UpsertUpgradeBinary(_ context.Context, _ db.UpsertUpgradeBinaryParams) (*db.UpgradeBinary, error) { return nil, nil }
+func (Stub) ListUpgradeBinaries(_ context.Context, _ string) ([]*db.UpgradeBinary, error)                     { return nil, nil }
 
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }

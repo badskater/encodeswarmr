@@ -1,4 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AuditEntry, AuditStats, ActiveSession, APIKey, UpgradeChannel } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -199,6 +199,12 @@ export const drainAgent = (id: string) => request<void>(`/agents/${id}/drain`, {
 
 export const approveAgent = (id: string) => request<void>(`/agents/${id}/approve`, { method: 'POST' })
 
+export const updateAgentChannel = (id: string, channel: string) =>
+  request<{ ok: boolean; channel: string }>(`/agents/${id}/channel`, {
+    method: 'PUT',
+    body: JSON.stringify({ channel }),
+  })
+
 // Sources
 export const listSources = (params?: { state?: string; cursor?: string; page_size?: number }) =>
   request<Source[]>(`/sources${buildQuery(params ?? {})}`)
@@ -374,19 +380,53 @@ export const getJobComparison = (jobId: string) =>
   request<ComparisonResponse>(`/jobs/${jobId}/comparison`)
 
 // Audit Log
-export interface AuditEntry {
-  id: number
-  user_id: string | null
-  username: string
-  action: string
-  resource: string
-  resource_id: string
-  ip_address: string
-  logged_at: string
-}
-
 export const listAuditLog = (limit = 100, offset = 0) =>
   requestCollection<AuditEntry>(`/audit-log${buildQuery({ limit, offset })}`)
+
+/** Returns a URL for the audit log export endpoint (opens as file download). */
+export const auditLogExportURL = (params: {
+  format: 'csv' | 'json'
+  from?: string
+  to?: string
+  user_id?: string
+  action?: string
+}) => `${API_BASE}/audit-logs/export${buildQuery(params)}`
+
+export const getAuditLogStats = () =>
+  request<AuditStats>('/audit-logs/stats')
+
+export const getUserActivity = (userId: string, limit = 100, offset = 0) =>
+  requestCollection<AuditEntry>(`/users/${userId}/activity${buildQuery({ limit, offset })}`)
+
+export const anonymizeUserData = (userId: string) =>
+  request<unknown>(`/users/${userId}/data`, { method: 'DELETE' })
+
+// Sessions
+export const listSessions = () =>
+  request<ActiveSession[]>('/sessions')
+
+export const terminateSession = (id: string) =>
+  request<void>(`/sessions/${id}`, { method: 'DELETE' })
+
+// API Keys
+export const listAPIKeys = () =>
+  request<APIKey[]>('/api-keys')
+
+export const createAPIKey = (body: { name: string; rate_limit?: number }) =>
+  request<APIKey & { key: string }>('/api-keys', { method: 'POST', body: JSON.stringify(body) })
+
+export const deleteAPIKey = (id: string) =>
+  request<void>(`/api-keys/${id}`, { method: 'DELETE' })
+
+export const updateAPIKeyRateLimit = (id: string, rate_limit: number) =>
+  request<{ ok: boolean; rate_limit: number }>(`/api-keys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ rate_limit }),
+  })
+
+// Upgrade Channels
+export const listUpgradeChannels = () =>
+  request<UpgradeChannel[]>('/upgrade-channels')
 
 // Notification Preferences
 export const getNotificationPrefs = () =>

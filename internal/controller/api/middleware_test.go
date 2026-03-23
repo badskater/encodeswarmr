@@ -88,7 +88,10 @@ func TestRateLimitMiddleware(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := rateLimitMiddleware(next)
+	// The rate-limit middleware is now a method on Server so it can access the
+	// store for per-key limits.  Use a minimal server instance for tests.
+	srv := newTestServer(&stubStore{})
+	handler := srv.rateLimitMiddleware(next)
 
 	t.Run("normal requests pass through", func(t *testing.T) {
 		rr := httptest.NewRecorder()
