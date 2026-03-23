@@ -88,14 +88,11 @@ func TestE2E_HappyPath(t *testing.T) {
 		}
 	}
 
-	// Verify agent is present with idle status.
-	agent, err := tc.Store.GetAgentByName(ctx, "test-agent-1")
-	if err != nil {
-		t.Fatalf("get agent by name: %v", err)
-	}
-	if agent.Status != "idle" {
-		t.Errorf("agent status: got %q, want %q", agent.Status, "idle")
-	}
+	// Verify agent eventually returns to idle (heartbeat updates status async).
+	testharness.WaitFor(t, 15*time.Second, func() bool {
+		a, err := tc.Store.GetAgentByName(ctx, "test-agent-1")
+		return err == nil && a.Status == "idle"
+	})
 }
 
 // TestE2E_TaskFailure verifies that a task with a failing script causes the
