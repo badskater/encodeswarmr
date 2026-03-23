@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -488,4 +490,209 @@ type retryJobSuccessStore struct {
 
 func (s *retryJobSuccessStore) GetJobByID(_ context.Context, _ string) (*db.Job, error) {
 	return s.job, nil
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleCreateJobChain
+// ---------------------------------------------------------------------------
+
+func TestHandleCreateJobChain(t *testing.T) {
+	t.Run("valid chain creates jobs with depends_on links", func(t *testing.T) {
+		var calls int
+		store := &createChainStore{
+			stubStore: &stubStore{},
+			jobFn: func(params db.CreateJobParams) (*db.Job, error) {
+				calls++
+				id := fmt.Sprintf("j%d", calls)
+				return &db.Job{
+					ID:        id,
+					SourceID:  params.SourceID,
+					JobType:   params.JobType,
+					Status:    "queued",
+					DependsOn: params.DependsOn,
+				}, nil
+			},
+		}
+		srv := newTestServer(store)
+
+		body := `{
+			"source_id": "src-1",
+			"steps": [
+				{"job_type": "analysis"},
+				{"job_type": "encode"},
+				{"job_type": "audio"}
+			]
+		}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/job-chains", bytes.NewBufferString(body))
+		srv.handleCreateJobChain(rr, req)
+
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%s", rr.Code, rr.Body.String())
+		}
+
+		var resp struct {
+			Data struct {
+				ChainGroup string     `json:"chain_group"`
+				Jobs       []*db.Job  `json:"jobs"`
+			} `json:"data"`
+		}
+		decodeJSON(t, rr, &resp)
+
+		if len(resp.Data.Jobs) != 3 {
+			t.Fatalf("len(jobs) = %d, want 3", len(resp.Data.Jobs))
+		}
+		if resp.Data.ChainGroup == "" {
+			t.Error("chain_group should be non-empty")
+		}
+
+		// Second job should depend on the first.
+		if resp.Data.Jobs[1].DependsOn == nil || *resp.Data.Jobs[1].DependsOn != "j1" {
+			t.Errorf("jobs[1].depends_on = %v, want 'j1'", resp.Data.Jobs[1].DependsOn)
+		}
+		// Third job should depend on the second.
+		if resp.Data.Jobs[2].DependsOn == nil || *resp.Data.Jobs[2].DependsOn != "j2" {
+			t.Errorf("jobs[2].depends_on = %v, want 'j2'", resp.Data.Jobs[2].DependsOn)
+		}
+	})
+
+	t.Run("missing source_id returns 422", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+
+		body := `{"steps": [{"job_type": "analysis"}]}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/job-chains", bytes.NewBufferString(body))
+		srv.handleCreateJobChain(rr, req)
+
+		if rr.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", rr.Code)
+		}
+	})
+
+	t.Run("empty steps returns 422", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+
+		body := `{"source_id": "src-1", "steps": []}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/job-chains", bytes.NewBufferString(body))
+		srv.handleCreateJobChain(rr, req)
+
+		if rr.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", rr.Code)
+		}
+	})
+
+	t.Run("invalid job_type in step returns 422", func(t *testing.T) {
+		srv := newTestServer(&stubStore{})
+
+		body := `{"source_id": "src-1", "steps": [{"job_type": "bad-type"}]}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/job-chains", bytes.NewBufferString(body))
+		srv.handleCreateJobChain(rr, req)
+
+		if rr.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", rr.Code)
+		}
+	})
+
+	t.Run("store error returns 500", func(t *testing.T) {
+		store := &createChainErrStore{stubStore: &stubStore{}}
+		srv := newTestServer(store)
+
+		body := `{"source_id": "src-1", "steps": [{"job_type": "analysis"}]}`
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/job-chains", bytes.NewBufferString(body))
+		srv.handleCreateJobChain(rr, req)
+
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rr.Code)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleGetJobChain
+// ---------------------------------------------------------------------------
+
+func TestHandleGetJobChain(t *testing.T) {
+	t.Run("returns chain members in order", func(t *testing.T) {
+		j1 := &db.Job{ID: "j1", SourceID: "s1", JobType: "analysis", Status: "completed"}
+		j2 := &db.Job{ID: "j2", SourceID: "s1", JobType: "encode", Status: "queued", DependsOn: &j1.ID}
+		store := &getChainStore{
+			stubStore: &stubStore{},
+			jobs:      []*db.Job{j1, j2},
+		}
+		srv := newTestServer(store)
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/job-chains/chain-abc", nil)
+		req.SetPathValue("chain_group", "chain-abc")
+		srv.handleGetJobChain(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", rr.Code)
+		}
+
+		var resp struct {
+			Data struct {
+				ChainGroup string    `json:"chain_group"`
+				Jobs       []db.Job  `json:"jobs"`
+			} `json:"data"`
+		}
+		decodeJSON(t, rr, &resp)
+		if resp.Data.ChainGroup != "chain-abc" {
+			t.Errorf("chain_group = %q, want chain-abc", resp.Data.ChainGroup)
+		}
+		if len(resp.Data.Jobs) != 2 {
+			t.Fatalf("len(jobs) = %d, want 2", len(resp.Data.Jobs))
+		}
+	})
+
+	t.Run("store error returns 500", func(t *testing.T) {
+		store := &getChainErrStore{stubStore: &stubStore{}}
+		srv := newTestServer(store)
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/job-chains/chain-abc", nil)
+		req.SetPathValue("chain_group", "chain-abc")
+		srv.handleGetJobChain(rr, req)
+
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rr.Code)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// store stubs for job chain tests
+// ---------------------------------------------------------------------------
+
+type createChainStore struct {
+	*stubStore
+	jobFn func(db.CreateJobParams) (*db.Job, error)
+}
+
+func (s *createChainStore) CreateJob(_ context.Context, p db.CreateJobParams) (*db.Job, error) {
+	return s.jobFn(p)
+}
+
+type createChainErrStore struct{ *stubStore }
+
+func (s *createChainErrStore) CreateJob(_ context.Context, _ db.CreateJobParams) (*db.Job, error) {
+	return nil, errors.New("db error")
+}
+
+type getChainStore struct {
+	*stubStore
+	jobs []*db.Job
+}
+
+func (s *getChainStore) ListJobsByChainGroup(_ context.Context, _ string) ([]*db.Job, error) {
+	return s.jobs, nil
+}
+
+type getChainErrStore struct{ *stubStore }
+
+func (s *getChainErrStore) ListJobsByChainGroup(_ context.Context, _ string) ([]*db.Job, error) {
+	return nil, errors.New("db error")
 }
