@@ -269,7 +269,7 @@ export default function Sources() {
         <table className="min-w-full divide-y divide-th-border text-sm">
           <thead className="bg-th-surface-muted">
             <tr>
-              {['Filename', 'Path', 'Size', 'Duration', 'VMAF', 'HDR', 'State', 'Created', ''].map(h => (
+              {['', 'Filename', 'Path', 'Size', 'Duration', 'VMAF', 'HDR', 'State', 'Created', ''].map(h => (
                 <th key={h} className="px-4 py-2 text-left text-xs font-medium text-th-text-muted uppercase">{h}</th>
               ))}
             </tr>
@@ -281,6 +281,18 @@ export default function Sources() {
                 onClick={() => navigate(`/sources/${s.id}`)}
                 className="hover:bg-th-surface-muted cursor-pointer"
               >
+                <td className="px-2 py-2">
+                  {s.thumbnails && s.thumbnails.length > 0 ? (
+                    <img
+                      src={s.thumbnails[0]}
+                      alt="Preview"
+                      className="w-16 h-9 object-cover rounded"
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="w-16 h-9 bg-th-surface-muted rounded flex items-center justify-center text-th-text-subtle text-xs">—</div>
+                  )}
+                </td>
                 <td className="px-4 py-2 font-medium text-th-text">{s.filename}</td>
                 <td className="px-4 py-2 text-th-text-muted max-w-xs truncate">{s.path}</td>
                 <td className="px-4 py-2 text-th-text-secondary whitespace-nowrap">{fmtBytes(s.size_bytes)}</td>

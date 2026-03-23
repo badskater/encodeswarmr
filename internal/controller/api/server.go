@@ -235,11 +235,23 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/sources", operator(s.handleCreateSource))
 	mux.Handle("GET /api/v1/sources/{id}", viewer(s.handleGetSource))
 	mux.Handle("GET /api/v1/sources/{id}/scenes", viewer(s.handleGetSourceScenes))
+	mux.Handle("GET /api/v1/sources/{id}/subtitles", viewer(s.handleGetSourceSubtitles))
+	mux.Handle("GET /api/v1/sources/{id}/thumbnails", viewer(s.handleGetSourceThumbnails))
 	mux.Handle("POST /api/v1/sources/{id}/encode", operator(s.handleEncodeSource))
 	mux.Handle("POST /api/v1/sources/{id}/analyze", operator(s.handleAnalyzeSource))
 	mux.Handle("POST /api/v1/sources/{id}/hdr-detect", operator(s.handleHDRDetectSource))
 	mux.Handle("PATCH /api/v1/sources/{id}/hdr", operator(s.handleUpdateSourceHDR))
 	mux.Handle("DELETE /api/v1/sources/{id}", operator(s.handleDeleteSource))
+
+	// --- Thumbnails (static file serving) ---
+	mux.HandleFunc("GET /api/v1/thumbnails/", s.handleServeThumbnail)
+
+	// --- File Manager ---
+	mux.Handle("GET /api/v1/files/browse", operator(s.handleBrowseFiles))
+	mux.Handle("GET /api/v1/files/info", operator(s.handleFileInfo))
+	mux.Handle("POST /api/v1/files/move", operator(s.handleMoveFile))
+	mux.Handle("DELETE /api/v1/files/delete", admin(s.handleDeleteFile))
+	mux.Handle("GET /api/v1/files/download", operator(s.handleDownloadFile))
 
 	// --- Analysis ---
 	mux.Handle("POST /api/v1/analysis/scan", operator(s.handleScanAnalysis))

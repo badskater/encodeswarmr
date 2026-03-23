@@ -60,6 +60,7 @@ type Store interface {
 	UpdateSourceState(ctx context.Context, id, state string) error
 	UpdateSourceVMAF(ctx context.Context, id string, score float64) error
 	UpdateSourceHDR(ctx context.Context, p UpdateSourceHDRParams) error
+	UpdateSourceThumbnails(ctx context.Context, p UpdateSourceThumbnailsParams) error
 	DeleteSource(ctx context.Context, id string) error
 
 	// --- Jobs ---

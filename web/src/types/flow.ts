@@ -5,6 +5,7 @@ export type NodeCategory =
   | 'analysis'
   | 'condition'
   | 'audio'
+  | 'subtitle'
   | 'output'
   | 'notification'
   | 'flow'

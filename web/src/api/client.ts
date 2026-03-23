@@ -1,4 +1,5 @@
 import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AgentPool, QueueStatus } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, SubtitleTrack, FileEntry, FileInfo } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -543,3 +544,29 @@ export const reorderJobs = (jobIds: string[]) =>
 
 export const listPendingJobsPaged = (cursor?: string) =>
   requestCollection<Job>(`/jobs${buildQuery({ status: 'queued', page_size: 200, cursor })}`)
+// Subtitles
+export const getSourceSubtitles = (sourceId: string) =>
+  request<{ source_id: string; tracks: SubtitleTrack[] }>(`/sources/${sourceId}/subtitles`)
+
+// Thumbnails
+export const getSourceThumbnails = (sourceId: string) =>
+  request<{ source_id: string; thumbnails: string[] }>(`/sources/${sourceId}/thumbnails`)
+
+// File Manager
+export const browseFiles = (path: string) =>
+  request<{ path: string; entries: FileEntry[] }>(`/files/browse${buildQuery({ path })}`)
+
+export const getFileInfo = (path: string) =>
+  request<FileInfo>(`/files/info${buildQuery({ path })}`)
+
+export const moveFile = (source: string, destination: string) =>
+  request<{ source: string; destination: string; moved: boolean }>(
+    '/files/move',
+    { method: 'POST', body: JSON.stringify({ source, destination }) }
+  )
+
+export const deleteFile = (path: string) =>
+  request<void>(`/files/delete${buildQuery({ path })}`, { method: 'DELETE' })
+
+export const fileDownloadURL = (path: string) =>
+  `${API_BASE}/files/download${buildQuery({ path })}`

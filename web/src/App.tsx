@@ -32,6 +32,7 @@ import AgentPools from './pages/admin/AgentPools'
 import QueueManager from './pages/QueueManager'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
+import FileManager from './pages/FileManager'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -105,6 +106,7 @@ function App() {
         <Route path="/flows" element={<Flows />} />
         <Route path="/flows/editor" element={<FlowEditor />} />
         <Route path="/flows/editor/:id" element={<FlowEditor />} />
+        <Route path="/files" element={<FileManager />} />
         {user.role === 'admin' && (
           <>
             <Route path="/admin/templates" element={<Templates />} />

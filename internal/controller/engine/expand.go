@@ -254,6 +254,49 @@ func (e *Engine) expandFlowJob(ctx context.Context, job *db.Job) error {
 			}
 			taskIndex++
 			continue
+		case "subtitle_extract":
+			// Build ffmpeg subtitle extraction command.
+			trackIndex := 0
+			if v, ok := step.Config["track_index"]; ok {
+				switch ti := v.(type) {
+				case float64:
+					trackIndex = int(ti)
+				case int:
+					trackIndex = ti
+				}
+			}
+			format, _ := step.Config["format"].(string)
+			if format == "" {
+				format = "srt"
+			}
+			vars["subtitle_track_index"] = fmt.Sprintf("%d", trackIndex)
+			vars["subtitle_format"] = format
+			vars["subtitle_op"] = "extract"
+
+		case "subtitle_convert":
+			inputFmt, _ := step.Config["input_format"].(string)
+			outputFmt, _ := step.Config["output_format"].(string)
+			vars["subtitle_input_format"] = inputFmt
+			vars["subtitle_output_format"] = outputFmt
+			vars["subtitle_op"] = "convert"
+
+		case "subtitle_embed":
+			subtitlePath, _ := step.Config["subtitle_path"].(string)
+			language, _ := step.Config["language"].(string)
+			defaultTrack, _ := step.Config["default_track"].(bool)
+			vars["subtitle_path"] = subtitlePath
+			vars["subtitle_language"] = language
+			vars["subtitle_default_track"] = fmt.Sprintf("%t", defaultTrack)
+			vars["subtitle_op"] = "embed"
+
+		case "subtitle_burn":
+			subtitlePath, _ := step.Config["subtitle_path"].(string)
+			fontSize, _ := step.Config["font_size"].(float64)
+			position, _ := step.Config["position"].(string)
+			vars["subtitle_path"] = subtitlePath
+			vars["subtitle_font_size"] = fmt.Sprintf("%g", fontSize)
+			vars["subtitle_position"] = position
+			vars["subtitle_op"] = "burn"
 		}
 
 		if _, err := e.store.CreateTask(ctx, db.CreateTaskParams{
@@ -308,6 +351,39 @@ func (e *Engine) expandControllerAnalysisJob(ctx context.Context, job *db.Job) e
 				"job_id", job.ID, "job_type", job.JobType, "error", runErr)
 			_ = e.store.UpdateJobStatus(ctx, job.ID, "failed")
 			return
+		}
+
+		// After a successful analysis job, auto-generate thumbnails when a
+		// ThumbnailRunner is configured.
+		if job.JobType == "analysis" && e.thumbnails != nil && e.thumbnailDir != "" {
+			localPath, tErr := e.thumbnails.TranslatePath(ctx, source.UNCPath)
+			if tErr != nil {
+				e.logger.Warn("engine: thumbnail translate path",
+					"job_id", job.ID, "source_id", source.ID, "error", tErr)
+			} else {
+				outDir := fmt.Sprintf("%s/%s", e.thumbnailDir, source.ID)
+				thumbPaths, tErr := e.thumbnails.GenerateThumbnails(ctx, localPath, outDir, 0)
+				if tErr != nil {
+					e.logger.Warn("engine: thumbnail generation failed",
+						"job_id", job.ID, "source_id", source.ID, "error", tErr)
+				} else if len(thumbPaths) > 0 {
+					// Store paths relative to thumbnailDir/sourceID for the API to serve.
+					relPaths := make([]string, len(thumbPaths))
+					for i, p := range thumbPaths {
+						relPaths[i] = source.ID + "/" + p
+					}
+					if uErr := e.store.UpdateSourceThumbnails(ctx, db.UpdateSourceThumbnailsParams{
+						ID:         source.ID,
+						Thumbnails: relPaths,
+					}); uErr != nil {
+						e.logger.Warn("engine: update source thumbnails failed",
+							"source_id", source.ID, "error", uErr)
+					} else {
+						e.logger.Info("engine: thumbnails generated",
+							"source_id", source.ID, "count", len(relPaths))
+					}
+				}
+			}
 		}
 
 		if err := e.store.UpdateJobStatus(ctx, job.ID, "completed"); err != nil {
