@@ -31,7 +31,6 @@ import (
 	controllergrpc "github.com/badskater/encodeswarmr/internal/controller/grpc"
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
 	"github.com/badskater/encodeswarmr/internal/controller/notifications"
-	"github.com/badskater/encodeswarmr/internal/controller/mediaserver"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
 	"github.com/spf13/cobra"
@@ -189,13 +188,6 @@ func runServer(ctx context.Context, cfgPath string) error {
 	eng.SetAnalysisRunner(analysisRunner)
 	eng.SetConcatRunner(analysisRunner)
 	grpcSrv.SetConcatRunner(analysisRunner)
-
-	// Attach media server manager when servers are configured.
-	if len(cfg.MediaServers) > 0 {
-		mediaMgr := mediaserver.New(cfg.MediaServers, logger)
-		grpcSrv.SetMediaManager(mediaMgr, cfg.MediaServers)
-		logger.Info("media server manager attached", "count", len(cfg.MediaServers))
-	}
 
 	logger.Info("controller-side analysis runner attached",
 		"ffmpeg", cfg.Analysis.FFmpegBin,

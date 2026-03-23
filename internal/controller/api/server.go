@@ -14,7 +14,6 @@ import (
 	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	"github.com/badskater/encodeswarmr/internal/controller/ha"
 	"github.com/badskater/encodeswarmr/internal/controller/notifications"
-	"github.com/badskater/encodeswarmr/internal/controller/mediaserver"
 	"github.com/badskater/encodeswarmr/internal/controller/plugins"
 	"github.com/badskater/encodeswarmr/internal/controller/webhooks"
 	"github.com/badskater/encodeswarmr/internal/db"
@@ -33,7 +32,6 @@ type Server struct {
 	plugins      *plugins.Registry
 	email        *notifications.EmailSender // nil when SMTP is not configured
 	autoScaling  *engine.AutoScalingHook    // nil when auto-scaling is disabled
-	mediaManager *mediaserver.Manager
 }
 
 // New creates and configures a new HTTP API server.
@@ -55,7 +53,6 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		plugins:      pluginReg,
 		email:        notifications.NewEmailSender(cfg.SMTP, logger),
 		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
-		mediaManager: mediaserver.New(cfg.MediaServers, logger),
 	}
 
 	mux := http.NewServeMux()
@@ -270,10 +267,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))
 	mux.Handle("GET /api/v1/presets/{name}", viewer(s.handleGetPreset))
 	mux.Handle("GET /api/v1/presets/audio", viewer(s.handleListAudioPresets))
-
-	// --- Media Servers ---
-	mux.Handle("GET /api/v1/media-servers", admin(s.handleListMediaServers))
-	mux.Handle("POST /api/v1/media-servers/{name}/refresh", admin(s.handleRefreshMediaServer))
 
 	// --- Cost Estimation ---
 	mux.Handle("POST /api/v1/estimate", viewer(s.handleEstimate))

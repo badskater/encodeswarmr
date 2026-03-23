@@ -24,29 +24,9 @@ type Config struct {
 	AutoScaling  AutoScalingConfig   `mapstructure:"auto_scaling"`
 	Validation   ValidationConfig    `mapstructure:"validation"`
 	Archive      ArchiveConfig       `mapstructure:"archive"`
-	MediaServers []MediaServerConfig `mapstructure:"media_servers"`
 	Tracing      TracingConfig       `mapstructure:"tracing"`
 }
 
-// MediaServerConfig holds connection details for a single media server integration.
-// Supported types: "plex", "jellyfin", "emby".
-type MediaServerConfig struct {
-	// Name is a human-readable label, e.g. "Plex".
-	Name string `mapstructure:"name"`
-	// Type is the server kind: "plex", "jellyfin", or "emby".
-	Type string `mapstructure:"type"`
-	// URL is the base URL of the media server, e.g. "http://plex.local:32400".
-	URL string `mapstructure:"url"`
-	// Token is the Plex authentication token (plex type only).
-	Token string `mapstructure:"token"`
-	// APIKey is the API key for Jellyfin/Emby.
-	APIKey string `mapstructure:"api_key"`
-	// LibraryID is an optional library/section ID to refresh (plex type only).
-	LibraryID string `mapstructure:"library_id"`
-	// AutoRefresh controls whether a library refresh is triggered automatically
-	// after a job completes.
-	AutoRefresh bool `mapstructure:"auto_refresh"`
-}
 
 type ServerConfig struct {
 	Host           string        `mapstructure:"host"`

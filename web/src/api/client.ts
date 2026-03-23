@@ -1,6 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings } from '../types'
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, AudioConfig } from '../types'
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, AudioPreset, MediaServer, ComparisonResponse } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -370,12 +368,6 @@ export const deleteFlow = (id: string) =>
 
 // Audio Presets
 export const listAudioPresets = () => request<AudioPreset[]>('/presets/audio')
-
-// Media Servers
-export const listMediaServers = () => request<MediaServer[]>('/media-servers')
-
-export const refreshMediaServer = (name: string) =>
-  request<{ ok: boolean; name: string }>(`/media-servers/${encodeURIComponent(name)}/refresh`, { method: 'POST' })
 
 // Job comparison
 export const getJobComparison = (jobId: string) =>

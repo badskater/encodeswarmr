@@ -40,13 +40,6 @@ export interface AudioPreset {
   tags: string[]
 }
 
-// MediaServer is a configured media server integration.
-export interface MediaServer {
-  name: string
-  type: 'plex' | 'jellyfin' | 'emby'
-  auto_refresh: boolean
-}
-
 // ComparisonResponse holds source vs output metrics for a completed job.
 export interface ComparisonResponse {
   source: {
