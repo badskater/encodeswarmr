@@ -317,3 +317,22 @@ export interface AutoScalingSettings {
   scale_down_threshold: number
   cooldown_seconds: number
 }
+
+// AgentPool is a named tag group for organising agents.
+export interface AgentPool {
+  id: string
+  name: string
+  description: string
+  tags: string[]
+  color: string
+  created_at: string
+  updated_at: string
+}
+
+// QueueStatus holds the current queue state returned by GET /api/v1/queue/status.
+export interface QueueStatus {
+  paused: boolean
+  pending: number
+  running: number
+  estimated_completion: string
+}

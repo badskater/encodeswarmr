@@ -472,6 +472,87 @@ func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleUpdateJobPriority updates the priority of a single job.
+// PUT /api/v1/jobs/{id}/priority
+func (s *Server) handleUpdateJobPriority(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "missing job id")
+		return
+	}
+
+	var req struct {
+		Priority int `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if req.Priority < 0 || req.Priority > 100 {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "priority must be between 0 and 100")
+		return
+	}
+
+	if _, err := s.store.GetJobByID(r.Context(), id); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "job not found")
+			return
+		}
+		s.logger.Error("get job for priority update", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	if err := s.store.UpdateJobPriority(r.Context(), db.UpdateJobPriorityParams{
+		ID:       id,
+		Priority: req.Priority,
+	}); err != nil {
+		s.logger.Error("update job priority", "err", err, "job_id", id)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "priority": req.Priority})
+}
+
+// handleReorderJobs accepts an ordered list of job IDs and sets priority based
+// on position: the first job receives the highest priority (len-1), and each
+// subsequent job receives one less.
+// POST /api/v1/jobs/reorder
+func (s *Server) handleReorderJobs(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		JobIDs []string `json:"job_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if len(req.JobIDs) == 0 {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "job_ids must not be empty")
+		return
+	}
+
+	ctx := r.Context()
+	total := len(req.JobIDs)
+	for i, jid := range req.JobIDs {
+		priority := total - i // first item gets highest priority
+		if priority > 100 {
+			priority = 100
+		}
+		if err := s.store.UpdateJobPriority(ctx, db.UpdateJobPriorityParams{
+			ID:       jid,
+			Priority: priority,
+		}); err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				continue // skip unknown IDs silently
+			}
+			s.logger.Error("reorder jobs: update priority", "err", err, "job_id", jid)
+			writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+			return
+		}
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "updated": len(req.JobIDs)})
+}
+
 // handleGetTask returns a single task by ID.
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

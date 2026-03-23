@@ -273,6 +273,91 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 	return &a, nil
 }
 
+// UpdateAgentTags replaces the entire tags array for an agent.
+func (s *pgStore) UpdateAgentTags(ctx context.Context, p UpdateAgentTagsParams) error {
+	const q = `UPDATE agents SET tags = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.Tags)
+	if err != nil {
+		return fmt.Errorf("db: update agent tags: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Agent Pools
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateAgentPool(ctx context.Context, p CreateAgentPoolParams) (*AgentPool, error) {
+	const q = `
+		INSERT INTO agent_pools (name, description, tags, color)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, name, description, tags, color, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Description, p.Tags, p.Color)
+	return scanAgentPool(row)
+}
+
+func (s *pgStore) GetAgentPoolByID(ctx context.Context, id string) (*AgentPool, error) {
+	const q = `SELECT id, name, description, tags, color, created_at, updated_at
+	           FROM agent_pools WHERE id = $1`
+	return scanAgentPool(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListAgentPools(ctx context.Context) ([]*AgentPool, error) {
+	const q = `SELECT id, name, description, tags, color, created_at, updated_at
+	           FROM agent_pools ORDER BY name`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list agent pools: %w", err)
+	}
+	defer rows.Close()
+	var out []*AgentPool
+	for rows.Next() {
+		ap, err := scanAgentPool(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ap)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateAgentPool(ctx context.Context, p UpdateAgentPoolParams) (*AgentPool, error) {
+	const q = `
+		UPDATE agent_pools
+		SET name = $2, description = $3, tags = $4, color = $5, updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, description, tags, color, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.ID, p.Name, p.Description, p.Tags, p.Color)
+	return scanAgentPool(row)
+}
+
+func (s *pgStore) DeleteAgentPool(ctx context.Context, id string) error {
+	const q = `DELETE FROM agent_pools WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete agent pool: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanAgentPool(row pgx.Row) (*AgentPool, error) {
+	var ap AgentPool
+	err := row.Scan(&ap.ID, &ap.Name, &ap.Description, &ap.Tags, &ap.Color, &ap.CreatedAt, &ap.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan agent pool: %w", err)
+	}
+	return &ap, nil
+}
+
 // ---------------------------------------------------------------------------
 // Sources
 // ---------------------------------------------------------------------------
@@ -606,6 +691,48 @@ func (s *pgStore) UpdateJobStatus(ctx context.Context, id, status string) error 
 		return ErrNotFound
 	}
 	return nil
+}
+
+// UpdateJobPriority sets the priority of a job.
+func (s *pgStore) UpdateJobPriority(ctx context.Context, p UpdateJobPriorityParams) error {
+	const q = `UPDATE jobs SET priority = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.Priority)
+	if err != nil {
+		return fmt.Errorf("db: update job priority: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListPendingJobs returns all queued jobs ordered by priority desc, then created_at asc.
+// Used by the QueueManager UI to display and reorder the pending queue.
+func (s *pgStore) ListPendingJobs(ctx context.Context) ([]*Job, error) {
+	const q = `
+		SELECT j.id, j.source_id, j.status, j.job_type, j.priority, j.target_tags,
+		       j.tasks_total, j.tasks_pending, j.tasks_running, j.tasks_completed, j.tasks_failed,
+		       j.encode_config, j.audio_config, j.max_retries, j.depends_on, j.chain_group,
+		       j.completed_at, j.failed_at, j.created_at, j.updated_at,
+		       COALESCE(s.unc_path, '') AS source_path
+		FROM jobs j
+		LEFT JOIN sources s ON s.id = j.source_id
+		WHERE j.status IN ('queued', 'waiting')
+		ORDER BY j.priority DESC, j.created_at ASC`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list pending jobs: %w", err)
+	}
+	defer rows.Close()
+	var out []*Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
 }
 
 // UpdateJobTaskCounts recalculates the denormalised task counter columns

@@ -53,6 +53,7 @@ export default function NavBar({ role, onLogout }: Props) {
               <NavLink to="/" className={linkCls} end>Dashboard</NavLink>
               <NavLink to="/sources" className={linkCls}>Sources</NavLink>
               <NavLink to="/jobs" className={linkCls}>Jobs</NavLink>
+              <NavLink to="/queue" className={linkCls}>Queue</NavLink>
               <NavLink to="/agents" className={linkCls}>Agents</NavLink>
               <NavLink to="/audio-convert" className={linkCls}>Audio</NavLink>
               <NavLink to="/flows" className={linkCls}>Flows</NavLink>
@@ -62,6 +63,7 @@ export default function NavBar({ role, onLogout }: Props) {
                   <NavLink to="/admin/variables" className={linkCls}>Variables</NavLink>
                   <NavLink to="/admin/webhooks" className={linkCls}>Webhooks</NavLink>
                   <NavLink to="/admin/users" className={linkCls}>Users</NavLink>
+                  <NavLink to="/admin/agent-pools" className={linkCls}>Pools</NavLink>
                   <NavLink to="/admin/path-mappings" className={linkCls}>Path Mappings</NavLink>
                   <NavLink to="/admin/enrollment-tokens" className={linkCls}>Tokens</NavLink>
                   <NavLink to="/admin/schedules" className={linkCls}>Schedules</NavLink>
@@ -117,6 +119,7 @@ export default function NavBar({ role, onLogout }: Props) {
             <NavLink to="/" className={mobileLinkCls} end onClick={closeMenu}>Dashboard</NavLink>
             <NavLink to="/sources" className={mobileLinkCls} onClick={closeMenu}>Sources</NavLink>
             <NavLink to="/jobs" className={mobileLinkCls} onClick={closeMenu}>Jobs</NavLink>
+            <NavLink to="/queue" className={mobileLinkCls} onClick={closeMenu}>Queue</NavLink>
             <NavLink to="/agents" className={mobileLinkCls} onClick={closeMenu}>Agents</NavLink>
             <NavLink to="/audio-convert" className={mobileLinkCls} onClick={closeMenu}>Audio</NavLink>
             <NavLink to="/flows" className={mobileLinkCls} onClick={closeMenu}>Flows</NavLink>
@@ -127,6 +130,7 @@ export default function NavBar({ role, onLogout }: Props) {
                 <NavLink to="/admin/variables" className={mobileLinkCls} onClick={closeMenu}>Variables</NavLink>
                 <NavLink to="/admin/webhooks" className={mobileLinkCls} onClick={closeMenu}>Webhooks</NavLink>
                 <NavLink to="/admin/users" className={mobileLinkCls} onClick={closeMenu}>Users</NavLink>
+                <NavLink to="/admin/agent-pools" className={mobileLinkCls} onClick={closeMenu}>Agent Pools</NavLink>
                 <NavLink to="/admin/path-mappings" className={mobileLinkCls} onClick={closeMenu}>Path Mappings</NavLink>
                 <NavLink to="/admin/enrollment-tokens" className={mobileLinkCls} onClick={closeMenu}>Tokens</NavLink>
                 <NavLink to="/admin/schedules" className={mobileLinkCls} onClick={closeMenu}>Schedules</NavLink>

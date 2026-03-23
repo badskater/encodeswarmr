@@ -43,6 +43,14 @@ type Store interface {
 	MarkStaleAgents(ctx context.Context, olderThan time.Duration) (int64, error)
 	SetAgentUpgradeRequested(ctx context.Context, agentID string, requested bool) error
 	ClearAgentUpgradeRequested(ctx context.Context, agentID string) error
+	UpdateAgentTags(ctx context.Context, p UpdateAgentTagsParams) error
+
+	// --- Agent Pools ---
+	CreateAgentPool(ctx context.Context, p CreateAgentPoolParams) (*AgentPool, error)
+	GetAgentPoolByID(ctx context.Context, id string) (*AgentPool, error)
+	ListAgentPools(ctx context.Context) ([]*AgentPool, error)
+	UpdateAgentPool(ctx context.Context, p UpdateAgentPoolParams) (*AgentPool, error)
+	DeleteAgentPool(ctx context.Context, id string) error
 
 	// --- Sources ---
 	CreateSource(ctx context.Context, p CreateSourceParams) (*Source, error)
@@ -59,6 +67,7 @@ type Store interface {
 	GetJobByID(ctx context.Context, id string) (*Job, error)
 	ListJobs(ctx context.Context, filter ListJobsFilter) ([]*Job, int64, error)
 	UpdateJobStatus(ctx context.Context, id, status string) error
+	UpdateJobPriority(ctx context.Context, p UpdateJobPriorityParams) error
 	UpdateJobTaskCounts(ctx context.Context, id string) error
 	GetJobsNeedingExpansion(ctx context.Context) ([]*Job, error)
 	// UnblockDependentJobs transitions jobs from "waiting" to "queued" whose
@@ -67,6 +76,8 @@ type Store interface {
 	// ListJobsByChainGroup returns all jobs belonging to the given chain group,
 	// ordered by creation time.
 	ListJobsByChainGroup(ctx context.Context, chainGroup string) ([]*Job, error)
+	// ListPendingJobs returns queued jobs ordered by priority desc, created_at asc.
+	ListPendingJobs(ctx context.Context) ([]*Job, error)
 
 	// --- Tasks ---
 	CreateTask(ctx context.Context, p CreateTaskParams) (*Task, error)

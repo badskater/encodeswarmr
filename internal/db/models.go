@@ -810,3 +810,44 @@ type UpdateSourceWatchParams struct {
 	WatchFolder string
 	Category    string
 }
+// AgentPool is a row from the agent_pools table.
+// Pools are named tag groups used by the UI to organise agents; the dispatch
+// mechanism (ClaimNextTask tag matching) is unaffected.
+type AgentPool struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Tags        []string  `json:"tags"`
+	Color       string    `json:"color"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateAgentPoolParams holds values for inserting a new agent_pools row.
+type CreateAgentPoolParams struct {
+	Name        string
+	Description string
+	Tags        []string
+	Color       string
+}
+
+// UpdateAgentPoolParams holds values for updating an existing agent_pools row.
+type UpdateAgentPoolParams struct {
+	ID          string
+	Name        string
+	Description string
+	Tags        []string
+	Color       string
+}
+
+// UpdateAgentTagsParams holds the new complete tags slice for an agent.
+type UpdateAgentTagsParams struct {
+	ID   string
+	Tags []string
+}
+
+// UpdateJobPriorityParams holds values for updating a job's priority.
+type UpdateJobPriorityParams struct {
+	ID       string
+	Priority int
+}

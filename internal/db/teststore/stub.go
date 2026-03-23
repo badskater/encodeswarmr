@@ -56,6 +56,14 @@ func (Stub) SetAgentAPIKey(_ context.Context, _, _ string) error                
 func (Stub) MarkStaleAgents(_ context.Context, _ time.Duration) (int64, error)                     { return 0, nil }
 func (Stub) SetAgentUpgradeRequested(_ context.Context, _ string, _ bool) error                    { return nil }
 func (Stub) ClearAgentUpgradeRequested(_ context.Context, _ string) error                          { return nil }
+func (Stub) UpdateAgentTags(_ context.Context, _ db.UpdateAgentTagsParams) error                   { return nil }
+
+// --- Agent Pools ---
+func (Stub) CreateAgentPool(_ context.Context, _ db.CreateAgentPoolParams) (*db.AgentPool, error) { return nil, nil }
+func (Stub) GetAgentPoolByID(_ context.Context, _ string) (*db.AgentPool, error)                  { return nil, nil }
+func (Stub) ListAgentPools(_ context.Context) ([]*db.AgentPool, error)                            { return nil, nil }
+func (Stub) UpdateAgentPool(_ context.Context, _ db.UpdateAgentPoolParams) (*db.AgentPool, error) { return nil, nil }
+func (Stub) DeleteAgentPool(_ context.Context, _ string) error                                    { return nil }
 
 // --- Sources ---
 func (Stub) CreateSource(_ context.Context, _ db.CreateSourceParams) (*db.Source, error)            { return nil, nil }
@@ -68,14 +76,16 @@ func (Stub) UpdateSourceHDR(_ context.Context, _ db.UpdateSourceHDRParams) error
 func (Stub) DeleteSource(_ context.Context, _ string) error                                         { return nil }
 
 // --- Jobs ---
-func (Stub) CreateJob(_ context.Context, _ db.CreateJobParams) (*db.Job, error)           { return nil, nil }
-func (Stub) GetJobByID(_ context.Context, _ string) (*db.Job, error)                      { return nil, nil }
-func (Stub) ListJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, error)    { return nil, 0, nil }
-func (Stub) UpdateJobStatus(_ context.Context, _, _ string) error                         { return nil }
-func (Stub) UpdateJobTaskCounts(_ context.Context, _ string) error                        { return nil }
-func (Stub) GetJobsNeedingExpansion(_ context.Context) ([]*db.Job, error)                 { return nil, nil }
-func (Stub) UnblockDependentJobs(_ context.Context, _ string) error                       { return nil }
-func (Stub) ListJobsByChainGroup(_ context.Context, _ string) ([]*db.Job, error)          { return nil, nil }
+func (Stub) CreateJob(_ context.Context, _ db.CreateJobParams) (*db.Job, error)                  { return nil, nil }
+func (Stub) GetJobByID(_ context.Context, _ string) (*db.Job, error)                             { return nil, nil }
+func (Stub) ListJobs(_ context.Context, _ db.ListJobsFilter) ([]*db.Job, int64, error)           { return nil, 0, nil }
+func (Stub) UpdateJobStatus(_ context.Context, _, _ string) error                                { return nil }
+func (Stub) UpdateJobPriority(_ context.Context, _ db.UpdateJobPriorityParams) error             { return nil }
+func (Stub) UpdateJobTaskCounts(_ context.Context, _ string) error                               { return nil }
+func (Stub) GetJobsNeedingExpansion(_ context.Context) ([]*db.Job, error)                        { return nil, nil }
+func (Stub) UnblockDependentJobs(_ context.Context, _ string) error                              { return nil }
+func (Stub) ListJobsByChainGroup(_ context.Context, _ string) ([]*db.Job, error)                 { return nil, nil }
+func (Stub) ListPendingJobs(_ context.Context) ([]*db.Job, error)                                { return nil, nil }
 
 // --- Tasks ---
 func (Stub) CreateTask(_ context.Context, _ db.CreateTaskParams) (*db.Task, error)       { return nil, nil }

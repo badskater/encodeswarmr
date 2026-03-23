@@ -219,6 +219,9 @@ func runServer(ctx context.Context, cfgPath string) error {
 		"min_duration_ratio", validationCfg.MinDurationRatio,
 	)
 
+	// Wire the engine into the API server so queue pause/resume endpoints work.
+	httpSrv.SetEngine(eng)
+
 	eng.Start(ctx)
 	logger.Info("core engine started",
 		"dispatch_interval", cfg.Agent.DispatchInterval,

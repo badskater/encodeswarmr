@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/badskater/encodeswarmr/internal/db"
@@ -51,6 +52,9 @@ type Engine struct {
 	vmafTarget  VMAFTargetRunner   // optional; handles encode_vmaf_target flow nodes
 	webhooks    FlowWebhookEmitter // optional; enables webhook nodes in flows
 	autoScaling *AutoScalingHook   // optional; nil disables auto-scaling checks
+	// paused is 1 when dispatching is paused, 0 when running.
+	// Use atomic operations to read/write from multiple goroutines.
+	paused atomic.Int32
 }
 
 // New creates an Engine. Does not start the background loop.
@@ -97,6 +101,22 @@ func (e *Engine) SetWebhookEmitter(w FlowWebhookEmitter) {
 	e.webhooks = w
 }
 
+// Pause suspends job expansion. ClaimNextTask calls in the grpc layer still
+// proceed normally — only the controller-side expansion loop is gated.
+func (e *Engine) Pause() {
+	e.paused.Store(1)
+}
+
+// Resume re-enables job expansion after a previous Pause call.
+func (e *Engine) Resume() {
+	e.paused.Store(0)
+}
+
+// IsPaused reports whether dispatching is currently paused.
+func (e *Engine) IsPaused() bool {
+	return e.paused.Load() == 1
+}
+
 // Start launches the background dispatch loop in a goroutine.
 // Returns immediately. The loop runs until ctx is cancelled.
 func (e *Engine) Start(ctx context.Context) {
@@ -115,8 +135,10 @@ func (e *Engine) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := e.expandPendingJobs(ctx); err != nil {
-				e.logger.Warn("engine: expand pending jobs", "error", err)
+			if !e.IsPaused() {
+				if err := e.expandPendingJobs(ctx); err != nil {
+					e.logger.Warn("engine: expand pending jobs", "error", err)
+				}
 			}
 			if err := e.checkStaleAgents(ctx); err != nil {
 				e.logger.Warn("engine: check stale agents", "error", err)

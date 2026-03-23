@@ -37,6 +37,13 @@ type Server struct {
 	watcher      *watcher.Watcher           // nil when no watch folders are configured
 	rulesEngine  *rules.Engine
 	logHub       *logStreamHub              // per-task WebSocket log streaming
+	eng          *engine.Engine             // nil until SetEngine is called
+}
+
+// SetEngine attaches the core engine so the API layer can expose queue
+// pause/resume controls.  Must be called before Serve.
+func (s *Server) SetEngine(eng *engine.Engine) {
+	s.eng = eng
 }
 
 // New creates and configures a new HTTP API server.
@@ -169,8 +176,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/jobs/{id}", viewer(s.handleGetJob))
 	mux.Handle("POST /api/v1/jobs/{id}/cancel", operator(s.handleCancelJob))
 	mux.Handle("POST /api/v1/jobs/{id}/retry", operator(s.handleRetryJob))
+	mux.Handle("PUT /api/v1/jobs/{id}/priority", operator(s.handleUpdateJobPriority))
 	mux.Handle("GET /api/v1/jobs/{id}/logs", viewer(s.handleListJobLogs))
 	mux.Handle("GET /api/v1/jobs/{id}/comparison", viewer(s.handleGetJobComparison))
+	mux.Handle("POST /api/v1/jobs/reorder", operator(s.handleReorderJobs))
 
 	// --- Job Chains ---
 	mux.Handle("POST /api/v1/job-chains", operator(s.handleCreateJobChain))
@@ -196,6 +205,19 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 	mux.Handle("POST /api/v1/agents/{id}/upgrade", admin(s.handleRequestAgentUpgrade))
+	mux.Handle("POST /api/v1/agents/{id}/pools", operator(s.handleAssignAgentToPool))
+	mux.Handle("DELETE /api/v1/agents/{id}/pools/{pool_id}", operator(s.handleRemoveAgentFromPool))
+
+	// --- Agent Pools ---
+	mux.Handle("GET /api/v1/agent-pools", viewer(s.handleListAgentPools))
+	mux.Handle("POST /api/v1/agent-pools", operator(s.handleCreateAgentPool))
+	mux.Handle("PUT /api/v1/agent-pools/{id}", operator(s.handleUpdateAgentPool))
+	mux.Handle("DELETE /api/v1/agent-pools/{id}", admin(s.handleDeleteAgentPool))
+
+	// --- Queue management ---
+	mux.Handle("GET /api/v1/queue/status", viewer(s.handleQueueStatus))
+	mux.Handle("POST /api/v1/queue/pause", operator(s.handlePauseQueue))
+	mux.Handle("POST /api/v1/queue/resume", operator(s.handleResumeQueue))
 
 	// --- VNC remote desktop ---
 	// WebSocket proxy to the agent's VNC TCP port (noVNC binary framing).
