@@ -238,5 +238,30 @@ func (Stub) DeleteEncodingRule(_ context.Context, _ string) error               
 // --- Sources (watch folder extensions) ---
 func (Stub) UpdateSourceWatch(_ context.Context, _ db.UpdateSourceWatchParams) error { return nil }
 
+// --- Encoding Profiles ---
+func (Stub) CreateEncodingProfile(_ context.Context, _ db.CreateEncodingProfileParams) (*db.EncodingProfile, error) { return nil, nil }
+func (Stub) GetEncodingProfileByID(_ context.Context, _ string) (*db.EncodingProfile, error)                        { return nil, nil }
+func (Stub) ListEncodingProfiles(_ context.Context) ([]*db.EncodingProfile, error)                                  { return nil, nil }
+func (Stub) UpdateEncodingProfile(_ context.Context, _ db.UpdateEncodingProfileParams) (*db.EncodingProfile, error) { return nil, nil }
+func (Stub) DeleteEncodingProfile(_ context.Context, _ string) error                                                { return nil }
+
+// --- Agent update channel ---
+func (Stub) UpdateAgentChannel(_ context.Context, _ db.UpdateAgentChannelParams) error { return nil }
+
+// --- Agent encoding stats ---
+func (Stub) GetAgentEncodingStats(_ context.Context, _ string) (*db.AgentEncodingStats, error)       { return nil, nil }
+func (Stub) ListRecentTasksByAgent(_ context.Context, _ string, _ int) ([]*db.Task, error)           { return nil, nil }
+
+// --- API key rate limit ---
+func (Stub) UpdateAPIKeyRateLimit(_ context.Context, _ db.UpdateAPIKeyRateLimitParams) error { return nil }
+
+// --- Audit log extended ---
+func (Stub) ListAuditLogByUser(_ context.Context, _ string, _, _ int) ([]*db.AuditEntry, int, error) { return nil, 0, nil }
+func (Stub) ExportAuditLog(_ context.Context, _ int) ([]*db.AuditEntry, error)                       { return nil, nil }
+
+// --- Sessions extended ---
+func (Stub) ListSessionsByUser(_ context.Context, _ string) ([]*db.Session, error) { return nil, nil }
+func (Stub) DeleteSessionByID(_ context.Context, _ string) error                   { return nil }
+
 // --- Misc ---
 func (Stub) Ping(_ context.Context) error { return nil }

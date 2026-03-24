@@ -144,6 +144,19 @@ func runServer(ctx context.Context, cfgPath string) error {
 		whSvc.SetEmailSender(emailSender)
 		logger.Info("email notifications enabled", "smtp_host", cfg.SMTP.Host)
 	}
+	// Attach push notification channel senders when configured.
+	if t := notifications.NewTelegramSender(cfg.Notifications.Telegram, logger); t != nil {
+		whSvc.SetTelegramSender(t)
+		logger.Info("telegram notifications enabled")
+	}
+	if p := notifications.NewPushoverSender(cfg.Notifications.Pushover, logger); p != nil {
+		whSvc.SetPushoverSender(p)
+		logger.Info("pushover notifications enabled")
+	}
+	if n := notifications.NewNtfySender(cfg.Notifications.Ntfy, logger); n != nil {
+		whSvc.SetNtfySender(n)
+		logger.Info("ntfy notifications enabled")
+	}
 	whSvc.Start(ctx)
 	logger.Info("webhook delivery service started", "workers", cfg.Webhooks.WorkerCount)
 

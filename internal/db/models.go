@@ -84,6 +84,9 @@ type Agent struct {
 	// UpgradeRequested indicates the controller has requested this agent
 	// self-upgrade on its next upgrade check poll.
 	UpgradeRequested bool       `json:"upgrade_requested"`
+	// UpdateChannel controls which release channel this agent tracks.
+	// Valid values: "stable" (default), "beta", "nightly".
+	UpdateChannel    string     `json:"update_channel"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
@@ -623,6 +626,9 @@ type APIKey struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"user_id"`
 	Name        string     `json:"name"`
+	// RateLimit is the maximum requests per minute for this key.
+	// 0 means use the global default.
+	RateLimit   int        `json:"rate_limit"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
@@ -859,4 +865,90 @@ type UpdateAgentTagsParams struct {
 type UpdateJobPriorityParams struct {
 	ID       string
 	Priority int
+}
+
+// ---------------------------------------------------------------------------
+// Agent encoding stats (health deep-dive)
+// ---------------------------------------------------------------------------
+
+// AgentEncodingStats holds aggregate encoding statistics for a single agent.
+type AgentEncodingStats struct {
+	AgentID        string   `json:"agent_id"`
+	TotalTasks     int64    `json:"total_tasks"`
+	CompletedTasks int64    `json:"completed_tasks"`
+	FailedTasks    int64    `json:"failed_tasks"`
+	AvgFPS         float64  `json:"avg_fps"`
+	TotalFrames    int64    `json:"total_frames"`
+}
+
+// ---------------------------------------------------------------------------
+// Encoding Profiles
+// ---------------------------------------------------------------------------
+
+// EncodingProfile is a row from the encoding_profiles table.
+// Settings holds a JSONB object with template_id, extra_vars, etc.
+type EncodingProfile struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Container   string          `json:"container"`
+	Settings    json.RawMessage `json:"settings"`
+	AudioConfig json.RawMessage `json:"audio_config,omitempty"`
+	CreatedBy   string          `json:"created_by"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// CreateEncodingProfileParams holds values for inserting a new encoding_profiles row.
+type CreateEncodingProfileParams struct {
+	Name        string
+	Description string
+	Container   string
+	Settings    json.RawMessage
+	AudioConfig json.RawMessage
+	CreatedBy   string
+}
+
+// UpdateEncodingProfileParams holds values for updating an existing encoding_profiles row.
+type UpdateEncodingProfileParams struct {
+	ID          string
+	Name        string
+	Description string
+	Container   string
+	Settings    json.RawMessage
+	AudioConfig json.RawMessage
+}
+
+// ---------------------------------------------------------------------------
+// Agent update channel
+// ---------------------------------------------------------------------------
+
+// UpdateAgentChannelParams holds values for setting an agent's update channel.
+type UpdateAgentChannelParams struct {
+	ID      string
+	Channel string // "stable", "beta", or "nightly"
+}
+
+// ---------------------------------------------------------------------------
+// API key rate limit
+// ---------------------------------------------------------------------------
+
+// UpdateAPIKeyRateLimitParams holds values for updating an api_key's rate limit.
+type UpdateAPIKeyRateLimitParams struct {
+	ID        string
+	RateLimit int
+}
+
+// ---------------------------------------------------------------------------
+// Sessions (extended — list by user)
+// ---------------------------------------------------------------------------
+
+// UserSession is a public view of a session row (no token exposed).
+type UserSession struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	IPAddress string    `json:"ip_address"`
+	UserAgent string    `json:"user_agent"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
 }

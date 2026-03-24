@@ -33,6 +33,11 @@ import QueueManager from './pages/QueueManager'
 import Flows from './pages/Flows'
 import FlowEditor from './pages/FlowEditor'
 import FileManager from './pages/FileManager'
+import AgentDetail from './pages/AgentDetail'
+import EncodingProfiles from './pages/admin/EncodingProfiles'
+import AuditExport from './pages/admin/AuditExport'
+import Sessions from './pages/Sessions'
+import APIKeys from './pages/admin/APIKeys'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -101,6 +106,8 @@ function App() {
         <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/agents" element={<Agents />} />
+        <Route path="/agents/:id" element={<AgentDetail />} />
+        <Route path="/sessions" element={<Sessions />} />
         <Route path="/queue" element={<QueueManager />} />
         <Route path="/audio-convert" element={<AudioConvert />} />
         <Route path="/flows" element={<Flows />} />
@@ -123,6 +130,9 @@ function App() {
             <Route path="/admin/watch-folders" element={<WatchFolders />} />
             <Route path="/admin/encoding-rules" element={<EncodingRules />} />
             <Route path="/admin/agent-pools" element={<AgentPools />} />
+            <Route path="/admin/encoding-profiles" element={<EncodingProfiles />} />
+            <Route path="/admin/audit-export" element={<AuditExport />} />
+            <Route path="/admin/api-keys" element={<APIKeys />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

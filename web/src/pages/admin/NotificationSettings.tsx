@@ -23,6 +23,8 @@ export default function NotificationSettings() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [testResult, setTestResult] = useState('')
+  const [channelTesting, setChannelTesting] = useState<string | null>(null)
+  const [channelTestResult, setChannelTestResult] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +82,28 @@ export default function NotificationSettings() {
   const toggle = (field: keyof NotificationPrefs) => {
     setPrefs(prev => ({ ...prev, [field]: !prev[field] }))
     setSuccess('')
+  }
+
+  const handleTestChannel = async (channel: 'telegram' | 'pushover' | 'ntfy') => {
+    setChannelTesting(channel)
+    setChannelTestResult(prev => ({ ...prev, [channel]: '' }))
+    try {
+      let result: { ok: boolean }
+      if (channel === 'telegram') result = await api.testTelegram()
+      else if (channel === 'pushover') result = await api.testPushover()
+      else result = await api.testNtfy()
+      setChannelTestResult(prev => ({
+        ...prev,
+        [channel]: result.ok ? 'Test message sent.' : 'Test failed.',
+      }))
+    } catch (e: unknown) {
+      setChannelTestResult(prev => ({
+        ...prev,
+        [channel]: e instanceof Error ? e.message : 'Test failed.',
+      }))
+    } finally {
+      setChannelTesting(null)
+    }
   }
 
   if (loading) return <p className="text-th-text-muted">Loading…</p>
@@ -166,6 +190,72 @@ export default function NotificationSettings() {
           <p className="text-xs text-th-text-muted">
             Requires SMTP to be configured on the controller. Use the Test button to verify delivery.
           </p>
+        </div>
+      </section>
+
+      {/* Telegram */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-th-text">Telegram</h2>
+        <p className="text-xs text-th-text-muted">
+          Configure <code>notifications.telegram.bot_token</code> and <code>chat_id</code> in the controller config to enable.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleTestChannel('telegram')}
+            disabled={channelTesting === 'telegram'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {channelTesting === 'telegram' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {channelTestResult.telegram && (
+            <p className={`text-xs ${channelTestResult.telegram.includes('sent') ? 'text-green-600' : 'text-red-500'}`}>
+              {channelTestResult.telegram}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Pushover */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-th-text">Pushover</h2>
+        <p className="text-xs text-th-text-muted">
+          Configure <code>notifications.pushover.app_token</code> and <code>user_key</code> in the controller config to enable.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleTestChannel('pushover')}
+            disabled={channelTesting === 'pushover'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {channelTesting === 'pushover' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {channelTestResult.pushover && (
+            <p className={`text-xs ${channelTestResult.pushover.includes('sent') ? 'text-green-600' : 'text-red-500'}`}>
+              {channelTestResult.pushover}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* ntfy */}
+      <section className="bg-th-surface rounded-lg shadow p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-th-text">ntfy</h2>
+        <p className="text-xs text-th-text-muted">
+          Configure <code>notifications.ntfy.topic</code> (and optionally <code>server_url</code> and <code>token</code>) in the controller config to enable.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleTestChannel('ntfy')}
+            disabled={channelTesting === 'ntfy'}
+            className="rounded bg-th-surface-muted border border-th-border px-3 py-1.5 text-sm text-th-text hover:bg-th-surface disabled:opacity-50"
+          >
+            {channelTesting === 'ntfy' ? 'Sending…' : 'Send Test Message'}
+          </button>
+          {channelTestResult.ntfy && (
+            <p className={`text-xs ${channelTestResult.ntfy.includes('sent') ? 'text-green-600' : 'text-red-500'}`}>
+              {channelTestResult.ntfy}
+            </p>
+          )}
         </div>
       </section>
 

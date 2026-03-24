@@ -87,7 +87,7 @@ func agentCols() []string {
 		"gpu_vendor", "gpu_model", "gpu_enabled",
 		"agent_version", "os_version", "cpu_count", "ram_mib",
 		"nvenc", "qsv", "amf", "vnc_port", "api_key_hash", "last_heartbeat",
-		"upgrade_requested", "created_at", "updated_at",
+		"upgrade_requested", "update_channel", "created_at", "updated_at",
 	}
 }
 
@@ -97,7 +97,7 @@ func agentRow(id, name string) *pgxmock.Rows {
 			"nvidia", "RTX 4090", true,
 			"1.0.0", "Windows Server 2022", int32(16), int64(32768),
 			true, false, false, 5900, nil, nil,
-			false, now, now)
+			false, "stable", now, now)
 }
 
 func sourceCols() []string {
@@ -507,7 +507,7 @@ func TestListAgents_Success(t *testing.T) {
 	rows := pgxmock.NewRows(agentCols()).
 		AddRow("aid1", "agent-01", "host1", "192.168.1.1", "idle", []string{},
 			"", "", false, "1.0", "Win", int32(4), int64(8192),
-			false, false, false, 0, nil, nil, false, now, now)
+			false, false, false, 0, nil, nil, false, "stable", now, now)
 	mock.ExpectQuery(regexp.QuoteMeta(`FROM agents ORDER BY name`)).
 		WillReturnRows(rows)
 	agents, err := s.ListAgents(context.Background())

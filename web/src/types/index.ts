@@ -19,6 +19,7 @@ export interface Job {
   tasks_running: number
   depends_on?: string | null
   chain_group?: string | null
+  target_tags?: string[] | null
   audio_config?: AudioConfig | null
   // eta_seconds and eta_human are present when the job is running
   eta_seconds?: number | null
@@ -101,6 +102,7 @@ export interface Agent {
   vnc_port: number
   last_heartbeat: string | null
   created_at: string
+  update_channel: string
 }
 
 export interface Source {

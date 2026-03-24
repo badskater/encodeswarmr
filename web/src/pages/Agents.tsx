@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import * as api from '../api/client'
 import type { Agent, AgentPool } from '../types'
 import StatusBadge from '../components/StatusBadge'
@@ -161,12 +162,25 @@ export default function Agents() {
                   />
                 </td>
                 <td
-                  className="px-4 py-2 font-medium text-th-text cursor-pointer hover:underline"
+                  className="px-4 py-2 font-medium text-th-text cursor-pointer"
                   title="Click to toggle resource utilisation graph"
                   onClick={() => setExpandedMetrics(expandedMetrics === a.id ? null : a.id)}
                 >
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {a.name}
+                    <Link
+                      to={`/agents/${a.id}`}
+                      className="text-blue-600 hover:underline"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {a.name}
+                    </Link>
+                    {(a.update_channel && a.update_channel !== 'stable') && (
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                        a.update_channel === 'nightly' ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {a.update_channel}
+                      </span>
+                    )}
                     {getAgentPools(a, pools).map(p => (
                       <span
                         key={p.id}
@@ -275,7 +289,16 @@ export default function Agents() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                    <span className="font-medium text-th-text truncate">{a.name}</span>
+                    <Link to={`/agents/${a.id}`} className="font-medium text-blue-600 hover:underline truncate">
+                      {a.name}
+                    </Link>
+                    {(a.update_channel && a.update_channel !== 'stable') && (
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                        a.update_channel === 'nightly' ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {a.update_channel}
+                      </span>
+                    )}
                     {getAgentPools(a, pools).map(p => (
                       <span
                         key={p.id}

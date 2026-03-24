@@ -241,6 +241,31 @@ type Store interface {
 	// --- Sources (watch folder extensions) ---
 	UpdateSourceWatch(ctx context.Context, p UpdateSourceWatchParams) error
 
+	// --- Encoding Profiles ---
+	CreateEncodingProfile(ctx context.Context, p CreateEncodingProfileParams) (*EncodingProfile, error)
+	GetEncodingProfileByID(ctx context.Context, id string) (*EncodingProfile, error)
+	ListEncodingProfiles(ctx context.Context) ([]*EncodingProfile, error)
+	UpdateEncodingProfile(ctx context.Context, p UpdateEncodingProfileParams) (*EncodingProfile, error)
+	DeleteEncodingProfile(ctx context.Context, id string) error
+
+	// --- Agent update channel ---
+	UpdateAgentChannel(ctx context.Context, p UpdateAgentChannelParams) error
+
+	// --- Agent encoding stats (health deep-dive) ---
+	GetAgentEncodingStats(ctx context.Context, agentID string) (*AgentEncodingStats, error)
+	ListRecentTasksByAgent(ctx context.Context, agentID string, limit int) ([]*Task, error)
+
+	// --- API key rate limit ---
+	UpdateAPIKeyRateLimit(ctx context.Context, p UpdateAPIKeyRateLimitParams) error
+
+	// --- Audit log extended ---
+	ListAuditLogByUser(ctx context.Context, userID string, limit, offset int) ([]*AuditEntry, int, error)
+	ExportAuditLog(ctx context.Context, limit int) ([]*AuditEntry, error)
+
+	// --- Sessions extended ---
+	ListSessionsByUser(ctx context.Context, userID string) ([]*Session, error)
+	DeleteSessionByID(ctx context.Context, sessionID string) error
+
 	// Ping verifies the database connection is alive.
 	Ping(ctx context.Context) error
 }

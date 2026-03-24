@@ -1,5 +1,4 @@
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AgentPool, QueueStatus } from '../types'
-import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, SubtitleTrack, FileEntry, FileInfo } from '../types'
+import type { Job, Task, Agent, Source, Template, Variable, Webhook, WebhookDelivery, User, LogEntry, AnalysisResult, PathMapping, EnrollmentToken, SceneData, Schedule, ThroughputPoint, QueueSummary, ActivityEvent, Plugin, NotificationPrefs, AutoScalingSettings, AudioConfig, AudioPreset, ComparisonResponse, AgentPool, QueueStatus, SubtitleTrack, FileEntry, FileInfo } from '../types'
 import type { Flow } from '../types/flow'
 
 const API_BASE = '/api/v1'
@@ -570,3 +569,133 @@ export const deleteFile = (path: string) =>
 
 export const fileDownloadURL = (path: string) =>
   `${API_BASE}/files/download${buildQuery({ path })}`
+
+// Encoding Profiles
+export interface EncodingProfile {
+  id: string
+  name: string
+  description: string
+  container: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  settings: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  audio_config?: Record<string, any> | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export const listEncodingProfiles = () =>
+  request<EncodingProfile[]>('/encoding-profiles')
+
+export const getEncodingProfile = (id: string) =>
+  request<EncodingProfile>(`/encoding-profiles/${id}`)
+
+export const createEncodingProfile = (body: Partial<EncodingProfile>) =>
+  request<EncodingProfile>('/encoding-profiles', { method: 'POST', body: JSON.stringify(body) })
+
+export const updateEncodingProfile = (id: string, body: Partial<EncodingProfile>) =>
+  request<EncodingProfile>(`/encoding-profiles/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const deleteEncodingProfile = (id: string) =>
+  request<void>(`/encoding-profiles/${id}`, { method: 'DELETE' })
+
+// Agent health deep-dive
+export interface AgentEncodingStats {
+  agent_id: string
+  total_tasks: number
+  completed_tasks: number
+  failed_tasks: number
+  avg_fps: number
+  total_frames: number
+}
+
+export interface AgentHealthResponse {
+  agent: Agent
+  encoding_stats: AgentEncodingStats
+}
+
+export interface RecentTask {
+  id: string
+  job_id: string
+  chunk_index: number
+  task_type: string
+  status: string
+  avg_fps: number | null
+  frames_encoded: number | null
+  error_msg: string | null
+  updated_at: string
+}
+
+export const getAgentHealth = (id: string) =>
+  request<AgentHealthResponse>(`/agents/${id}/health`)
+
+export const listAgentRecentTasks = (id: string, limit = 20) =>
+  request<RecentTask[]>(`/agents/${id}/recent-tasks${buildQuery({ limit })}`)
+
+// Agent update channel
+export interface UpgradeChannel {
+  name: string
+  description: string
+}
+
+export const listUpgradeChannels = () =>
+  request<UpgradeChannel[]>('/upgrade-channels')
+
+export const updateAgentChannel = (agentId: string, channel: string) =>
+  request<{ ok: boolean; channel: string }>(`/agents/${agentId}/channel`, {
+    method: 'PUT',
+    body: JSON.stringify({ channel }),
+  })
+
+// Audit log export
+export const auditLogExportURL = (params: { format: 'csv' | 'json'; limit?: number }) =>
+  `${API_BASE}/audit-logs/export${buildQuery(params)}`
+
+export const getUserActivity = (userId: string, limit = 100, offset = 0) =>
+  requestCollection<AuditEntry>(`/users/${userId}/activity${buildQuery({ limit, offset })}`)
+
+// Sessions management
+export interface UserSession {
+  token: string
+  user_id: string
+  created_at: string
+  expires_at: string
+}
+
+export const listSessions = () =>
+  request<UserSession[]>('/sessions')
+
+export const deleteSession = (id: string) =>
+  request<void>(`/sessions/${id}`, { method: 'DELETE' })
+
+// API key management
+export interface APIKeyInfo {
+  id: string
+  user_id: string
+  name: string
+  rate_limit: number
+  created_at: string
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+export const listAPIKeys = () =>
+  request<APIKeyInfo[]>('/api-keys')
+
+// API key rate limit
+export const updateAPIKeyRateLimit = (id: string, rate_limit: number) =>
+  request<{ ok: boolean; rate_limit: number }>(`/api-keys/${id}/rate-limit`, {
+    method: 'PUT',
+    body: JSON.stringify({ rate_limit }),
+  })
+
+// Notification channel test endpoints
+export const testTelegram = () =>
+  request<{ ok: boolean }>('/notifications/test-telegram', { method: 'POST', body: JSON.stringify({}) })
+
+export const testPushover = () =>
+  request<{ ok: boolean }>('/notifications/test-pushover', { method: 'POST', body: JSON.stringify({}) })
+
+export const testNtfy = () =>
+  request<{ ok: boolean }>('/notifications/test-ntfy', { method: 'POST', body: JSON.stringify({}) })

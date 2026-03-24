@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/badskater/encodeswarmr/internal/controller/auth"
 	"golang.org/x/time/rate"
 )
 
@@ -114,7 +115,19 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 		e := val.(*entry)
 		e.lastSeen.Store(time.Now().UnixNano())
 
-		if !e.limiter.Allow() {
+		// If the request carries a per-API-key rate limit that is lower than
+		// the current limiter, create a stricter temporary limiter for this
+		// request only (without storing it to avoid overriding the shared
+		// per-IP limiter for other requests from the same IP).
+		limiter := e.limiter
+		if perKeyLimit, ok := auth.APIKeyRateLimitFromContext(r.Context()); ok {
+			perKeyRPS := rate.Limit(float64(perKeyLimit) / 60.0)
+			if perKeyRPS < limiter.Limit() {
+				limiter = rate.NewLimiter(perKeyRPS, perKeyLimit)
+			}
+		}
+
+		if !limiter.Allow() {
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{

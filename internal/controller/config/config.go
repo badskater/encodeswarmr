@@ -9,24 +9,25 @@ import (
 
 // Config is the root controller configuration.
 type Config struct {
-	Server      ServerConfig      `mapstructure:"server"`
-	Database    DatabaseConfig    `mapstructure:"database"`
-	GRPC        GRPCConfig        `mapstructure:"grpc"`
-	Auth        AuthConfig        `mapstructure:"auth"`
-	Logging     LoggingConfig     `mapstructure:"logging"`
-	Agent       AgentConfig       `mapstructure:"agent"`
-	Webhooks    WebhooksConfig    `mapstructure:"webhooks"`
-	TLS         TLSConfig         `mapstructure:"tls"`
-	Upgrade     UpgradeConfig     `mapstructure:"upgrade"`
-	VNC         VNCConfig         `mapstructure:"vnc"`
-	Analysis    AnalysisConfig    `mapstructure:"analysis"`
-	SMTP         SMTPConfig          `mapstructure:"smtp"`
-	AutoScaling  AutoScalingConfig   `mapstructure:"auto_scaling"`
-	Validation   ValidationConfig    `mapstructure:"validation"`
-	Archive      ArchiveConfig       `mapstructure:"archive"`
-	Tracing      TracingConfig       `mapstructure:"tracing"`
-	WatchFolders []WatchFolderConfig `mapstructure:"watch_folders"`
-	FileManager  FileManagerConfig   `mapstructure:"file_manager"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
+	Auth          AuthConfig          `mapstructure:"auth"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	Agent         AgentConfig         `mapstructure:"agent"`
+	Webhooks      WebhooksConfig      `mapstructure:"webhooks"`
+	TLS           TLSConfig           `mapstructure:"tls"`
+	Upgrade       UpgradeConfig       `mapstructure:"upgrade"`
+	VNC           VNCConfig           `mapstructure:"vnc"`
+	Analysis      AnalysisConfig      `mapstructure:"analysis"`
+	SMTP          SMTPConfig          `mapstructure:"smtp"`
+	AutoScaling   AutoScalingConfig   `mapstructure:"auto_scaling"`
+	Validation    ValidationConfig    `mapstructure:"validation"`
+	Archive       ArchiveConfig       `mapstructure:"archive"`
+	Tracing       TracingConfig       `mapstructure:"tracing"`
+	WatchFolders  []WatchFolderConfig `mapstructure:"watch_folders"`
+	FileManager   FileManagerConfig   `mapstructure:"file_manager"`
+	Notifications NotificationsConfig `mapstructure:"notifications"`
 }
 
 
@@ -234,6 +235,40 @@ type FileManagerConfig struct {
 	// Requests for paths outside these directories are rejected with 403.
 	// Example: ["/mnt/nas/media", "/mnt/nas/output"]
 	AllowedPaths []string `mapstructure:"allowed_paths"`
+}
+
+// NotificationsConfig holds settings for push notification channels.
+type NotificationsConfig struct {
+	Telegram TelegramConfig `mapstructure:"telegram"`
+	Pushover PushoverConfig `mapstructure:"pushover"`
+	Ntfy     NtfyConfig     `mapstructure:"ntfy"`
+}
+
+// TelegramConfig holds Telegram Bot API credentials.
+// BotToken is sensitive — supply via environment variable TELEGRAM_BOT_TOKEN.
+type TelegramConfig struct {
+	// BotToken is the token obtained from @BotFather.
+	BotToken string `mapstructure:"bot_token"`
+	// ChatID is the target chat or channel ID (numeric or @username).
+	ChatID string `mapstructure:"chat_id"`
+}
+
+// PushoverConfig holds Pushover application and user credentials.
+type PushoverConfig struct {
+	// AppToken is the Pushover application API token.
+	AppToken string `mapstructure:"app_token"`
+	// UserKey is the Pushover user/group key.
+	UserKey string `mapstructure:"user_key"`
+}
+
+// NtfyConfig holds ntfy.sh (or self-hosted ntfy) settings.
+type NtfyConfig struct {
+	// Topic is the ntfy topic to publish to, e.g. "encodeswarmr-alerts".
+	Topic string `mapstructure:"topic"`
+	// ServerURL is the ntfy server base URL. Defaults to "https://ntfy.sh".
+	ServerURL string `mapstructure:"server_url"`
+	// Token is an optional Bearer token for private topics.
+	Token string `mapstructure:"token"`
 }
 
 // TracingConfig controls OpenTelemetry distributed tracing.

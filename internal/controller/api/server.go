@@ -32,12 +32,15 @@ type Server struct {
 	hub          *Hub
 	leader       *ha.Leader
 	plugins      *plugins.Registry
-	email        *notifications.EmailSender // nil when SMTP is not configured
-	autoScaling  *engine.AutoScalingHook    // nil when auto-scaling is disabled
-	watcher      *watcher.Watcher           // nil when no watch folders are configured
+	email        *notifications.EmailSender    // nil when SMTP is not configured
+	telegram     *notifications.TelegramSender // nil when Telegram is not configured
+	pushover     *notifications.PushoverSender // nil when Pushover is not configured
+	ntfy         *notifications.NtfySender     // nil when ntfy is not configured
+	autoScaling  *engine.AutoScalingHook       // nil when auto-scaling is disabled
+	watcher      *watcher.Watcher              // nil when no watch folders are configured
 	rulesEngine  *rules.Engine
-	logHub       *logStreamHub              // per-task WebSocket log streaming
-	eng          *engine.Engine             // nil until SetEngine is called
+	logHub       *logStreamHub // per-task WebSocket log streaming
+	eng          *engine.Engine // nil until SetEngine is called
 }
 
 // SetEngine attaches the core engine so the API layer can expose queue
@@ -64,10 +67,14 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		leader:       ldr,
 		plugins:      pluginReg,
 		email:        notifications.NewEmailSender(cfg.SMTP, logger),
+		telegram:     notifications.NewTelegramSender(cfg.Notifications.Telegram, logger),
+		pushover:     notifications.NewPushoverSender(cfg.Notifications.Pushover, logger),
+		ntfy:         notifications.NewNtfySender(cfg.Notifications.Ntfy, logger),
 		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
 		rulesEngine:  rules.New(store, logger),
 		logHub:       newLogStreamHub(),
 	}
+
 	// Initialise watcher only when watch folders are configured.
 	if len(cfg.WatchFolders) > 0 {
 		s.watcher = watcher.New(cfg.WatchFolders, store, logger)
@@ -202,9 +209,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("GET /api/v1/agents", viewer(s.handleListAgents))
 	mux.Handle("GET /api/v1/agents/{id}", viewer(s.handleGetAgent))
 	mux.Handle("GET /api/v1/agents/{id}/metrics", viewer(s.handleGetAgentMetrics))
+	mux.Handle("GET /api/v1/agents/{id}/health", viewer(s.handleGetAgentHealth))
+	mux.Handle("GET /api/v1/agents/{id}/recent-tasks", viewer(s.handleListAgentRecentTasks))
 	mux.Handle("POST /api/v1/agents/{id}/drain", operator(s.handleDrainAgent))
 	mux.Handle("POST /api/v1/agents/{id}/approve", operator(s.handleApproveAgent))
 	mux.Handle("POST /api/v1/agents/{id}/upgrade", admin(s.handleRequestAgentUpgrade))
+	mux.Handle("PUT /api/v1/agents/{id}/channel", operator(s.handleUpdateAgentChannel))
 	mux.Handle("POST /api/v1/agents/{id}/pools", operator(s.handleAssignAgentToPool))
 	mux.Handle("DELETE /api/v1/agents/{id}/pools/{pool_id}", operator(s.handleRemoveAgentFromPool))
 
@@ -303,11 +313,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 	mux.Handle("POST /api/v1/api-keys", viewer(s.handleCreateAPIKey))
 	mux.Handle("GET /api/v1/api-keys", viewer(s.handleListAPIKeys))
 	mux.Handle("DELETE /api/v1/api-keys/{id}", viewer(s.handleDeleteAPIKey))
+	mux.Handle("PUT /api/v1/api-keys/{id}/rate-limit", admin(s.handleUpdateAPIKeyRateLimit))
 
 	// --- Notification Preferences (per-user) ---
 	mux.Handle("GET /api/v1/me/notifications", viewer(s.handleGetNotificationPrefs))
 	mux.Handle("PUT /api/v1/me/notifications", viewer(s.handleUpdateNotificationPrefs))
 	mux.Handle("POST /api/v1/notifications/test-email", admin(s.handleTestEmail))
+	mux.Handle("POST /api/v1/notifications/test-telegram", admin(s.handleTestTelegram))
+	mux.Handle("POST /api/v1/notifications/test-pushover", admin(s.handleTestPushover))
+	mux.Handle("POST /api/v1/notifications/test-ntfy", admin(s.handleTestNtfy))
 
 	// --- Auto-Scaling Settings ---
 	mux.Handle("GET /api/v1/settings/auto-scaling", admin(s.handleGetAutoScaling))
@@ -316,6 +330,24 @@ func (s *Server) registerRoutes(mux *http.ServeMux) error {
 
 	// --- Audit Log ---
 	mux.Handle("GET /api/v1/audit-log", admin(s.handleListAuditLog))
+	mux.Handle("GET /api/v1/audit-logs/export", admin(s.handleExportAuditLog))
+
+	// --- User activity ---
+	mux.Handle("GET /api/v1/users/{id}/activity", admin(s.handleGetUserActivity))
+
+	// --- Sessions management ---
+	mux.Handle("GET /api/v1/sessions", viewer(s.handleListSessions))
+	mux.Handle("DELETE /api/v1/sessions/{id}", viewer(s.handleDeleteSession))
+
+	// --- Encoding Profiles ---
+	mux.Handle("GET /api/v1/encoding-profiles", viewer(s.handleListEncodingProfiles))
+	mux.Handle("POST /api/v1/encoding-profiles", admin(s.handleCreateEncodingProfile))
+	mux.Handle("GET /api/v1/encoding-profiles/{id}", viewer(s.handleGetEncodingProfile))
+	mux.Handle("PUT /api/v1/encoding-profiles/{id}", admin(s.handleUpdateEncodingProfile))
+	mux.Handle("DELETE /api/v1/encoding-profiles/{id}", admin(s.handleDeleteEncodingProfile))
+
+	// --- Upgrade channels ---
+	mux.Handle("GET /api/v1/upgrade-channels", viewer(s.handleListUpgradeChannels))
 
 	// --- Encoding Presets ---
 	mux.Handle("GET /api/v1/presets", viewer(s.handleListPresets))

@@ -127,6 +127,40 @@ func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleUpdateAPIKeyRateLimit sets the per-minute rate limit for an API key.
+// PUT /api/v1/api-keys/{id}/rate-limit  (admin only)
+func (s *Server) handleUpdateAPIKeyRateLimit(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req struct {
+		RateLimit int `json:"rate_limit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", "invalid JSON body")
+		return
+	}
+	if req.RateLimit < 0 {
+		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error",
+			"rate_limit must be >= 0 (0 = use global default)")
+		return
+	}
+
+	if err := s.store.UpdateAPIKeyRateLimit(r.Context(), db.UpdateAPIKeyRateLimitParams{
+		ID:        id,
+		RateLimit: req.RateLimit,
+	}); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeProblem(w, r, http.StatusNotFound, "Not Found", "api key not found")
+			return
+		}
+		s.logger.Error("update api key rate limit", "err", err)
+		writeProblem(w, r, http.StatusInternalServerError, "Internal Server Error", "")
+		return
+	}
+
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "rate_limit": req.RateLimit})
+}
+
 // generateAPIKey creates a random 32-byte hex key and returns both the
 // plaintext and its SHA-256 hash (used for storage).
 func generateAPIKey() (plaintext, keyHash string, err error) {
