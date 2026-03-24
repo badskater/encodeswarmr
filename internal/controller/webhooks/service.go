@@ -35,11 +35,14 @@ type delivery struct {
 
 // Service manages webhook event routing and delivery.
 type Service struct {
-	store  db.Store
-	cfg    Config
-	logger *slog.Logger
-	queue  chan delivery
-	email  *notifications.EmailSender // nil when email is not configured
+	store    db.Store
+	cfg      Config
+	logger   *slog.Logger
+	queue    chan delivery
+	email    *notifications.EmailSender    // nil when email is not configured
+	telegram *notifications.TelegramSender // nil when Telegram is not configured
+	pushover *notifications.PushoverSender // nil when Pushover is not configured
+	ntfy     *notifications.NtfySender     // nil when ntfy is not configured
 }
 
 // New creates a new Service. Call Start to begin background workers.
@@ -61,6 +64,21 @@ func New(store db.Store, cfg Config, logger *slog.Logger) *Service {
 // Call this before Start.
 func (s *Service) SetEmailSender(e *notifications.EmailSender) {
 	s.email = e
+}
+
+// SetTelegramSender attaches a TelegramSender. Call this before Start.
+func (s *Service) SetTelegramSender(t *notifications.TelegramSender) {
+	s.telegram = t
+}
+
+// SetPushoverSender attaches a PushoverSender. Call this before Start.
+func (s *Service) SetPushoverSender(p *notifications.PushoverSender) {
+	s.pushover = p
+}
+
+// SetNtfySender attaches a NtfySender. Call this before Start.
+func (s *Service) SetNtfySender(n *notifications.NtfySender) {
+	s.ntfy = n
 }
 
 // Start launches WorkerCount background delivery workers.
@@ -109,6 +127,11 @@ func (s *Service) Emit(ctx context.Context, event Event) {
 	// Dispatch email notifications asynchronously if email is configured.
 	if s.email != nil {
 		go s.dispatchEmails(ctx, event)
+	}
+
+	// Dispatch push channel notifications asynchronously.
+	if s.telegram != nil || s.pushover != nil || s.ntfy != nil {
+		go s.dispatchPushChannels(ctx, event)
 	}
 }
 
@@ -174,6 +197,59 @@ func (s *Service) dispatchEmails(ctx context.Context, event Event) {
 			s.logger.Warn("webhooks: send email notification",
 				slog.String("event", event.Type),
 				slog.String("to", p.EmailAddress),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+}
+
+// dispatchPushChannels sends a notification via Telegram, Pushover, and ntfy
+// for the given event. Each channel is best-effort: errors are logged but
+// never propagate or block event delivery.
+func (s *Service) dispatchPushChannels(_ context.Context, event Event) {
+	jobID, _ := event.Payload["job_id"].(string)
+	sourcePath, _ := event.Payload["source_path"].(string)
+	agentName, _ := event.Payload["agent_name"].(string)
+
+	var title, message string
+	switch event.Type {
+	case "job.completed":
+		title = "Job Completed — EncodeSwarmr"
+		message = "Job " + jobID + " completed: " + sourcePath
+	case "job.failed":
+		detail, _ := event.Payload["error"].(string)
+		title = "Job Failed — EncodeSwarmr"
+		message = "Job " + jobID + " failed: " + sourcePath
+		if detail != "" {
+			message += "\n" + detail
+		}
+	case "agent.stale":
+		title = "Agent Offline — EncodeSwarmr"
+		message = "Agent " + agentName + " has stopped sending heartbeats."
+	default:
+		return
+	}
+
+	if s.telegram != nil {
+		if err := s.telegram.Send(title + "\n" + message); err != nil {
+			s.logger.Warn("webhooks: telegram notification failed",
+				slog.String("event", event.Type),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+	if s.pushover != nil {
+		if err := s.pushover.Send(title, message); err != nil {
+			s.logger.Warn("webhooks: pushover notification failed",
+				slog.String("event", event.Type),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+	if s.ntfy != nil {
+		if err := s.ntfy.Send(title, message); err != nil {
+			s.logger.Warn("webhooks: ntfy notification failed",
+				slog.String("event", event.Type),
 				slog.String("error", err.Error()),
 			)
 		}

@@ -146,7 +146,7 @@ func (s *pgStore) UpsertAgent(ctx context.Context, p UpsertAgentParams) (*Agent,
 		          gpu_vendor, gpu_model, gpu_enabled,
 		          agent_version, os_version, cpu_count, ram_mib,
 		          nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-		          upgrade_requested, created_at, updated_at`
+		          upgrade_requested, COALESCE(update_channel, 'stable'), created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		p.Name, p.Hostname, p.IPAddress, p.Tags,
 		p.GPUVendor, p.GPUModel, p.GPUEnabled,
@@ -161,7 +161,7 @@ func (s *pgStore) GetAgentByID(ctx context.Context, id string) (*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, COALESCE(update_channel, 'stable'), created_at, updated_at
 	           FROM agents WHERE id = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, id))
 }
@@ -171,7 +171,7 @@ func (s *pgStore) GetAgentByName(ctx context.Context, name string) (*Agent, erro
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, COALESCE(update_channel, 'stable'), created_at, updated_at
 	           FROM agents WHERE name = $1`
 	return scanAgent(s.pool.QueryRow(ctx, q, name))
 }
@@ -181,7 +181,7 @@ func (s *pgStore) ListAgents(ctx context.Context) ([]*Agent, error) {
 	                  gpu_vendor, gpu_model, gpu_enabled,
 	                  agent_version, os_version, cpu_count, ram_mib,
 	                  nvenc, qsv, amf, vnc_port, api_key_hash, last_heartbeat,
-	                  upgrade_requested, created_at, updated_at
+	                  upgrade_requested, COALESCE(update_channel, 'stable'), created_at, updated_at
 	           FROM agents ORDER BY name`
 	rows, err := s.pool.Query(ctx, q)
 	if err != nil {
@@ -262,7 +262,7 @@ func scanAgent(row pgx.Row) (*Agent, error) {
 		&a.GPUVendor, &a.GPUModel, &a.GPUEnabled,
 		&a.AgentVersion, &a.OSVersion, &a.CPUCount, &a.RAMMIB,
 		&a.NVENC, &a.QSV, &a.AMF, &a.VNCPort, &a.APIKeyHash, &a.LastHeartbeat,
-		&a.UpgradeRequested, &a.CreatedAt, &a.UpdatedAt,
+		&a.UpgradeRequested, &a.UpdateChannel, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -1824,6 +1824,21 @@ func (s *pgStore) ListAuditLog(ctx context.Context, limit, offset int) ([]*Audit
 	return entries, total, rows.Err()
 }
 
+func scanAuditEntry(row pgx.Row) (*AuditEntry, error) {
+	var e AuditEntry
+	err := row.Scan(
+		&e.ID, &e.UserID, &e.Username, &e.Action,
+		&e.Resource, &e.ResourceID, &e.Detail, &e.IPAddress, &e.LoggedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan audit entry: %w", err)
+	}
+	return &e, nil
+}
+
 // ---------------------------------------------------------------------------
 // Agent Metrics
 // ---------------------------------------------------------------------------
@@ -2010,7 +2025,7 @@ func (s *pgStore) CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIK
 	const q = `
 		INSERT INTO api_keys (user_id, name, key_hash, expires_at)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id, name, created_at, last_used_at, expires_at`
+		RETURNING id, user_id, name, COALESCE(rate_limit, 0), created_at, last_used_at, expires_at`
 	row := s.pool.QueryRow(ctx, q, p.UserID, p.Name, p.KeyHash, p.ExpiresAt)
 	return scanAPIKey(row)
 }
@@ -2019,7 +2034,7 @@ func (s *pgStore) CreateAPIKey(ctx context.Context, p CreateAPIKeyParams) (*APIK
 // the key has not expired (when expires_at is set).
 func (s *pgStore) GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey, error) {
 	const q = `
-		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		SELECT id, user_id, name, COALESCE(rate_limit, 0), created_at, last_used_at, expires_at
 		FROM api_keys
 		WHERE key_hash = $1
 		  AND (expires_at IS NULL OR expires_at > now())`
@@ -2028,7 +2043,7 @@ func (s *pgStore) GetAPIKeyByHash(ctx context.Context, keyHash string) (*APIKey,
 
 func (s *pgStore) ListAPIKeysByUser(ctx context.Context, userID string) ([]*APIKey, error) {
 	const q = `
-		SELECT id, user_id, name, created_at, last_used_at, expires_at
+		SELECT id, user_id, name, COALESCE(rate_limit, 0), created_at, last_used_at, expires_at
 		FROM api_keys
 		WHERE user_id = $1
 		ORDER BY created_at`
@@ -2174,7 +2189,7 @@ func (s *pgStore) UpdateAPIKeyLastUsed(ctx context.Context, id string) error {
 
 func scanAPIKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
-	err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt)
+	err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.RateLimit, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -3009,6 +3024,260 @@ func (s *pgStore) UpdateSourceWatch(ctx context.Context, p UpdateSourceWatchPara
 	ct, err := s.pool.Exec(ctx, q, p.ID, p.WatchFolder, p.Category)
 	if err != nil {
 		return fmt.Errorf("db: update source watch: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Encoding Profiles
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) CreateEncodingProfile(ctx context.Context, p CreateEncodingProfileParams) (*EncodingProfile, error) {
+	const q = `
+		INSERT INTO encoding_profiles (name, description, container, settings, audio_config, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, name, description, container, settings, audio_config, created_by, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Description, p.Container, p.Settings, nullableJSON(p.AudioConfig), p.CreatedBy)
+	return scanEncodingProfile(row)
+}
+
+func (s *pgStore) GetEncodingProfileByID(ctx context.Context, id string) (*EncodingProfile, error) {
+	const q = `SELECT id, name, description, container, settings, audio_config, created_by, created_at, updated_at
+	           FROM encoding_profiles WHERE id = $1`
+	return scanEncodingProfile(s.pool.QueryRow(ctx, q, id))
+}
+
+func (s *pgStore) ListEncodingProfiles(ctx context.Context) ([]*EncodingProfile, error) {
+	const q = `SELECT id, name, description, container, settings, audio_config, created_by, created_at, updated_at
+	           FROM encoding_profiles ORDER BY name`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("db: list encoding profiles: %w", err)
+	}
+	defer rows.Close()
+	var out []*EncodingProfile
+	for rows.Next() {
+		ep, err := scanEncodingProfile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ep)
+	}
+	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateEncodingProfile(ctx context.Context, p UpdateEncodingProfileParams) (*EncodingProfile, error) {
+	const q = `
+		UPDATE encoding_profiles
+		SET name = $2, description = $3, container = $4, settings = $5, audio_config = $6, updated_at = now()
+		WHERE id = $1
+		RETURNING id, name, description, container, settings, audio_config, created_by, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, p.ID, p.Name, p.Description, p.Container, p.Settings, nullableJSON(p.AudioConfig))
+	return scanEncodingProfile(row)
+}
+
+func (s *pgStore) DeleteEncodingProfile(ctx context.Context, id string) error {
+	const q = `DELETE FROM encoding_profiles WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("db: delete encoding profile: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func scanEncodingProfile(row pgx.Row) (*EncodingProfile, error) {
+	var p EncodingProfile
+	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.Container, &p.Settings, &p.AudioConfig, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: scan encoding profile: %w", err)
+	}
+	return &p, nil
+}
+
+// nullableJSON returns nil when b is empty, otherwise b — used to store
+// optional JSONB columns without a zero-value byte slice.
+func nullableJSON(b json.RawMessage) interface{} {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
+}
+
+// ---------------------------------------------------------------------------
+// Agent update channel
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) UpdateAgentChannel(ctx context.Context, p UpdateAgentChannelParams) error {
+	const q = `UPDATE agents SET update_channel = $2, updated_at = now() WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.Channel)
+	if err != nil {
+		return fmt.Errorf("db: update agent channel: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Agent encoding stats (health deep-dive)
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) GetAgentEncodingStats(ctx context.Context, agentID string) (*AgentEncodingStats, error) {
+	const q = `
+		SELECT
+			$1::text AS agent_id,
+			COUNT(*) AS total_tasks,
+			COUNT(*) FILTER (WHERE status = 'completed') AS completed_tasks,
+			COUNT(*) FILTER (WHERE status = 'failed') AS failed_tasks,
+			COALESCE(AVG(avg_fps) FILTER (WHERE avg_fps IS NOT NULL AND avg_fps > 0), 0) AS avg_fps,
+			COALESCE(SUM(frames_encoded), 0) AS total_frames
+		FROM tasks
+		WHERE agent_id = $1`
+	var st AgentEncodingStats
+	err := s.pool.QueryRow(ctx, q, agentID).Scan(
+		&st.AgentID, &st.TotalTasks, &st.CompletedTasks, &st.FailedTasks,
+		&st.AvgFPS, &st.TotalFrames,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: get agent encoding stats: %w", err)
+	}
+	return &st, nil
+}
+
+func (s *pgStore) ListRecentTasksByAgent(ctx context.Context, agentID string, limit int) ([]*Task, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	const q = `SELECT id, job_id, chunk_index, task_type, status, agent_id, script_dir,
+	                  source_path, output_path, variables, exit_code,
+	                  frames_encoded, avg_fps, output_size, duration_sec,
+	                  vmaf_score, psnr, ssim, error_msg, retry_count, retry_after,
+	                  preemptible, preempted_at, started_at, completed_at, created_at, updated_at
+	           FROM tasks WHERE agent_id = $1 ORDER BY updated_at DESC LIMIT $2`
+	rows, err := s.pool.Query(ctx, q, agentID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("db: list recent tasks by agent: %w", err)
+	}
+	defer rows.Close()
+	var out []*Task
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// API key rate limit
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) UpdateAPIKeyRateLimit(ctx context.Context, p UpdateAPIKeyRateLimitParams) error {
+	const q = `UPDATE api_keys SET rate_limit = $2 WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, p.ID, p.RateLimit)
+	if err != nil {
+		return fmt.Errorf("db: update api key rate limit: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Audit log extended
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) ListAuditLogByUser(ctx context.Context, userID string, limit, offset int) ([]*AuditEntry, int, error) {
+	const countQ = `SELECT COUNT(*) FROM audit_log WHERE user_id = $1`
+	var total int
+	if err := s.pool.QueryRow(ctx, countQ, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("db: count audit log by user: %w", err)
+	}
+	const q = `SELECT id, user_id, username, action, resource, resource_id, detail, ip_address, logged_at
+	           FROM audit_log WHERE user_id = $1
+	           ORDER BY logged_at DESC LIMIT $2 OFFSET $3`
+	rows, err := s.pool.Query(ctx, q, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("db: list audit log by user: %w", err)
+	}
+	defer rows.Close()
+	var out []*AuditEntry
+	for rows.Next() {
+		e, err := scanAuditEntry(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, e)
+	}
+	return out, total, rows.Err()
+}
+
+func (s *pgStore) ExportAuditLog(ctx context.Context, limit int) ([]*AuditEntry, error) {
+	if limit <= 0 || limit > 100000 {
+		limit = 10000
+	}
+	const q = `SELECT id, user_id, username, action, resource, resource_id, detail, ip_address, logged_at
+	           FROM audit_log ORDER BY logged_at DESC LIMIT $1`
+	rows, err := s.pool.Query(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("db: export audit log: %w", err)
+	}
+	defer rows.Close()
+	var out []*AuditEntry
+	for rows.Next() {
+		e, err := scanAuditEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Sessions extended
+// ---------------------------------------------------------------------------
+
+func (s *pgStore) ListSessionsByUser(ctx context.Context, userID string) ([]*Session, error) {
+	const q = `SELECT token, user_id, created_at, expires_at
+	           FROM sessions WHERE user_id = $1 AND expires_at > now()
+	           ORDER BY created_at DESC`
+	rows, err := s.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("db: list sessions by user: %w", err)
+	}
+	defer rows.Close()
+	var out []*Session
+	for rows.Next() {
+		sess, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sess)
+	}
+	return out, rows.Err()
+}
+
+// DeleteSessionByID removes a session by its token (used as the ID from the
+// sessions management API).
+func (s *pgStore) DeleteSessionByID(ctx context.Context, sessionID string) error {
+	const q = `DELETE FROM sessions WHERE token = $1`
+	ct, err := s.pool.Exec(ctx, q, sessionID)
+	if err != nil {
+		return fmt.Errorf("db: delete session by id: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrNotFound

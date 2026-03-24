@@ -58,6 +58,7 @@ export default function NavBar({ role, onLogout }: Props) {
               <NavLink to="/audio-convert" className={linkCls}>Audio</NavLink>
               <NavLink to="/flows" className={linkCls}>Flows</NavLink>
               <NavLink to="/files" className={linkCls}>Files</NavLink>
+              <NavLink to="/sessions" className={linkCls}>Sessions</NavLink>
               {role === 'admin' && (
                 <>
                   <NavLink to="/admin/templates" className={linkCls}>Templates</NavLink>
@@ -74,6 +75,9 @@ export default function NavBar({ role, onLogout }: Props) {
                   <NavLink to="/admin/auto-scaling" className={linkCls}>Auto-Scaling</NavLink>
                   <NavLink to="/admin/watch-folders" className={linkCls}>Watch Folders</NavLink>
                   <NavLink to="/admin/encoding-rules" className={linkCls}>Enc. Rules</NavLink>
+                  <NavLink to="/admin/encoding-profiles" className={linkCls}>Profiles</NavLink>
+                  <NavLink to="/admin/audit-export" className={linkCls}>Audit</NavLink>
+                  <NavLink to="/admin/api-keys" className={linkCls}>API Keys</NavLink>
                 </>
               )}
             </div>
@@ -125,6 +129,7 @@ export default function NavBar({ role, onLogout }: Props) {
             <NavLink to="/audio-convert" className={mobileLinkCls} onClick={closeMenu}>Audio</NavLink>
             <NavLink to="/flows" className={mobileLinkCls} onClick={closeMenu}>Flows</NavLink>
             <NavLink to="/files" className={mobileLinkCls} onClick={closeMenu}>Files</NavLink>
+            <NavLink to="/sessions" className={mobileLinkCls} onClick={closeMenu}>Sessions</NavLink>
             {role === 'admin' && (
               <>
                 <div className="px-4 pt-2 pb-1 text-xs text-th-nav-text opacity-50 uppercase tracking-wide">Admin</div>
@@ -142,6 +147,9 @@ export default function NavBar({ role, onLogout }: Props) {
                 <NavLink to="/admin/auto-scaling" className={mobileLinkCls} onClick={closeMenu}>Auto-Scaling</NavLink>
                 <NavLink to="/admin/watch-folders" className={mobileLinkCls} onClick={closeMenu}>Watch Folders</NavLink>
                 <NavLink to="/admin/encoding-rules" className={mobileLinkCls} onClick={closeMenu}>Enc. Rules</NavLink>
+                <NavLink to="/admin/encoding-profiles" className={mobileLinkCls} onClick={closeMenu}>Enc. Profiles</NavLink>
+                <NavLink to="/admin/audit-export" className={mobileLinkCls} onClick={closeMenu}>Audit Export</NavLink>
+                <NavLink to="/admin/api-keys" className={mobileLinkCls} onClick={closeMenu}>API Keys</NavLink>
               </>
             )}
             <div className="border-t border-th-nav-hover mt-1 pt-1">

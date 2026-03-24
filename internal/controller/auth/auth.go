@@ -85,26 +85,34 @@ func (s *Service) OIDCEnabled() bool { return s.oidc != nil }
 // AuthenticateAPIKey validates a plaintext API key and returns the owning user.
 // It updates last_used_at on success.
 func (s *Service) AuthenticateAPIKey(ctx context.Context, plaintext string) (*db.User, error) {
+	user, _, err := s.AuthenticateAPIKeyWithKey(ctx, plaintext)
+	return user, err
+}
+
+// AuthenticateAPIKeyWithKey validates a plaintext API key and returns both the
+// owning user and the key row (which includes the per-key rate limit).
+// It updates last_used_at on success.
+func (s *Service) AuthenticateAPIKeyWithKey(ctx context.Context, plaintext string) (*db.User, *db.APIKey, error) {
 	hash := HashAPIKey(plaintext)
 	key, err := s.store.GetAPIKeyByHash(ctx, hash)
 	if errors.Is(err, db.ErrNotFound) || key == nil {
-		return nil, ErrInvalidCredentials
+		return nil, nil, ErrInvalidCredentials
 	}
 	if err != nil {
-		return nil, fmt.Errorf("auth: api key lookup: %w", err)
+		return nil, nil, fmt.Errorf("auth: api key lookup: %w", err)
 	}
 	if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
-		return nil, ErrInvalidCredentials // key expired
+		return nil, nil, ErrInvalidCredentials // key expired
 	}
 	user, err := s.store.GetUserByID(ctx, key.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("auth: api key user lookup: %w", err)
+		return nil, nil, fmt.Errorf("auth: api key user lookup: %w", err)
 	}
 	// Best-effort last_used_at update; do not fail the request on error.
 	if err := s.store.UpdateAPIKeyLastUsed(ctx, key.ID); err != nil && s.logger != nil {
 		s.logger.Warn("failed to update api key last_used_at", "key_id", key.ID, "err", err)
 	}
-	return user, nil
+	return user, key, nil
 }
 
 // HashAPIKey returns the hex-encoded SHA-256 hash of a plaintext API key.

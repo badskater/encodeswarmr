@@ -10,6 +10,8 @@ import (
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
+const testNotificationMessage = "Test notification from EncodeSwarmr — if you received this, your configuration is correct."
+
 // defaultNotificationPrefs returns the default notification preferences used
 // when a user has not yet saved any explicit preferences.
 func defaultNotificationPrefs(userID string) *db.NotificationPrefs {
@@ -129,4 +131,52 @@ func (s *Server) handleTestEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "to": req.To})
+}
+
+// handleTestTelegram sends a test message to verify Telegram configuration.
+// POST /api/v1/notifications/test-telegram  (admin only)
+func (s *Server) handleTestTelegram(w http.ResponseWriter, r *http.Request) {
+	if s.telegram == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "Telegram Not Configured",
+			"no Telegram bot token or chat ID configured; set notifications.telegram in the controller config")
+		return
+	}
+	if err := s.telegram.Send("<b>EncodeSwarmr</b> — " + testNotificationMessage); err != nil {
+		s.logger.Warn("test-telegram: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "Telegram Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleTestPushover sends a test message to verify Pushover configuration.
+// POST /api/v1/notifications/test-pushover  (admin only)
+func (s *Server) handleTestPushover(w http.ResponseWriter, r *http.Request) {
+	if s.pushover == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "Pushover Not Configured",
+			"no Pushover app token or user key configured; set notifications.pushover in the controller config")
+		return
+	}
+	if err := s.pushover.Send("EncodeSwarmr Test", testNotificationMessage); err != nil {
+		s.logger.Warn("test-pushover: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "Pushover Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleTestNtfy sends a test message to verify ntfy configuration.
+// POST /api/v1/notifications/test-ntfy  (admin only)
+func (s *Server) handleTestNtfy(w http.ResponseWriter, r *http.Request) {
+	if s.ntfy == nil {
+		writeProblem(w, r, http.StatusServiceUnavailable, "ntfy Not Configured",
+			"no ntfy topic configured; set notifications.ntfy in the controller config")
+		return
+	}
+	if err := s.ntfy.Send("EncodeSwarmr Test", testNotificationMessage); err != nil {
+		s.logger.Warn("test-ntfy: send failed", "err", err)
+		writeProblem(w, r, http.StatusBadGateway, "ntfy Delivery Failed", err.Error())
+		return
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true})
 }

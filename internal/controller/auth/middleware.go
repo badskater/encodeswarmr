@@ -36,8 +36,10 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		}
 
 		// Fall back to API key when no matching session was found.
+		var apiKeyRateLimit int
 		if errors.Is(err, db.ErrNotFound) {
-			user, err = s.AuthenticateAPIKey(r.Context(), token)
+			var apiKey *db.APIKey
+			user, apiKey, err = s.AuthenticateAPIKeyWithKey(r.Context(), token)
 			if errors.Is(err, ErrInvalidCredentials) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
@@ -47,6 +49,9 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
+			if apiKey != nil {
+				apiKeyRateLimit = apiKey.RateLimit
+			}
 		}
 
 		claims := &Claims{
@@ -54,7 +59,11 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			Username: user.Username,
 			Role:     user.Role,
 		}
-		next.ServeHTTP(w, r.WithContext(withClaims(r.Context(), claims)))
+		ctx := withClaims(r.Context(), claims)
+		if apiKeyRateLimit > 0 {
+			ctx = WithAPIKeyRateLimit(ctx, apiKeyRateLimit)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
