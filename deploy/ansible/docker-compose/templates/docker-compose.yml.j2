@@ -10,9 +10,12 @@ services:
     volumes:
       - {{ controller_config_file_docker }}:/etc/encodeswarmr/controller.yaml:ro
       - {{ docker_cert_dir }}:/etc/encodeswarmr/certs:ro
+      - thumbnails_data:/var/lib/encodeswarmr/thumbnails
+      - agent_bins:/var/lib/encodeswarmr/binaries
 {% for export in nas_nfs_exports %}
       - {{ export.dest }}:{{ export.dest }}:rw
 {% endfor %}
+    command: ["run", "--config", "/etc/encodeswarmr/controller.yaml"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,3 +57,5 @@ services:
 
 volumes:
   postgres_data:
+  thumbnails_data:
+  agent_bins:

@@ -141,6 +141,78 @@ hpa:
   targetCPUUtilizationPercentage: 70
 
 # ---------------------------------------------------------------------------
+# SMTP (optional)
+# ---------------------------------------------------------------------------
+smtp:
+  host: ""
+  port: 587
+  username: ""
+  # -- SMTP password. Store in a Secret and reference via extraEnv instead.
+  password: ""
+  fromAddress: ""
+  starttls: true
+
+# ---------------------------------------------------------------------------
+# Notification channels (optional)
+# ---------------------------------------------------------------------------
+notifications:
+  telegram:
+    botToken: ""
+    chatId: ""
+  pushover:
+    appToken: ""
+    userKey: ""
+  ntfy:
+    topic: ""
+    serverUrl: "https://ntfy.sh"
+    token: ""
+
+# ---------------------------------------------------------------------------
+# File Manager
+# ---------------------------------------------------------------------------
+fileManager:
+  # -- Directories the file manager may access. Empty disables the feature.
+  allowedPaths: []
+    # - /mnt/nas/media
+    # - /mnt/nas/output
+
+# ---------------------------------------------------------------------------
+# Watch Folders (optional)
+# ---------------------------------------------------------------------------
+watchFolders: []
+  # - name: incoming
+  #   path: /mnt/nas/incoming
+  #   windowsPath: "\\\\NAS01\\incoming"
+  #   filePatterns: ["*.mkv", "*.mp4"]
+  #   pollInterval: 30s
+  #   autoAnalyze: true
+  #   enabled: true
+
+# ---------------------------------------------------------------------------
+# Auto-Scaling (optional)
+# ---------------------------------------------------------------------------
+autoScaling:
+  enabled: false
+  webhookUrl: ""
+  scaleUpThreshold: 10
+  scaleDownThreshold: 3
+  cooldownSeconds: 300
+
+# ---------------------------------------------------------------------------
+# Output Validation
+# ---------------------------------------------------------------------------
+validation:
+  enabled: true
+  minDurationRatio: 0.9
+
+# ---------------------------------------------------------------------------
+# Job Archival
+# ---------------------------------------------------------------------------
+archive:
+  enabled: true
+  retentionDays: 30
+
+# ---------------------------------------------------------------------------
 # Tracing
 # ---------------------------------------------------------------------------
 tracing:

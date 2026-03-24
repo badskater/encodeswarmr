@@ -8,24 +8,27 @@ services:
       - "9443:9443"
     env_file:
       - ../.env
-    environment:
-      # Set if dovi_tool is installed at a non-default path (default: /usr/local/bin/dovi_tool)
-      # DOVI_TOOL_BIN: /usr/local/bin/dovi_tool
-      # Cloud storage credentials (optional)
-      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      # GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-sa.json
     volumes:
+      # Controller configuration — copy configs/controller.yaml.example,
+      # customise it, and place it at ../configs/controller.yaml
+      - ../configs/controller.yaml:/etc/encodeswarmr/controller.yaml:ro
+      # mTLS certificates for gRPC agent communication
+      - ../certs:/etc/encodeswarmr/certs:ro
+      # Persistent data directories
+      - thumbnails_data:/var/lib/encodeswarmr/thumbnails
+      - agent_bins:/var/lib/encodeswarmr/binaries
       # Mount NAS NFS shares so the analysis runner can access source files.
       # Paths must match the linux_prefix values in path_mappings config.
+      # Uncomment and adjust for your environment:
       # - /mnt/nas/media:/mnt/nas/media:rw
       # - /mnt/nas/encodes:/mnt/nas/encodes:rw
       # - /mnt/nas/temp:/mnt/nas/temp:rw
+    command: ["run", "--config", "/etc/encodeswarmr/controller.yaml"]
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/app/controller", "health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -62,3 +65,5 @@ services:
 
 volumes:
   postgres_data:
+  thumbnails_data:
+  agent_bins:

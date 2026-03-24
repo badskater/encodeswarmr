@@ -18,6 +18,7 @@ agent:
   poll_interval: 10s
   cleanup_on_success: true
   keep_failed_jobs: 10
+  update_channel: "stable"        # stable | beta | nightly
 
 tools:
   ffmpeg: "C:\\Tools\\ffmpeg\\ffmpeg.exe"
@@ -51,3 +52,5 @@ logging:
 vnc:
   enabled: false
   port: 5900
+  password: ""                    # Required when enabled = true
+  installer_url: ""               # Optional: URL for auto-installing TightVNC

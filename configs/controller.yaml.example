@@ -10,7 +10,7 @@ database:
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "/usr/share/encodeswarmr/migrations"
+  migrations_path: "/app/migrations"  # Docker: /app/migrations; native: /usr/share/encodeswarmr/migrations
 
 grpc:
   host: "0.0.0.0"
@@ -85,6 +85,7 @@ analysis:
   ffprobe_bin:   "/usr/local/bin/ffprobe"
   dovi_tool_bin: "/usr/local/bin/dovi_tool"
   concurrency:   2               # max simultaneous controller-side analysis jobs
+  thumbnail_dir: "/var/lib/encodeswarmr/thumbnails"  # source preview thumbnails
 
   path_mappings:
     - name:    "NAS media"
@@ -96,3 +97,76 @@ analysis:
     - name:    "NAS temp"
       windows: "\\\\NAS01\\temp"
       linux:   "/mnt/nas/temp"
+
+# ─── SMTP email notifications ────────────────────────────────────────────────
+# See also: notifications section below for Telegram/Pushover/ntfy
+smtp:
+  host: ""                        # e.g. smtp.example.com
+  port: 587
+  username: ""
+  password: ""                    # Use SMTP_PASSWORD env var instead
+  from_address: ""                # e.g. encodeswarmr@example.com
+  tls_enabled: false              # implicit TLS on port 465
+  starttls: true                  # STARTTLS upgrade on port 587
+
+# ─── Push notification channels ──────────────────────────────────────────────
+# Each channel is optional. Leave unconfigured to disable.
+notifications:
+  telegram:
+    bot_token: ""                 # From @BotFather. Use TELEGRAM_BOT_TOKEN env var
+    chat_id: ""                   # Numeric chat ID or @channel_username
+  pushover:
+    app_token: ""                 # Pushover application token. Use PUSHOVER_APP_TOKEN env var
+    user_key: ""                  # Pushover user/group key
+  ntfy:
+    topic: ""                     # e.g. encodeswarmr-alerts
+    server_url: "https://ntfy.sh" # Self-hosted: http://ntfy.internal:8080
+    token: ""                     # Optional Bearer token for private topics
+
+# ─── Watch folders ───────────────────────────────────────────────────────────
+# Monitor directories for new media files. Creates sources and optionally
+# schedules analysis. No encoding jobs are created automatically.
+watch_folders: []
+  # - name: incoming
+  #   path: /mnt/nas/incoming           # Linux mount path (controller polls this)
+  #   windows_path: "\\\\NAS01\\incoming" # UNC path stored on source records
+  #   file_patterns: ["*.mkv", "*.mp4"]  # Default: ["*.mkv", "*.mp4", "*.ts", "*.avi"]
+  #   poll_interval: 30s
+  #   auto_analyze: true                 # Schedule analysis + HDR detect for new files
+  #   move_after_analysis: ""            # Optional category tag
+  #   enabled: true
+
+# ─── File manager ────────────────────────────────────────────────────────────
+# Web-based file browser. Only paths within allowed_paths are accessible.
+# Empty list disables the file manager entirely.
+file_manager:
+  allowed_paths: []
+    # - /mnt/nas/media
+    # - /mnt/nas/output
+
+# ─── Auto-scaling ────────────────────────────────────────────────────────────
+# Webhook-based agent scaling hooks. Fires scale_up/scale_down events.
+auto_scaling:
+  enabled: false
+  webhook_url: ""                 # Receives JSON payloads: {"event": "scale_up", ...}
+  scale_up_threshold: 10          # Pending tasks that trigger scale-up
+  scale_down_threshold: 3         # Idle agents above which scale-down fires
+  cooldown_seconds: 300           # Minimum seconds between same-type events
+
+# ─── Output validation ──────────────────────────────────────────────────────
+# Post-encode verification via ffprobe
+validation:
+  enabled: true
+  min_duration_ratio: 0.9         # Output must be at least 90% of source duration
+
+# ─── Job archival ────────────────────────────────────────────────────────────
+# Move completed/failed jobs to archive after retention period
+archive:
+  enabled: true
+  retention_days: 30
+
+# ─── OpenTelemetry tracing ───────────────────────────────────────────────────
+tracing:
+  enabled: false
+  endpoint: "localhost:4317"      # OTLP receiver
+  sample_rate: 0.1                # 10% sampling

@@ -152,7 +152,7 @@ database:
   max_conns: 25
   min_conns: 5
   max_conn_lifetime: 1h
-  migrations_path: "/usr/share/encodeswarmr/migrations"
+  migrations_path: "/app/migrations"
 
 grpc:
   host: "0.0.0.0"
@@ -195,9 +195,11 @@ tls:
   ca:   "/etc/encodeswarmr/certs/ca.crt"
 
 analysis:
-  ffmpeg_bin:  "/usr/bin/ffmpeg"
-  ffprobe_bin: "/usr/bin/ffprobe"
+  ffmpeg_bin:  "/usr/local/bin/ffmpeg"
+  ffprobe_bin: "/usr/local/bin/ffprobe"
+  dovi_tool_bin: "/usr/local/bin/dovi_tool"
   concurrency: 2
+  thumbnail_dir: "/var/lib/encodeswarmr/thumbnails"
 
   path_mappings:
     - name:    "NAS media"
@@ -209,6 +211,53 @@ analysis:
     - name:    "NAS temp"
       windows: "\\\\NAS01\\temp"
       linux:   "/mnt/nas/temp"
+
+smtp:
+  host: ""
+  port: 587
+  username: ""
+  password: ""
+  from_address: ""
+  starttls: true
+
+notifications:
+  telegram:
+    bot_token: ""
+    chat_id: ""
+  pushover:
+    app_token: ""
+    user_key: ""
+  ntfy:
+    topic: ""
+    server_url: "https://ntfy.sh"
+    token: ""
+
+watch_folders: []
+
+file_manager:
+  allowed_paths:
+    - /mnt/nas/media
+    - /mnt/nas/encodes
+
+auto_scaling:
+  enabled: false
+  webhook_url: ""
+  scale_up_threshold: 10
+  scale_down_threshold: 3
+  cooldown_seconds: 300
+
+validation:
+  enabled: true
+  min_duration_ratio: 0.9
+
+archive:
+  enabled: true
+  retention_days: 30
+
+tracing:
+  enabled: false
+  endpoint: ""
+  sample_rate: 0.1
 EOF
 
     # ── Pull and start controller container ───────────────────────────────────
