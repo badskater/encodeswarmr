@@ -1,8 +1,6 @@
 services:
   controller:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile.controller
+    image: ghcr.io/badskater/encodeswarmr-controller:latest
     ports:
       - "8080:8080"
       - "9443:9443"
