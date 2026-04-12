@@ -1,6 +1,7 @@
 .PHONY: all controller agent agent-linux agent-windows web proto test lint \
         migrate-up migrate-down migrate-status bin installer \
-        deb deb-agent rpm rpm-agent
+        deb deb-agent rpm rpm-agent \
+        desktop-windows desktop-linux deb-desktop
 
 VERSION          ?= dev
 LDFLAGS          := -s -w -X main.Version=$(VERSION)
@@ -8,6 +9,8 @@ LDFLAGS          := -s -w -X main.Version=$(VERSION)
 CONTROLLER_BIN   := bin/controller
 AGENT_BIN        := bin/agent.exe
 AGENT_LINUX_BIN  := bin/agent
+DESKTOP_WIN_BIN  := bin/encodeswarmr-desktop.exe
+DESKTOP_LINUX_BIN := bin/encodeswarmr-desktop
 
 all: web controller agent
 
@@ -76,3 +79,16 @@ rpm: controller
 
 rpm-agent: agent-linux
 	VERSION=$(VERSION) nfpm package --config nfpm-agent-rpm.yaml --packager rpm --target dist/
+
+# ── Desktop GUI client ──────────────────────────────────────────────────────────
+
+desktop-windows: bin
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+		go build -ldflags="$(LDFLAGS) -H=windowsgui" -o $(DESKTOP_WIN_BIN) ./cmd/desktop
+
+desktop-linux: bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+		go build -ldflags="$(LDFLAGS)" -o $(DESKTOP_LINUX_BIN) ./cmd/desktop
+
+deb-desktop: desktop-linux
+	VERSION=$(VERSION) nfpm package --config nfpm-desktop.yaml --packager deb --target dist/

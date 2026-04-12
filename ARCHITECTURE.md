@@ -2714,3 +2714,102 @@ User creates job via Web UI / API
 | **S3 / object storage** | Support cloud storage as source/destination in addition to UNC/NFS shares. |
 | **Multi-controller HA** | Active-passive or active-active controllers behind a load balancer for zero-downtime upgrades. |
 | **Web-based VNC/RDP** | ✅ Implemented — NoVNC browser client served by the controller at `/novnc/{agent_id}`. Controller proxies WebSocket to the agent's VNC TCP port. Agent auto-installs TightVNC via `setup-vnc` subcommand with configurable installer URL. VNC port reported to controller at registration; "Remote Desktop" button appears in the Agents page when vnc_port > 0. |
+
+---
+
+## 12. Desktop Manager
+
+The Desktop Manager (`cmd/desktop`) is a native GUI client for the EncodeSwarmr controller.
+It is a pure remote client — it communicates with the controller exclusively over HTTP and
+WebSocket, and shares no code with the controller or agent binaries.
+
+### 12.1 Binary
+
+| Item | Detail |
+|------|--------|
+| Entry point | `cmd/desktop/main.go` |
+| Output (Windows) | `bin/encodeswarmr-desktop.exe` |
+| Output (Linux) | `bin/encodeswarmr-desktop` |
+| Build target | `make desktop-windows` / `make desktop-linux` |
+
+### 12.2 Framework
+
+The UI is built with **[Gio](https://gioui.org)** (`gioui.org`):
+
+- **Immediate-mode** rendering — the full frame is re-drawn on every invalidation rather
+  than maintaining a retained widget tree.
+- **Pure Go** — zero CGO. The binary cross-compiles from any host OS with a standard Go
+  toolchain.
+- **GPU-accelerated** via Vulkan (Linux), Metal (macOS), Direct3D 11 (Windows), or OpenGL
+  fallback.
+
+### 12.3 Architecture
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  DESKTOP MANAGER  (local process)                          │
+│                                                            │
+│  ┌──────────┐   ┌──────────┐   ┌────────────────────────┐ │
+│  │  nav/    │   │  page/   │   │  widget/               │ │
+│  │  Router  │──►│  (pages) │──►│  Table · LogViewer     │ │
+│  │  Sidebar │   │          │   │  Badge · Chart · Form  │ │
+│  └──────────┘   └────┬─────┘   └────────────────────────┘ │
+│                      │                                     │
+│  ┌───────────────────▼──────────────────────────────────┐  │
+│  │  app.State  (RWMutex-guarded shared state)           │  │
+│  │  · client.Client  (HTTP — REST API calls)            │  │
+│  │  · client.WSClient (WebSocket — live updates)        │  │
+│  │  · Authenticated user + active profile name          │  │
+│  └───────────────────┬──────────────────────────────────┘  │
+│                      │ HTTPS / WSS                         │
+└──────────────────────┼─────────────────────────────────────┘
+                       │
+                       ▼
+          ┌─────────────────────────┐
+          │  CONTROLLER  :8080      │
+          │  REST API  +  WebSocket │
+          └─────────────────────────┘
+```
+
+The Gio event loop runs on the main goroutine. All network calls are dispatched in separate
+goroutines; on completion they update `app.State` and call `window.Invalidate()` to trigger
+a re-render.
+
+Navigation uses a **stack-based router** (`nav.Router`):
+
+- Sidebar links call `Router.Replace` (no back history across top-level sections).
+- Detail pages (job detail, agent detail, task detail) call `Router.Push` so the user can
+  `Pop` back to the list.
+- The login page occupies the full window; all other pages share a sidebar + content split
+  layout.
+
+### 12.4 Package Layout
+
+| Package | Responsibility |
+|---------|----------------|
+| `internal/desktop/app` | `Application` struct (event loop, layout), `State` (shared runtime state), theme |
+| `internal/desktop/client` | Typed HTTP wrappers for every controller REST endpoint; WebSocket client |
+| `internal/desktop/nav` | `Router` (stack-based page navigation), `Sidebar` widget |
+| `internal/desktop/page` | One file per screen; `register.go` wires all factories to the router |
+| `internal/desktop/page/admin` | Admin sub-pages (one file per managed resource type) |
+| `internal/desktop/profile` | `Store` — JSON persistence of controller connection profiles |
+| `internal/desktop/widget` | Reusable UI components: `Table`, `LogViewer`, `Badge`, `Chart`, `Form`, `SearchBar`, `Progress`, `Dialog` |
+
+### 12.5 No Shared Code with Controller / Agent
+
+The desktop package imports only:
+
+- The Go standard library
+- `gioui.org/*` (UI framework)
+- `golang.org/x/net/websocket` (WebSocket client)
+
+It does **not** import any `internal/controller` or `internal/agent` packages. All
+communication is over the documented REST API.
+
+### 12.6 Packaging
+
+| Platform | Mechanism | Target |
+|----------|-----------|--------|
+| Debian / Ubuntu | nFPM (`nfpm-desktop.yaml`) | `make deb-desktop` → `dist/*.deb` |
+| Arch Linux | `PKGBUILD` in `deployments/arch/` | `makepkg -si` |
+| Windows | Inno Setup (`installer/desktop-setup.iss`) | `iscc installer\desktop-setup.iss` |

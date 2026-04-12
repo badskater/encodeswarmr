@@ -1,0 +1,47 @@
+# nFPM package descriptor — EncodeSwarmr Desktop
+#
+# Build:
+#   VERSION=1.2.0 nfpm package --config nfpm-desktop.yaml --packager deb --target dist/
+#
+# Or via Makefile:
+#   make deb-desktop VERSION=1.2.0
+#
+# Install nFPM:
+#   go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+name:        encodeswarmr-desktop
+arch:        amd64
+platform:    linux
+version:     ${VERSION}
+maintainer:  "badskater"
+description: |
+  EncodeSwarmr Desktop Manager.
+  Native GUI client for managing distributed video encoding farms.
+  Connects to an EncodeSwarmr Controller to monitor jobs, agents,
+  and encoding queues from a desktop interface.
+homepage:    https://github.com/badskater/encodeswarmr
+license:     AGPL-3.0
+section:     video
+priority:    optional
+
+recommends:
+  - vulkan-loader
+
+contents:
+  # ── Desktop binary ────────────────────────────────────────────────────────────
+  - src: bin/encodeswarmr-desktop
+    dst: /usr/bin/encodeswarmr-desktop
+    file_info:
+      mode: 0755
+
+  # ── XDG desktop entry ─────────────────────────────────────────────────────────
+  - src: deployments/desktop/encodeswarmr-desktop.desktop
+    dst: /usr/share/applications/encodeswarmr-desktop.desktop
+    file_info:
+      mode: 0644
+
+  # ── Application icon ──────────────────────────────────────────────────────────
+  - src: deployments/desktop/encodeswarmr-desktop.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/encodeswarmr-desktop.svg
+    file_info:
+      mode: 0644

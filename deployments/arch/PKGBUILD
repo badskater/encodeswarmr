@@ -1,0 +1,29 @@
+# Maintainer: badskater <support@encodeswarmr.dev>
+pkgname=encodeswarmr-desktop
+pkgver=VERSION_PLACEHOLDER
+pkgrel=1
+pkgdesc="EncodeSwarmr Desktop Manager - Native GUI for distributed video encoding"
+arch=('x86_64')
+url="https://github.com/badskater/encodeswarmr"
+license=('AGPL-3.0-only')
+makedepends=('go>=1.25' 'vulkan-headers' 'libx11' 'libxkbcommon' 'wayland')
+optdepends=(
+    'vulkan-icd-loader: Vulkan rendering backend'
+    'mesa: OpenGL rendering fallback'
+)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/badskater/encodeswarmr/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "encodeswarmr-$pkgver"
+    export CGO_ENABLED=0
+    export GOFLAGS="-buildmode=pie -trimpath"
+    go build -ldflags="-s -w -X main.Version=$pkgver -linkmode=external" -o encodeswarmr-desktop ./cmd/desktop
+}
+
+package() {
+    cd "encodeswarmr-$pkgver"
+    install -Dm755 encodeswarmr-desktop "$pkgdir/usr/bin/encodeswarmr-desktop"
+    install -Dm644 deployments/desktop/encodeswarmr-desktop.desktop "$pkgdir/usr/share/applications/encodeswarmr-desktop.desktop"
+    install -Dm644 deployments/desktop/encodeswarmr-desktop.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/encodeswarmr-desktop.svg"
+}
