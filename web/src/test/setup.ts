@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 // Mock fetch globally
-global.fetch = vi.fn()
+;(globalThis as Record<string, unknown>).fetch = vi.fn()
 
 // Mock window.matchMedia (used by theme.tsx)
 Object.defineProperty(window, 'matchMedia', {
