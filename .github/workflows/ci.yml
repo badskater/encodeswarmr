@@ -33,14 +33,11 @@ jobs:
           go-version: "1.25"
           cache: true
       - run: go mod tidy
-      - name: Build (excluding desktop GUI — requires CGO_ENABLED=0)
-        run: go build $(go list ./... | grep -v /desktop/)
-      - name: Build desktop (CGO_ENABLED=0)
-        run: CGO_ENABLED=0 go build ./cmd/desktop/... ./internal/desktop/...
-      - run: go vet $(go list ./... | grep -v /desktop/)
-      - name: Vet desktop
-        run: CGO_ENABLED=0 go vet ./cmd/desktop/... ./internal/desktop/...
-      - name: Test (excluding desktop GUI)
+      - name: Build all packages
+        run: CGO_ENABLED=0 go build ./...
+      - name: Vet all packages
+        run: CGO_ENABLED=0 go vet ./...
+      - name: Test (with race detector, excluding desktop)
         run: go test $(go list ./... | grep -v /desktop/) -race -cover -timeout 120s
       - name: Test desktop
         run: CGO_ENABLED=0 go test ./internal/desktop/... -cover -timeout 60s
