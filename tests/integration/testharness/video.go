@@ -12,14 +12,18 @@ import (
 )
 
 const (
-	// testVideoURL is the Big Buck Bunny 10-second 1080p test clip.
-	// This is a stable, freely-licensed reference video used for encoding tests.
-	testVideoURL = "https://test-videos.co.uk/vids/bigbuckbunny/mkv/1080/Big_Buck_Bunny_1080_10s_5MB.mkv"
-
 	// testVideoCachePath is the well-known path for caching the test video
 	// across test runs to avoid redundant downloads.
 	testVideoCachePath = "/tmp/encodeswarmr-test-video/big_buck_bunny_1080_10s.mkv"
 )
+
+// testVideoURLs lists Big Buck Bunny mirrors in preference order.
+// If the primary source is down (HTTP 522, timeout, etc.) the next is tried.
+var testVideoURLs = []string{
+	"https://test-videos.co.uk/vids/bigbuckbunny/mkv/1080/Big_Buck_Bunny_1080_10s_5MB.mkv",
+	"https://sample-videos.com/video321/mkv/720/big_buck_bunny_720_1mb.mkv",
+	"https://filesamples.com/samples/video/mkv/sample_960x400_ocean_with_audio.mkv",
+}
 
 // DownloadTestVideo downloads the Big Buck Bunny test clip to a temp directory
 // and returns the absolute path to the file.
@@ -44,10 +48,17 @@ func DownloadTestVideo(t *testing.T) string {
 	if info, err := os.Stat(testVideoCachePath); err == nil && info.Size() > 0 {
 		t.Logf("video: using cached test video at %s (%d bytes)", testVideoCachePath, info.Size())
 	} else {
-		// Cache miss — download from the upstream URL.
-		t.Logf("video: downloading test video from %s", testVideoURL)
-		if err := downloadFile(testVideoURL, testVideoCachePath); err != nil {
-			t.Fatalf("video: download test video: %v", err)
+		// Cache miss — try each mirror until one succeeds.
+		var dlErr error
+		for _, u := range testVideoURLs {
+			t.Logf("video: downloading test video from %s", u)
+			if dlErr = downloadFile(u, testVideoCachePath); dlErr == nil {
+				break
+			}
+			t.Logf("video: mirror failed: %v, trying next", dlErr)
+		}
+		if dlErr != nil {
+			t.Fatalf("video: all mirrors failed, last error: %v", dlErr)
 		}
 		info, err := os.Stat(testVideoCachePath)
 		if err != nil {
