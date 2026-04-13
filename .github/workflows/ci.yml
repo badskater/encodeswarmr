@@ -32,15 +32,12 @@ jobs:
         with:
           go-version: "1.25"
           cache: true
+      - name: Install Gio dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
       - run: go mod tidy
-      - name: Build all packages
-        run: CGO_ENABLED=0 go build ./...
-      - name: Vet all packages
-        run: CGO_ENABLED=0 go vet ./...
-      - name: Test (with race detector, excluding desktop)
-        run: go test $(go list ./... | grep -v /desktop/) -race -cover -timeout 120s
-      - name: Test desktop
-        run: CGO_ENABLED=0 go test ./internal/desktop/... -cover -timeout 60s
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./... -race -cover -timeout 120s
 
   integration:
     name: integration
