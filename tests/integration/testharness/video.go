@@ -5,32 +5,29 @@ package testharness
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
 const (
-	// testVideoURL is the Big Buck Bunny 10-second 1080p test clip.
-	// This is a stable, freely-licensed reference video used for encoding tests.
-	testVideoURL = "https://test-videos.co.uk/vids/bigbuckbunny/mkv/1080/Big_Buck_Bunny_1080_10s_5MB.mkv"
-
-	// testVideoCachePath is the well-known path for caching the test video
-	// across test runs to avoid redundant downloads.
-	testVideoCachePath = "/tmp/encodeswarmr-test-video/big_buck_bunny_1080_10s.mkv"
+	// testVideoCachePath is the well-known path for caching the generated
+	// test video across test runs.
+	testVideoCachePath = "/tmp/encodeswarmr-test-video/test_input.mkv"
 )
 
-// DownloadTestVideo downloads the Big Buck Bunny test clip to a temp directory
-// and returns the absolute path to the file.
+// DownloadTestVideo generates a short synthetic test video using ffmpeg and
+// returns the absolute path to the file.
 //
 // The file is cached at testVideoCachePath between test runs. If the cached
-// copy already exists and is non-empty it is used directly. This avoids
-// re-downloading the file on every test run, which is important in CI where
-// bandwidth is shared.
+// copy already exists and is non-empty it is used directly.
 //
 // The returned path points to a copy inside t.TempDir() so that each test
 // gets its own writable copy and cleanup is automatic.
+//
+// This replaces the previous approach of downloading from external mirrors,
+// which was unreliable in CI due to third-party server outages.
 func DownloadTestVideo(t *testing.T) string {
 	t.Helper()
 
@@ -44,16 +41,26 @@ func DownloadTestVideo(t *testing.T) string {
 	if info, err := os.Stat(testVideoCachePath); err == nil && info.Size() > 0 {
 		t.Logf("video: using cached test video at %s (%d bytes)", testVideoCachePath, info.Size())
 	} else {
-		// Cache miss — download from the upstream URL.
-		t.Logf("video: downloading test video from %s", testVideoURL)
-		if err := downloadFile(testVideoURL, testVideoCachePath); err != nil {
-			t.Fatalf("video: download test video: %v", err)
+		// Generate a 5-second 720p test video with ffmpeg using the
+		// testsrc2 pattern generator — no network access needed.
+		t.Log("video: generating synthetic test video with ffmpeg")
+		cmd := exec.Command("ffmpeg", "-y",
+			"-f", "lavfi", "-i", "testsrc2=duration=5:size=1280x720:rate=30",
+			"-f", "lavfi", "-i", "sine=frequency=440:duration=5",
+			"-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+			"-c:a", "aac", "-b:a", "64k",
+			"-pix_fmt", "yuv420p",
+			testVideoCachePath,
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("video: ffmpeg generate failed: %v\n%s", err, out)
 		}
 		info, err := os.Stat(testVideoCachePath)
 		if err != nil {
-			t.Fatalf("video: stat cached file after download: %v", err)
+			t.Fatalf("video: stat generated file: %v", err)
 		}
-		t.Logf("video: downloaded %d bytes to %s", info.Size(), testVideoCachePath)
+		t.Logf("video: generated %d bytes at %s", info.Size(), testVideoCachePath)
 	}
 
 	// Copy the cached file into the test's temp directory so each test has
@@ -66,34 +73,6 @@ func DownloadTestVideo(t *testing.T) string {
 	}
 
 	return dest
-}
-
-// downloadFile fetches url and writes the response body to dest.
-// It overwrites dest if it already exists. On error the partially-written
-// file is removed to avoid leaving a corrupt cache entry.
-func downloadFile(url, dest string) error {
-	resp, err := http.Get(url) //nolint:gosec,noctx
-	if err != nil {
-		return fmt.Errorf("GET %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
-	}
-
-	f, err := os.Create(dest)
-	if err != nil {
-		return fmt.Errorf("create %s: %w", dest, err)
-	}
-
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		f.Close()
-		os.Remove(dest) //nolint:errcheck // best-effort cleanup on error
-		return fmt.Errorf("write %s: %w", dest, err)
-	}
-
-	return f.Close()
 }
 
 // copyFile copies src to dst, creating dst if it does not exist.
