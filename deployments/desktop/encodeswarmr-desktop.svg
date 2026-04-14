@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#3B82F6"/>
+  <!-- Film strip / encoding symbol -->
+  <rect x="60" y="80" width="136" height="96" rx="8" fill="white" opacity="0.9"/>
+  <!-- Progress bars representing encoding -->
+  <rect x="76" y="100" width="104" height="12" rx="6" fill="#3B82F6" opacity="0.3"/>
+  <rect x="76" y="100" width="78" height="12" rx="6" fill="#3B82F6"/>
+  <rect x="76" y="120" width="104" height="12" rx="6" fill="#3B82F6" opacity="0.3"/>
+  <rect x="76" y="120" width="52" height="12" rx="6" fill="#3B82F6"/>
+  <rect x="76" y="140" width="104" height="12" rx="6" fill="#3B82F6" opacity="0.3"/>
+  <rect x="76" y="140" width="96" height="12" rx="6" fill="#3B82F6"/>
+  <!-- Network dots -->
+  <circle cx="80" cy="60" r="8" fill="white" opacity="0.8"/>
+  <circle cx="128" cy="48" r="8" fill="white" opacity="0.8"/>
+  <circle cx="176" cy="60" r="8" fill="white" opacity="0.8"/>
+  <line x1="80" y1="60" x2="128" y2="48" stroke="white" stroke-width="2" opacity="0.5"/>
+  <line x1="128" y1="48" x2="176" y2="60" stroke="white" stroke-width="2" opacity="0.5"/>
+</svg>

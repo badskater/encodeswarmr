@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=EncodeSwarmr Desktop
+Comment=Manage distributed video encoding farms
+Exec=encodeswarmr-desktop
+Icon=encodeswarmr-desktop
+Terminal=false
+Type=Application
+Categories=AudioVideo;Video;Utility;
+Keywords=video;encoding;encoder;distributed;
+StartupWMClass=encodeswarmr-desktop
