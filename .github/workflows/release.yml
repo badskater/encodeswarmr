@@ -1,10 +1,12 @@
 name: Release
 
 # Triggered by a semver tag push (e.g. v1.2.3).
-# Produces four artifacts attached to the GitHub Release:
-#   - encodeswarmr-controller_<ver>_linux_amd64.deb
-#   - encodeswarmr-agent_<ver>_linux_amd64.deb
+# Produces artifacts attached to the GitHub Release:
+#   - encodeswarmr-controller_<ver>_linux_amd64.deb / .rpm
+#   - encodeswarmr-agent_<ver>_linux_amd64.deb / .rpm
 #   - encodeswarmr-agent.exe  (Windows amd64 binary)
+#   - encodeswarmr-desktop_<ver>_linux_amd64.deb
+#   - encodeswarmr-desktop-windows-amd64.exe
 #   - ghcr.io/<owner>/encodeswarmr-controller:<ver>  (container)
 #
 # The Inno Setup Windows installer is built separately by installer.yml.
@@ -241,3 +243,65 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist/agent-windows-amd64.exe
+
+  # ── Desktop: Linux .deb package ──────────────────────────────────────────────
+  desktop-linux-deb:
+    name: Desktop Linux .deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Install Gio system dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc pkg-config libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+
+      - name: Build desktop binary (linux/amd64)
+        run: |
+          mkdir -p bin
+          VERSION="${GITHUB_REF_NAME#v}"
+          GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o bin/encodeswarmr-desktop ./cmd/desktop
+
+      - name: Install nFPM
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.1
+
+      - name: Package desktop .deb
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}" \
+            nfpm package --config nfpm-desktop.yaml --packager deb --target dist/
+
+      - name: Upload desktop .deb to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/encodeswarmr-desktop_*.deb
+
+  # ── Desktop: Windows .exe ────────────────────────────────────────────────────
+  desktop-windows-exe:
+    name: Desktop Windows .exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Build desktop binary (windows/amd64)
+        run: |
+          mkdir -p dist
+          VERSION="${GITHUB_REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="-s -w -H=windowsgui -X main.Version=${VERSION}" \
+            -o dist/encodeswarmr-desktop-windows-amd64.exe ./cmd/desktop
+
+      - name: Upload desktop .exe to release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/encodeswarmr-desktop-windows-amd64.exe
