@@ -15,19 +15,25 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 ## Documentation
 - Full project documentation: https://github.com/badskater/encodeswarmr/wiki
 - Architecture: ARCHITECTURE.md (in repo)
+- Deployment (canonical entry point): DEPLOYMENT.md (in repo) — links out to wiki deep dives
 - Agent details: https://github.com/badskater/encodeswarmr/wiki/Agents
-- Deployment guide: https://github.com/badskater/encodeswarmr/wiki/Deployment
+- Deployment deep dive: https://github.com/badskater/encodeswarmr/wiki/Deployment
+- Incident triage runbook: https://github.com/badskater/encodeswarmr/wiki/Runbook
+- Operational semantics: https://github.com/badskater/encodeswarmr/wiki/Operational-Semantics
+- Testing guide: https://github.com/badskater/encodeswarmr/wiki/Testing-Guide
+- gRPC reference: https://github.com/badskater/encodeswarmr/wiki/gRPC-Reference
 - Architecture Decision Records: https://github.com/badskater/encodeswarmr/wiki/ADR-Index
 
 ## Session workflow
 - Begin each work session by reviewing:
   - ARCHITECTURE.md
+  - DEPLOYMENT.md (canonical deployment entry point)
   - The [Wiki](https://github.com/badskater/encodeswarmr/wiki) for current roadmap and feature status
-- Create a deployment document
-  - DEPLOYMENT.md
-- If issues are discovered, add concise troubleshooting notes and prevention tips to:
-  - DEPLOYMENT.md
+- If deployment issues are discovered, add concise troubleshooting notes and prevention tips to:
+  - DEPLOYMENT.md §10 (quick list), and
+  - The [Runbook](https://github.com/badskater/encodeswarmr/wiki/Runbook) wiki page for the full scenario
 - Keep relevant README files and Wiki pages up to date when behavior, configuration, or workflows change.
+- When the proto contract changes, regenerate stubs (`make proto`) AND update the [gRPC Reference](https://github.com/badskater/encodeswarmr/wiki/gRPC-Reference) wiki page.
 
 ## Instruction precedence
 - Resolve conflicts in this order:
@@ -70,9 +76,15 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - When a design choice is not yet final, capture it in the Open Decisions section.
 
 ## Testing and verification
-- Add tests for new behavior and regressions when feasible.
-- Run or suggest relevant checks (unit tests, lint, build) after changes.
-- Note any gaps or risks if tests are not available.
+- Tests are part of the code, not an afterthought. Every change — new feature, bug fix, or refactor — ships with tests covering its behavior. Code without tests does not merge.
+- All tests run as part of CI on every push and PR (`go test ./... -race -cover`, the `integration`-tagged suite against a real PostgreSQL, `npm test` for the web, and cross-compile builds for controller/agent/desktop on both linux and windows). No code merges without CI green.
+- Before marking work complete, locally run:
+  - `make test` (Go unit + race + cover)
+  - `cd web && npm test && npx tsc --noEmit` when web is touched
+  - `make lint` when practical
+- New features require tests at the appropriate layer (unit in-package, integration under `tests/integration/` with `//go:build integration`, or web `*.test.{ts,tsx}` via Vitest). See the [Testing Guide](https://github.com/badskater/encodeswarmr/wiki/Testing-Guide) wiki page for conventions, patterns, and examples.
+- The only acceptable exceptions are code paths that genuinely cannot be tested without a live display or an external system — these must be called out explicitly in the PR description along with why.
+- Note any coverage gaps or risks explicitly when they exist.
 
 ## Security and secrets
 - Never hardcode secrets.
@@ -89,5 +101,5 @@ It aims to keep changes safe, maintainable, and aligned with the documented arch
 - After each commit, confirm the working tree is clean unless explicitly leaving staged follow-up work.
 
 ## Suggested future additions
-- Add a lightweight runbook for incident triage.
+- Dynamic / external plugin loading (see [Plugin Loading](https://github.com/badskater/encodeswarmr/wiki/Plugin-Loading) for current compile-time model).
  
