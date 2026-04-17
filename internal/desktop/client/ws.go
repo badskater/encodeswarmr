@@ -20,6 +20,15 @@ type HubEvent struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+// wsDialer is an abstraction over gorilla/websocket's DialContext so that
+// tests can inject a fake connection without a real network.
+type wsDialer interface {
+	DialContext(ctx context.Context, urlStr string, requestHeader http.Header) (*websocket.Conn, *http.Response, error)
+}
+
+// defaultWSDialer wraps websocket.DefaultDialer to satisfy wsDialer.
+var defaultWSDialer wsDialer = websocket.DefaultDialer
+
 // WSClient manages a WebSocket connection for live events from the controller.
 type WSClient struct {
 	conn      *websocket.Conn
@@ -32,6 +41,12 @@ type WSClient struct {
 // ConnectWS establishes a WebSocket connection to the controller's event hub.
 // The returned WSClient must be closed with Close() when no longer needed.
 func (c *Client) ConnectWS(ctx context.Context, logger *slog.Logger) (*WSClient, error) {
+	return c.connectWSWithDialer(ctx, logger, defaultWSDialer)
+}
+
+// connectWSWithDialer is the internal implementation that accepts an injectable
+// dialer, enabling unit tests to supply a fake connection.
+func (c *Client) connectWSWithDialer(ctx context.Context, logger *slog.Logger, dialer wsDialer) (*WSClient, error) {
 	// Convert the HTTP base URL to a WebSocket URL.
 	wsURL := strings.Replace(c.baseURL, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
@@ -52,7 +67,7 @@ func (c *Client) ConnectWS(ctx context.Context, logger *slog.Logger) (*WSClient,
 		}
 	}
 
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, header)
+	conn, _, err := dialer.DialContext(ctx, wsURL, header)
 	if err != nil {
 		return nil, fmt.Errorf("ws connect: %w", err)
 	}
