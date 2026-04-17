@@ -7,6 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Controller
+- Per-user and per-IP cap on WebSocket log-stream connections. New config section `logstream:` with `max_per_user` (default 10) and `max_per_ip` (default 20). Prometheus metrics `encodeswarmr_logstream_rejected_total{reason}` and `encodeswarmr_logstream_active_connections`.
+- Flow-engine hardening: cycle detection, panic recovery, context cancellation checks, and error-edge routing in the DAG walker. `ValidateFlow` is now called from `POST /api/v1/flows` and `PUT /api/v1/flows/{id}` — invalid graphs rejected with HTTP 400 at save time.
+- Cloud-storage adapters (S3, Azure, GCS) now use SDK-native retry with configurable exponential backoff. New config section `cloud_storage.retry:` with `max_elapsed`, `initial_interval`, `max_interval`, `multiplier`. All three adapters log per-attempt warnings with structured fields (`attempt`, `operation`, `bucket`, `key`, `next_delay`, `error`).
+- `controller agent drain <host>` CLI — graceful drain (finish current task, stop polling).
+- `controller task reset <task-id>` CLI — reset a stuck task to `pending` with safety checks (refuses running-but-live, refuses terminal states even with `--force`). Writes audit-log entry.
+
+#### Desktop manager
+- Test coverage raised from effectively zero to ~41% for the `client` package and ~95% for `client/ws.go` (via injectable `wsDialer`).
+
+#### Documentation
+- New `DEPLOYMENT.md` at the repo root — canonical deployment entry point.
+- New wiki pages: `Runbook` (incident triage), `Testing-Guide`, `gRPC-Reference` (auto-gen from proto), `Operational-Semantics`, `Plugin-Loading`.
+- CLAUDE.md codifies that tests are mandatory for every change.
+
+### Changed
+
+- `controller agent disable <host>` CLI now correctly sets agent status to `disabled` (abort current task, do not pick up new work). Prior behavior (drain-and-stop) is available as `controller agent drain`. A deprecation warning is printed on stderr for one release to ease the transition.
+- `tests/integration/stress_test.go` moved behind `//go:build integration && stress` — excluded from default CI integration runs. New `make stress` target for opt-in local runs.
+- TypeScript API client (`client.gen.ts`): corrected generated error-cast type and documented non-OK response shape; the CI workflow now post-patches the regenerated output.
+
+### Removed
+
+- Dead generated API clients: `api/generated/ts/`, `api/generated/go/`, `api/openapi-ts.config.ts`, `api/oapi-codegen.yaml`, and the `.github/workflows/generate-sdk.yml` workflow. The OpenAPI spec at `api/openapi.yaml` remains; integrators can generate their own clients. Wiki page `API-Client-SDKs` removed.
+- Dead config keys `agent.stale_threshold` and `engine.stale_threshold` — neither was read at runtime. `agent.heartbeat_timeout` is the single source of truth for stale detection.
+- `github.com/oapi-codegen/runtime` Go dependency (no longer needed after the generated Go client was removed).
+
+### Fixed
+
+- `HeartbeatResp.drain` and `HeartbeatResp.disabled` are now reachable from separate CLI subcommands (previously `agent disable` emitted `drain`, and there was no way to trigger `disabled`).
+- WebSocket log-stream hub no longer has an unbounded connection ceiling — a DoS vector is closed.
+
 ---
 
 ## [1.0.0] — 2026-03-05
