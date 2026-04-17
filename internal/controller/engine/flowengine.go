@@ -11,6 +11,10 @@ import (
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
+// errCyclicDAG is returned by ValidateFlow when a back-edge is detected.
+// It is also used internally by ExecuteFlow to surface the same condition.
+var errCyclicDAG = fmt.Errorf("flowengine: graph contains a cycle")
+
 // FlowEngine interprets a flow graph and translates it into an ordered list
 // of TaskSteps that can be handed to the job expander.
 type FlowEngine struct {
@@ -58,6 +62,91 @@ type flowEdge struct {
 	SourceHandle string `json:"sourceHandle"` // "true" | "false" | "" for condition nodes
 }
 
+// ValidateFlow parses the flow graph and checks for structural problems:
+//   - No nodes
+//   - No input_ node
+//   - Edge targets that reference non-existent nodes
+//   - Cycles (back-edges in DFS)
+//
+// It does not execute the graph or evaluate conditions.  Call this when a
+// flow definition is saved so problems are surfaced early rather than at
+// expansion time.
+func (fe *FlowEngine) ValidateFlow(flow *db.Flow) error {
+	var g flowGraph
+	if err := json.Unmarshal(flow.Graph, &g); err != nil {
+		return fmt.Errorf("flowengine: validate flow %s: parse graph: %w", flow.ID, err)
+	}
+	if len(g.Nodes) == 0 {
+		return fmt.Errorf("flowengine: validate flow %s: no nodes", flow.ID)
+	}
+
+	nodeByID := make(map[string]flowNode, len(g.Nodes))
+	for _, n := range g.Nodes {
+		nodeByID[n.ID] = n
+	}
+
+	// Verify all edge targets and sources exist.
+	for _, e := range g.Edges {
+		if _, ok := nodeByID[e.Source]; !ok {
+			return fmt.Errorf("flowengine: validate flow %s: edge %s references unknown source node %s", flow.ID, e.ID, e.Source)
+		}
+		if _, ok := nodeByID[e.Target]; !ok {
+			return fmt.Errorf("flowengine: validate flow %s: edge %s references unknown target node %s", flow.ID, e.ID, e.Target)
+		}
+	}
+
+	hasInput := false
+	for _, n := range g.Nodes {
+		if len(n.Type) >= 6 && n.Type[:6] == "input_" {
+			hasInput = true
+			break
+		}
+	}
+	if !hasInput {
+		return fmt.Errorf("flowengine: validate flow %s: no input node", flow.ID)
+	}
+
+	// Cycle detection via DFS with three-color marking.
+	// white (absent) → grey (in stack) → black (done)
+	type color int
+	const (
+		white color = iota
+		grey
+		black
+	)
+	mark := make(map[string]color, len(g.Nodes))
+
+	edgesFrom := make(map[string][]flowEdge, len(g.Edges))
+	for _, e := range g.Edges {
+		edgesFrom[e.Source] = append(edgesFrom[e.Source], e)
+	}
+
+	var dfs func(id string) error
+	dfs = func(id string) error {
+		if mark[id] == black {
+			return nil
+		}
+		if mark[id] == grey {
+			return fmt.Errorf("%w: back-edge detected at node %s", errCyclicDAG, id)
+		}
+		mark[id] = grey
+		for _, edge := range edgesFrom[id] {
+			if err := dfs(edge.Target); err != nil {
+				return err
+			}
+		}
+		mark[id] = black
+		return nil
+	}
+
+	for _, n := range g.Nodes {
+		if err := dfs(n.ID); err != nil {
+			return fmt.Errorf("flowengine: validate flow %s: %w", flow.ID, err)
+		}
+	}
+	return nil
+}
+
 // ExecuteFlow parses the flow graph stored in flow, finds the input node,
 // walks the edges in order, evaluates condition nodes, and returns the
 // resulting ordered list of TaskSteps.  The sourceID is passed through to
@@ -65,7 +154,33 @@ type flowEdge struct {
 //
 // Condition nodes are evaluated against live source analysis data when
 // available, so branches are resolved at expansion time rather than deferred.
-func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID string) ([]TaskStep, error) {
+//
+// Error-edge routing: if a node's data map contains a key "simulate_error"
+// with value true (bool) or "true" (string), the engine treats that node as
+// failed and follows any outgoing edge whose SourceHandle is "error" instead
+// of the normal successor edges.  This lets flow authors wire an
+// error-handler sub-graph without changing the TaskStep public API.
+//
+// Context cancellation: walk checks ctx.Done() before visiting each node and
+// returns ctx.Err() immediately, so the caller gets a clean error instead of
+// a partial step list.
+//
+// Panics inside walk are recovered, logged, and surfaced as errors so the
+// engine goroutine is never silently killed.
+func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID string) (steps []TaskStep, retErr error) {
+	// Panic recovery: convert any panic inside ExecuteFlow to an error so the
+	// engine background loop remains alive.
+	defer func() {
+		if r := recover(); r != nil {
+			fe.logger.Error("flowengine: panic in ExecuteFlow",
+				"flow_id", flow.ID,
+				"panic", fmt.Sprintf("%v", r),
+			)
+			retErr = fmt.Errorf("flowengine: panic in flow %s: %v", flow.ID, r)
+			steps = nil
+		}
+	}()
+
 	// 1. Parse graph JSON.
 	var g flowGraph
 	if err := json.Unmarshal(flow.Graph, &g); err != nil {
@@ -116,16 +231,40 @@ func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID s
 	inputConfig := copyData(inputNode.Data)
 	inputConfig["source_id"] = sourceID
 
-	var steps []TaskStep
 	visited := make(map[string]bool)
 
 	// 3. Walk the graph from the input node following edges.
+	// inStack tracks nodes on the current DFS path for cycle detection at
+	// execution time (catches cycles that ValidateFlow did not see, e.g. when
+	// a flow is loaded directly from DB without being validated first).
+	inStack := make(map[string]bool)
+
 	var walk func(nodeID string, dependsOn []string) error
 	walk = func(nodeID string, dependsOn []string) error {
+		// Context cancellation check. Guard against nil ctx (used in some tests
+		// via the //nolint:staticcheck exemption on the caller side).
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+
+		// Cycle guard: if this node is already on the current DFS path we have
+		// a back-edge.  Return an error rather than silently truncating the graph.
+		if inStack[nodeID] {
+			return fmt.Errorf("%w: back-edge detected at node %s during execution", errCyclicDAG, nodeID)
+		}
+
+		// Visit-once guard for diamond/converging paths (not a cycle).
 		if visited[nodeID] {
 			return nil
 		}
+
 		visited[nodeID] = true
+		inStack[nodeID] = true
+		defer func() { inStack[nodeID] = false }()
 
 		node, ok := nodeByID[nodeID]
 		if !ok {
@@ -137,12 +276,29 @@ func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID s
 			cfg = inputConfig
 		}
 
+		// Error-edge routing: if the node signals a simulated failure (used in
+		// tests and by error-injection tooling), follow "error" handle edges
+		// instead of the normal successor edges.  In a real run the caller marks
+		// the task as failed; the engine re-expands with simulate_error=true.
+		nodeSimulatesError := func() bool {
+			switch v := cfg["simulate_error"].(type) {
+			case bool:
+				return v
+			case string:
+				return v == "true"
+			}
+			return false
+		}()
+
 		// 4. For condition nodes: evaluate and follow only the matching branch.
 		if node.Type == "condition" {
 			result := evaluateCondition(cfg, analysisSummary)
 			handle := "false"
 			if result {
 				handle = "true"
+			}
+			if nodeSimulatesError {
+				handle = "error"
 			}
 
 			// Record the condition node itself as a step.
@@ -163,20 +319,29 @@ func (fe *FlowEngine) ExecuteFlow(ctx context.Context, flow *db.Flow, sourceID s
 			return nil
 		}
 
-		// 5. For webhook nodes: record as a step (webhook delivery is queued
-		//    by the caller after task execution).
-		step := TaskStep{
+		// 5. For all other node types: record as a step.
+		steps = append(steps, TaskStep{
 			NodeID:    nodeID,
 			NodeType:  node.Type,
 			Config:    cfg,
 			DependsOn: dependsOn,
-		}
-		steps = append(steps, step)
+		})
 
-		// 6. Continue walking all outgoing edges from this node.
+		// 6. Continue walking edges. When the node signals failure, follow only
+		// "error" handle edges; otherwise follow all non-"error" outgoing edges.
 		for _, edge := range edgesFrom[nodeID] {
-			if err := walk(edge.Target, []string{nodeID}); err != nil {
-				return err
+			if nodeSimulatesError {
+				if edge.SourceHandle == "error" {
+					if err := walk(edge.Target, []string{nodeID}); err != nil {
+						return err
+					}
+				}
+			} else {
+				if edge.SourceHandle != "error" {
+					if err := walk(edge.Target, []string{nodeID}); err != nil {
+						return err
+					}
+				}
 			}
 		}
 		return nil

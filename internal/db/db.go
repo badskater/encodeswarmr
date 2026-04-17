@@ -213,6 +213,11 @@ type Store interface {
 	// --- Task preemption ---
 	PreemptTask(ctx context.Context, taskID string) error
 
+	// ResetTask sets a task's status back to "pending" and clears agent
+	// assignment, start time, and progress percent.  It is intended for
+	// operator-driven recovery (see: controller task reset).
+	ResetTask(ctx context.Context, taskID string) error
+
 	// --- Estimation ---
 	// GetAvgFPSStats returns the average encoding FPS and sample count from
 	// completed encode tasks for the given source.  Returns (0, 0, nil) when

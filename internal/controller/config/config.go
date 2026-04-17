@@ -28,6 +28,20 @@ type Config struct {
 	WatchFolders  []WatchFolderConfig `mapstructure:"watch_folders"`
 	FileManager   FileManagerConfig   `mapstructure:"file_manager"`
 	Notifications NotificationsConfig `mapstructure:"notifications"`
+	LogStream     LogStreamConfig     `mapstructure:"logstream"`
+}
+
+// LogStreamConfig controls connection limits for the per-task WebSocket log
+// streaming endpoint (/api/v1/tasks/{id}/logs/stream).
+type LogStreamConfig struct {
+	// MaxPerUser is the maximum number of concurrent log-stream WebSocket
+	// connections allowed per authenticated user ID.  0 disables the cap.
+	// Default: 10.
+	MaxPerUser int `mapstructure:"max_per_user"`
+	// MaxPerIP is the maximum number of concurrent log-stream WebSocket
+	// connections allowed per client IP address.  0 disables the cap.
+	// Default: 20.
+	MaxPerIP int `mapstructure:"max_per_ip"`
 }
 
 
@@ -341,6 +355,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("tracing.enabled", false)
 	v.SetDefault("tracing.endpoint", "localhost:4317")
 	v.SetDefault("tracing.sample_rate", 0.1)
+	v.SetDefault("logstream.max_per_user", 10)
+	v.SetDefault("logstream.max_per_ip", 20)
 
 	v.AutomaticEnv()
 

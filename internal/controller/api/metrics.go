@@ -134,6 +134,16 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "encodeswarmr_http_requests_total{method=%q,path=%q,status=\"%d\"} %d\n", method, path, status, count)
 		return true
 	})
+
+	// --- Log-stream WebSocket connection metrics ---
+	fmt.Fprintln(w, "# HELP encodeswarmr_logstream_rejected_total Total log-stream WebSocket connections rejected due to a connection cap.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_logstream_rejected_total counter")
+	fmt.Fprintf(w, "encodeswarmr_logstream_rejected_total{reason=\"user_limit\"} %d\n", logStreamRejectedUser.Load())
+	fmt.Fprintf(w, "encodeswarmr_logstream_rejected_total{reason=\"ip_limit\"} %d\n", logStreamRejectedIP.Load())
+
+	fmt.Fprintln(w, "# HELP encodeswarmr_logstream_active_connections Current number of active log-stream WebSocket connections.")
+	fmt.Fprintln(w, "# TYPE encodeswarmr_logstream_active_connections gauge")
+	fmt.Fprintf(w, "encodeswarmr_logstream_active_connections %d\n", logStreamActiveTotal.Load())
 }
 
 // parseHTTPKey extracts method, path, and status from an HTTP counter key

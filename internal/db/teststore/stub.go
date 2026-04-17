@@ -200,6 +200,9 @@ func (Stub) MarkScheduleRun(_ context.Context, _ db.MarkScheduleRunParams) error
 // --- Task Preemption ---
 func (Stub) PreemptTask(_ context.Context, _ string) error { return nil }
 
+// --- Task Reset ---
+func (Stub) ResetTask(_ context.Context, _ string) error { return nil }
+
 // --- Estimation ---
 func (Stub) GetAvgFPSStats(_ context.Context, _ string) (float64, int64, error) { return 0, 0, nil }
 

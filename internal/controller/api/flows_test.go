@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/badskater/encodeswarmr/internal/controller/engine"
 	"github.com/badskater/encodeswarmr/internal/db"
 )
 
@@ -490,4 +493,126 @@ type deleteFlowErrStore struct {
 
 func (s *deleteFlowErrStore) DeleteFlow(_ context.Context, _ string) error {
 	return errors.New("delete query failed")
+}
+
+// ---------------------------------------------------------------------------
+// newTestServerWithFlowEngine creates a Server with a real FlowEngine wired
+// in so that graph-validation paths are exercised in handler tests.
+// ---------------------------------------------------------------------------
+
+func newTestServerWithFlowEngine(store db.Store) *Server {
+	srv := newTestServer(store)
+	srv.flowEngine = engine.NewFlowEngine(store, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return srv
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleCreateFlow_GraphValidation
+// ---------------------------------------------------------------------------
+
+func TestHandleCreateFlow_GraphValidation(t *testing.T) {
+	// A structurally valid graph: one input node, no edges.
+	validGraph := `{"nodes":[{"id":"n1","type":"input_source","data":{}}],"edges":[]}`
+
+	// A cyclic graph: two nodes each pointing at the other.
+	cyclicGraph := `{"nodes":[{"id":"n1","type":"input_source","data":{}},{"id":"n2","type":"encode","data":{}}],"edges":[{"id":"e1","source":"n1","target":"n2"},{"id":"e2","source":"n2","target":"n1"}]}`
+
+	// An edge pointing to a node that does not exist.
+	badEdgeGraph := `{"nodes":[{"id":"n1","type":"input_source","data":{}}],"edges":[{"id":"e1","source":"n1","target":"ghost"}]}`
+
+	t.Run("valid flow is accepted (201)", func(t *testing.T) {
+		created := &db.Flow{ID: "f-new", Name: "good-flow", Graph: json.RawMessage(validGraph)}
+		store := &createFlowStore{stubStore: &stubStore{}, created: created}
+		srv := newTestServerWithFlowEngine(store)
+
+		body := bytes.NewBufferString(`{"name":"good-flow","graph":` + validGraph + `}`)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/flows", body)
+		srv.handleCreateFlow(rr, req)
+
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusCreated)
+		}
+	})
+
+	t.Run("cyclic graph is rejected (400)", func(t *testing.T) {
+		srv := newTestServerWithFlowEngine(&stubStore{})
+
+		body := bytes.NewBufferString(`{"name":"cyclic-flow","graph":` + cyclicGraph + `}`)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/flows", body)
+		srv.handleCreateFlow(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusBadRequest, rr.Body.String())
+		}
+
+		var p problem
+		if err := json.NewDecoder(rr.Body).Decode(&p); err != nil {
+			t.Fatalf("decode problem body: %v", err)
+		}
+		if p.Detail == "" {
+			t.Error("expected non-empty detail in problem response")
+		}
+	})
+
+	t.Run("edge to non-existent node is rejected (400)", func(t *testing.T) {
+		srv := newTestServerWithFlowEngine(&stubStore{})
+
+		body := bytes.NewBufferString(`{"name":"bad-edge-flow","graph":` + badEdgeGraph + `}`)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/flows", body)
+		srv.handleCreateFlow(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusBadRequest, rr.Body.String())
+		}
+
+		var p problem
+		if err := json.NewDecoder(rr.Body).Decode(&p); err != nil {
+			t.Fatalf("decode problem body: %v", err)
+		}
+		if p.Detail == "" {
+			t.Error("expected non-empty detail in problem response")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleUpdateFlow_GraphValidation
+// ---------------------------------------------------------------------------
+
+func TestHandleUpdateFlow_GraphValidation(t *testing.T) {
+	// A cyclic graph.
+	cyclicGraph := `{"nodes":[{"id":"n1","type":"input_source","data":{}},{"id":"n2","type":"encode","data":{}}],"edges":[{"id":"e1","source":"n1","target":"n2"},{"id":"e2","source":"n2","target":"n1"}]}`
+
+	t.Run("update with invalid graph is rejected (400) and store not called", func(t *testing.T) {
+		// updateCallStore records whether UpdateFlow was invoked.
+		store := &updateFlowNotCalledStore{stubStore: &stubStore{}}
+		srv := newTestServerWithFlowEngine(store)
+
+		body := bytes.NewBufferString(`{"name":"still-valid","graph":` + cyclicGraph + `}`)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/flows/f1", body)
+		req.SetPathValue("id", "f1")
+		srv.handleUpdateFlow(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d; body: %s", rr.Code, http.StatusBadRequest, rr.Body.String())
+		}
+		if store.called {
+			t.Error("UpdateFlow was called despite invalid graph — old flow may have been overwritten")
+		}
+	})
+}
+
+// updateFlowNotCalledStore lets tests assert that UpdateFlow was never invoked.
+type updateFlowNotCalledStore struct {
+	*stubStore
+	called bool
+}
+
+func (s *updateFlowNotCalledStore) UpdateFlow(_ context.Context, _ db.UpdateFlowParams) (*db.Flow, error) {
+	s.called = true
+	return nil, errors.New("should not have been called")
 }

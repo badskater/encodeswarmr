@@ -2843,6 +2843,29 @@ func (s *pgStore) PreemptTask(ctx context.Context, taskID string) error {
 	return nil
 }
 
+// ResetTask resets an operator-specified task back to "pending" so the engine
+// can reassign it.  Unlike PreemptTask (which only operates on running/assigned
+// tasks), ResetTask can act on any non-terminal status.  Terminal statuses
+// ("completed", "failed") are never touched — the caller must check those
+// before calling this function.
+func (s *pgStore) ResetTask(ctx context.Context, taskID string) error {
+	const q = `
+		UPDATE tasks
+		SET status     = 'pending',
+		    agent_id   = NULL,
+		    started_at = NULL,
+		    updated_at = now()
+		WHERE id = $1`
+	ct, err := s.pool.Exec(ctx, q, taskID)
+	if err != nil {
+		return fmt.Errorf("db: reset task: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Encoding Stats (cost estimation learning)
 // ---------------------------------------------------------------------------

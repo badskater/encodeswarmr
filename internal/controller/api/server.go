@@ -40,7 +40,8 @@ type Server struct {
 	watcher      *watcher.Watcher              // nil when no watch folders are configured
 	rulesEngine  *rules.Engine
 	logHub       *logStreamHub // per-task WebSocket log streaming
-	eng          *engine.Engine // nil until SetEngine is called
+	eng          *engine.Engine      // nil until SetEngine is called
+	flowEngine   *engine.FlowEngine  // used to validate flow graphs at save time
 }
 
 // SetEngine attaches the core engine so the API layer can expose queue
@@ -71,8 +72,9 @@ func New(store db.Store, authSvc *auth.Service, cfg *config.Config, logger *slog
 		pushover:     notifications.NewPushoverSender(cfg.Notifications.Pushover, logger),
 		ntfy:         notifications.NewNtfySender(cfg.Notifications.Ntfy, logger),
 		autoScaling:  engine.NewAutoScalingHook(func() config.AutoScalingConfig { return cfg.AutoScaling }, logger),
+		flowEngine:   engine.NewFlowEngine(store, logger),
 		rulesEngine:  rules.New(store, logger),
-		logHub:       newLogStreamHub(),
+		logHub:       newLogStreamHub(cfg.LogStream),
 	}
 
 	// Initialise watcher only when watch folders are configured.

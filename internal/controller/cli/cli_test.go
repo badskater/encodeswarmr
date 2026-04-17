@@ -272,6 +272,10 @@ func exerciseAgentCommand(t *testing.T, stub db.Store, args []string) (string, e
 		c := newAgentEnableWithStore(ctx, stub, &buf)
 		c.SetArgs(args[1:])
 		cmd = c
+	case "drain":
+		c := newAgentDrainWithStore(ctx, stub, &buf)
+		c.SetArgs(args[1:])
+		cmd = c
 	case "disable":
 		c := newAgentDisableWithStore(ctx, stub, &buf)
 		c.SetArgs(args[1:])
@@ -341,7 +345,7 @@ func newAgentEnableWithStore(ctx context.Context, store db.Store, w io.Writer) *
 	return c
 }
 
-func newAgentDisableWithStore(ctx context.Context, store db.Store, w io.Writer) *testCmd {
+func newAgentDrainWithStore(ctx context.Context, store db.Store, w io.Writer) *testCmd {
 	c := &testCmd{args: 1}
 	c.runE = func() error {
 		agent, err := store.GetAgentByName(ctx, c.positional[0])
@@ -349,6 +353,22 @@ func newAgentDisableWithStore(ctx context.Context, store db.Store, w io.Writer) 
 			return fmt.Errorf("get agent: %w", err)
 		}
 		if err := store.UpdateAgentStatus(ctx, agent.ID, "draining"); err != nil {
+			return fmt.Errorf("drain agent: %w", err)
+		}
+		fmt.Fprintf(w, "agent %q draining\n", c.positional[0])
+		return nil
+	}
+	return c
+}
+
+func newAgentDisableWithStore(ctx context.Context, store db.Store, w io.Writer) *testCmd {
+	c := &testCmd{args: 1}
+	c.runE = func() error {
+		agent, err := store.GetAgentByName(ctx, c.positional[0])
+		if err != nil {
+			return fmt.Errorf("get agent: %w", err)
+		}
+		if err := store.UpdateAgentStatus(ctx, agent.ID, "disabled"); err != nil {
 			return fmt.Errorf("disable agent: %w", err)
 		}
 		fmt.Fprintf(w, "agent %q disabled\n", c.positional[0])
@@ -475,6 +495,48 @@ func TestAgentEnable_Success(t *testing.T) {
 	}
 }
 
+// --- Agent drain ---
+
+func TestAgentDrain_Success(t *testing.T) {
+	stub := &agentStub{}
+	out, err := exerciseAgentCommand(t, stub, []string{"drain", "worker1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "draining") {
+		t.Errorf("expected 'draining' in output, got %q", out)
+	}
+	if len(stub.statusSets) == 0 || !strings.Contains(stub.statusSets[0], "draining") {
+		t.Errorf("expected draining status, calls: %v", stub.statusSets)
+	}
+}
+
+func TestAgentDrain_MissingArg(t *testing.T) {
+	stub := &agentStub{}
+	_, err := exerciseAgentCommand(t, stub, []string{"drain"})
+	if err == nil {
+		t.Error("expected error when agent name arg is missing")
+	}
+}
+
+func TestAgentDrain_GetError(t *testing.T) {
+	stub := &agentStub{getErr: errors.New("agent not found")}
+	_, err := exerciseAgentCommand(t, stub, []string{"drain", "ghost"})
+	if err == nil {
+		t.Error("expected error when GetAgentByName fails")
+	}
+}
+
+func TestAgentDrain_UpdateError(t *testing.T) {
+	stub := &agentStub{updateErr: errors.New("db write failed")}
+	_, err := exerciseAgentCommand(t, stub, []string{"drain", "worker1"})
+	if err == nil {
+		t.Error("expected error when UpdateAgentStatus fails")
+	}
+}
+
+// --- Agent disable ---
+
 func TestAgentDisable_Success(t *testing.T) {
 	stub := &agentStub{}
 	out, err := exerciseAgentCommand(t, stub, []string{"disable", "worker1"})
@@ -482,10 +544,24 @@ func TestAgentDisable_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(out, "disabled") {
-		t.Errorf("expected 'disabled' in output")
+		t.Errorf("expected 'disabled' in output, got %q", out)
 	}
-	if len(stub.statusSets) == 0 || !strings.Contains(stub.statusSets[0], "draining") {
-		t.Errorf("expected draining status, calls: %v", stub.statusSets)
+	// disable must set status to "disabled", not "draining".
+	if len(stub.statusSets) == 0 || !strings.Contains(stub.statusSets[0], "disabled") {
+		t.Errorf("expected disabled status, calls: %v", stub.statusSets)
+	}
+}
+
+func TestAgentDisable_DoesNotSetDraining(t *testing.T) {
+	stub := &agentStub{}
+	_, err := exerciseAgentCommand(t, stub, []string{"disable", "worker1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, call := range stub.statusSets {
+		if strings.Contains(call, "draining") {
+			t.Errorf("agent disable must not set status to 'draining'; use 'agent drain' for that. calls: %v", stub.statusSets)
+		}
 	}
 }
 
@@ -494,6 +570,22 @@ func TestAgentDisable_MissingArg(t *testing.T) {
 	_, err := exerciseAgentCommand(t, stub, []string{"disable"})
 	if err == nil {
 		t.Error("expected error when agent name arg is missing")
+	}
+}
+
+func TestAgentDisable_GetError(t *testing.T) {
+	stub := &agentStub{getErr: errors.New("agent not found")}
+	_, err := exerciseAgentCommand(t, stub, []string{"disable", "ghost"})
+	if err == nil {
+		t.Error("expected error when GetAgentByName fails")
+	}
+}
+
+func TestAgentDisable_UpdateError(t *testing.T) {
+	stub := &agentStub{updateErr: errors.New("db write failed")}
+	_, err := exerciseAgentCommand(t, stub, []string{"disable", "worker1"})
+	if err == nil {
+		t.Error("expected error when UpdateAgentStatus fails")
 	}
 }
 
@@ -1536,3 +1628,317 @@ func TestScheduleFire_InvalidTemplate(t *testing.T) {
 		t.Error("expected unmarshal error for invalid template")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// taskResetSafetyCheck — pure function unit tests
+// ---------------------------------------------------------------------------
+
+func TestTaskResetSafetyCheck_NotRunning(t *testing.T) {
+	task := &db.Task{ID: "t-1", Status: "pending", UpdatedAt: time.Now()}
+	err := taskResetSafetyCheck(task, nil, 90*time.Second, time.Now())
+	if err == nil {
+		t.Error("expected error for non-running task")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("expected --force hint in error, got: %v", err)
+	}
+}
+
+func TestTaskResetSafetyCheck_RunningAgentDead(t *testing.T) {
+	now := time.Now()
+	staleHeartbeat := now.Add(-10 * time.Minute)
+	startedAt := now.Add(-30 * time.Minute)
+	task := &db.Task{
+		ID:        "t-2",
+		Status:    "running",
+		StartedAt: &startedAt,
+		UpdatedAt: now.Add(-15 * time.Minute),
+	}
+	err := taskResetSafetyCheck(task, &staleHeartbeat, 90*time.Second, now)
+	if err != nil {
+		t.Errorf("expected no error for dead-agent task, got: %v", err)
+	}
+}
+
+func TestTaskResetSafetyCheck_RunningAgentAlive(t *testing.T) {
+	now := time.Now()
+	recentHeartbeat := now.Add(-5 * time.Second) // well within 90s timeout
+	startedAt := now.Add(-5 * time.Minute)
+	task := &db.Task{
+		ID:        "t-3",
+		Status:    "running",
+		StartedAt: &startedAt,
+		UpdatedAt: now.Add(-4 * time.Minute), // not stale enough
+	}
+	err := taskResetSafetyCheck(task, &recentHeartbeat, 90*time.Second, now)
+	if err == nil {
+		t.Error("expected error: agent is alive and task not stale")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("expected --force hint in error, got: %v", err)
+	}
+}
+
+func TestTaskResetSafetyCheck_RunningStaleNoHeartbeat(t *testing.T) {
+	// No agent heartbeat info (nil), but the task update is stale > 10 min.
+	now := time.Now()
+	startedAt := now.Add(-20 * time.Minute)
+	task := &db.Task{
+		ID:        "t-4",
+		Status:    "running",
+		StartedAt: &startedAt,
+		UpdatedAt: now.Add(-15 * time.Minute),
+	}
+	err := taskResetSafetyCheck(task, nil, 90*time.Second, now)
+	if err != nil {
+		t.Errorf("expected no error for stale task with no heartbeat info, got: %v", err)
+	}
+}
+
+func TestTaskResetSafetyCheck_CompletedStatus(t *testing.T) {
+	task := &db.Task{ID: "t-5", Status: "completed", UpdatedAt: time.Now()}
+	err := taskResetSafetyCheck(task, nil, 90*time.Second, time.Now())
+	if err == nil {
+		t.Error("expected error for completed task")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// terminalStatus helper
+// ---------------------------------------------------------------------------
+
+func TestTerminalStatus(t *testing.T) {
+	if !terminalStatus("completed") {
+		t.Error("completed should be terminal")
+	}
+	if !terminalStatus("failed") {
+		t.Error("failed should be terminal")
+	}
+	if terminalStatus("running") {
+		t.Error("running should not be terminal")
+	}
+	if terminalStatus("pending") {
+		t.Error("pending should not be terminal")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task reset command — store-injected integration tests
+// ---------------------------------------------------------------------------
+
+// taskResetStub extends taskStub with ResetTask, GetAgentByID,
+// UpdateJobTaskCounts, and CreateAuditEntry support.
+type taskResetStub struct {
+	teststore.Stub
+	taskByID       *db.Task
+	getTaskErr     error
+	agentByID      *db.Agent
+	getAgentErr    error
+	resetErr       error
+	resetCalled    bool
+	auditEntries   []db.CreateAuditEntryParams
+}
+
+func (s *taskResetStub) GetTaskByID(_ context.Context, id string) (*db.Task, error) {
+	if s.getTaskErr != nil {
+		return nil, s.getTaskErr
+	}
+	if s.taskByID != nil {
+		return s.taskByID, nil
+	}
+	agentID := "agent-1"
+	return &db.Task{ID: id, JobID: "job-1", Status: "running", AgentID: &agentID, UpdatedAt: time.Now()}, nil
+}
+
+func (s *taskResetStub) GetAgentByID(_ context.Context, _ string) (*db.Agent, error) {
+	if s.getAgentErr != nil {
+		return nil, s.getAgentErr
+	}
+	if s.agentByID != nil {
+		return s.agentByID, nil
+	}
+	hb := time.Now().Add(-10 * time.Minute) // stale — safe to reset
+	return &db.Agent{ID: "agent-1", LastHeartbeat: &hb}, nil
+}
+
+func (s *taskResetStub) ResetTask(_ context.Context, _ string) error {
+	s.resetCalled = true
+	return s.resetErr
+}
+
+func (s *taskResetStub) UpdateJobTaskCounts(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *taskResetStub) CreateAuditEntry(_ context.Context, p db.CreateAuditEntryParams) error {
+	s.auditEntries = append(s.auditEntries, p)
+	return nil
+}
+
+// runTaskReset calls the task reset business logic directly (bypassing cobra
+// flag parsing and openStore) so tests can inject a stub store.
+func runTaskReset(ctx context.Context, store db.Store, taskID string, force bool, heartbeatTimeout time.Duration, w io.Writer) error {
+	task, err := store.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+
+	if terminalStatus(task.Status) {
+		return fmt.Errorf(
+			"task %s is in terminal state %q and cannot be reset; "+
+				"use the job retry command to re-queue failed tasks",
+			taskID, task.Status,
+		)
+	}
+
+	if !force {
+		var agentLastHeartbeat *time.Time
+		if task.AgentID != nil {
+			agent, agentErr := store.GetAgentByID(ctx, *task.AgentID)
+			if agentErr == nil {
+				agentLastHeartbeat = agent.LastHeartbeat
+			}
+		}
+		if checkErr := taskResetSafetyCheck(task, agentLastHeartbeat, heartbeatTimeout, time.Now()); checkErr != nil {
+			return checkErr
+		}
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "Before:\tstatus=%s", task.Status)
+	if task.AgentID != nil {
+		fmt.Fprintf(tw, " agent_id=%s", *task.AgentID)
+	}
+	fmt.Fprintln(tw)
+	_ = tw.Flush()
+
+	if err := store.ResetTask(ctx, taskID); err != nil {
+		return fmt.Errorf("reset task: %w", err)
+	}
+
+	_ = store.UpdateJobTaskCounts(ctx, task.JobID)
+
+	_ = store.CreateAuditEntry(ctx, db.CreateAuditEntryParams{
+		Username:   "cli",
+		Action:     "task.reset",
+		Resource:   "task",
+		ResourceID: taskID,
+		IPAddress:  "127.0.0.1",
+	})
+
+	fmt.Fprintf(w, "After:\tstatus=pending agent_id=- started_at=-\n")
+	fmt.Fprintf(w, "task %s reset to pending\n", taskID)
+	return nil
+}
+
+func TestTaskReset_Success(t *testing.T) {
+	stub := &taskResetStub{}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-xyz", false, 90*time.Second, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !stub.resetCalled {
+		t.Error("expected ResetTask to be called")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "pending") {
+		t.Errorf("expected 'pending' in output, got: %q", out)
+	}
+	if len(stub.auditEntries) != 1 || stub.auditEntries[0].Action != "task.reset" {
+		t.Errorf("expected audit entry with action task.reset, got: %v", stub.auditEntries)
+	}
+}
+
+func TestTaskReset_CompletedRefused(t *testing.T) {
+	stub := &taskResetStub{
+		taskByID: &db.Task{ID: "task-done", JobID: "job-1", Status: "completed", UpdatedAt: time.Now()},
+	}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-done", true, 90*time.Second, &buf)
+	if err == nil {
+		t.Error("expected error for completed task with --force")
+	}
+	if !strings.Contains(err.Error(), "terminal") {
+		t.Errorf("expected 'terminal' in error, got: %v", err)
+	}
+	if stub.resetCalled {
+		t.Error("ResetTask should not have been called for completed task")
+	}
+}
+
+func TestTaskReset_FailedRefused(t *testing.T) {
+	stub := &taskResetStub{
+		taskByID: &db.Task{ID: "task-fail", JobID: "job-1", Status: "failed", UpdatedAt: time.Now()},
+	}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-fail", true, 90*time.Second, &buf)
+	if err == nil {
+		t.Error("expected error for failed task with --force")
+	}
+	if stub.resetCalled {
+		t.Error("ResetTask should not have been called for failed task")
+	}
+}
+
+func TestTaskReset_ForceBypassesSafetyCheck(t *testing.T) {
+	// Agent heartbeat is recent (safe-check would normally block this).
+	recentHB := time.Now().Add(-5 * time.Second)
+	stub := &taskResetStub{
+		agentByID: &db.Agent{ID: "agent-1", LastHeartbeat: &recentHB},
+	}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-abc", true, 90*time.Second, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error with --force: %v", err)
+	}
+	if !stub.resetCalled {
+		t.Error("expected ResetTask to be called with --force")
+	}
+}
+
+func TestTaskReset_SafetyBlocksRecentHeartbeat(t *testing.T) {
+	// Agent heartbeat is recent and task is not stale — should be blocked.
+	recentHB := time.Now().Add(-5 * time.Second)
+	startedAt := time.Now().Add(-2 * time.Minute)
+	stub := &taskResetStub{
+		taskByID: &db.Task{
+			ID:        "task-live",
+			JobID:     "job-1",
+			Status:    "running",
+			AgentID:   strPtr("agent-1"),
+			StartedAt: &startedAt,
+			UpdatedAt: time.Now().Add(-1 * time.Minute),
+		},
+		agentByID: &db.Agent{ID: "agent-1", LastHeartbeat: &recentHB},
+	}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-live", false, 90*time.Second, &buf)
+	if err == nil {
+		t.Error("expected safety-check error for task with live agent")
+	}
+	if stub.resetCalled {
+		t.Error("ResetTask should not have been called")
+	}
+}
+
+func TestTaskReset_GetTaskError(t *testing.T) {
+	stub := &taskResetStub{getTaskErr: errors.New("not found")}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "ghost", false, 90*time.Second, &buf)
+	if err == nil {
+		t.Error("expected error when GetTaskByID fails")
+	}
+}
+
+func TestTaskReset_ResetDBError(t *testing.T) {
+	stub := &taskResetStub{resetErr: errors.New("db write failed")}
+	var buf bytes.Buffer
+	err := runTaskReset(context.Background(), stub, "task-xyz", false, 90*time.Second, &buf)
+	if err == nil {
+		t.Error("expected error when ResetTask fails")
+	}
+}
+
+// strPtr is a test helper that returns a pointer to a string value.
+func strPtr(s string) *string { return &s }

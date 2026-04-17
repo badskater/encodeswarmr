@@ -349,6 +349,7 @@ func newAgentCmd(ctx context.Context) *cobra.Command {
 		newAgentListCmd(ctx),
 		newAgentApproveCmd(ctx),
 		newAgentEnableCmd(ctx),
+		newAgentDrainCmd(ctx),
 		newAgentDisableCmd(ctx),
 	)
 	return cmd
@@ -432,10 +433,12 @@ func newAgentEnableCmd(ctx context.Context) *cobra.Command {
 	}
 }
 
-func newAgentDisableCmd(ctx context.Context) *cobra.Command {
+// newAgentDrainCmd sets an agent to "draining" status: finish the current task
+// then stop polling for new work.
+func newAgentDrainCmd(ctx context.Context) *cobra.Command {
 	return &cobra.Command{
-		Use:   "disable <name>",
-		Short: "Disable an agent (set status to draining)",
+		Use:   "drain <name>",
+		Short: "Drain an agent (finish current task, then stop polling for new work)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, close, err := openStore(ctx, cfgFile)
@@ -448,6 +451,43 @@ func newAgentDisableCmd(ctx context.Context) *cobra.Command {
 				return fmt.Errorf("get agent: %w", err)
 			}
 			if err := store.UpdateAgentStatus(ctx, agent.ID, "draining"); err != nil {
+				return fmt.Errorf("drain agent: %w", err)
+			}
+			fmt.Printf("agent %q draining\n", args[0])
+			return nil
+		},
+	}
+}
+
+// newAgentDisableCmd sets an agent to "disabled" status: stop polling for new
+// work immediately (does not abort any in-flight process).
+//
+// Deprecation notice: before v1.1.0 this subcommand set the agent to "draining"
+// rather than "disabled". The semantics have been corrected. If you were relying
+// on the old behaviour, use "agent drain" instead.
+func newAgentDisableCmd(ctx context.Context) *cobra.Command {
+	return &cobra.Command{
+		Use:   "disable <name>",
+		Short: "Disable an agent immediately (stop polling; use 'drain' to finish current task first)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Deprecation warning: v1.0.x set status to "draining" here. The
+			// correct status for immediate stop is "disabled". Use 'agent drain'
+			// if you want the agent to finish its current task before stopping.
+			fmt.Fprintf(cmd.ErrOrStderr(),
+				"WARNING: 'agent disable' semantics changed in v1.1.0: status is now set to "+
+					"'disabled' (immediate stop), not 'draining'. "+
+					"Use 'agent drain' to let the agent finish its current task first.\n")
+			store, close, err := openStore(ctx, cfgFile)
+			if err != nil {
+				return err
+			}
+			defer close()
+			agent, err := store.GetAgentByName(ctx, args[0])
+			if err != nil {
+				return fmt.Errorf("get agent: %w", err)
+			}
+			if err := store.UpdateAgentStatus(ctx, agent.ID, "disabled"); err != nil {
 				return fmt.Errorf("disable agent: %w", err)
 			}
 			fmt.Printf("agent %q disabled\n", args[0])
@@ -786,6 +826,7 @@ func newTaskCmd(ctx context.Context) *cobra.Command {
 	cmd.AddCommand(
 		newTaskListCmd(ctx),
 		newTaskStatusCmd(ctx),
+		newTaskResetCmd(ctx),
 	)
 	return cmd
 }
@@ -868,6 +909,163 @@ func newTaskStatusCmd(ctx context.Context) *cobra.Command {
 			return tw.Flush()
 		},
 	}
+}
+
+// taskResetSafetyCheck returns a non-nil error with a human-readable message
+// when the task does not meet the conditions for an automatic (non-forced) reset.
+// It is exported only for test purposes; all production callers use
+// newTaskResetCmd which gates on --force.
+//
+// Safe-to-reset conditions (any one of):
+//   - status is "running" AND the assigned agent's last heartbeat is older
+//     than heartbeatTimeout (agent is presumed dead).
+//   - status is "running" AND the task has been in that state for more than
+//     10 minutes with no update (progressStaleThreshold).
+//
+// Terminal states ("completed", "failed") are rejected even with --force via
+// a separate caller-side check.
+func taskResetSafetyCheck(task *db.Task, agentLastHeartbeat *time.Time, heartbeatTimeout time.Duration, now time.Time) error {
+	const progressStaleThreshold = 10 * time.Minute
+
+	if task.Status != "running" {
+		return fmt.Errorf(
+			"task %s has status %q (not running); use --force to override",
+			task.ID, task.Status,
+		)
+	}
+
+	// Check 1: assigned agent has not heartbeated within the timeout.
+	if agentLastHeartbeat != nil && now.Sub(*agentLastHeartbeat) > heartbeatTimeout {
+		return nil // safe to reset
+	}
+
+	// Check 2: task has been running without an update for > 10 minutes.
+	if task.StartedAt != nil && now.Sub(*task.StartedAt) > progressStaleThreshold {
+		// Use UpdatedAt as a proxy for last progress: if updated_at has not
+		// advanced in the stale window, the task is stuck.
+		if now.Sub(task.UpdatedAt) > progressStaleThreshold {
+			return nil // safe to reset
+		}
+	}
+
+	heartbeatAge := "unknown"
+	if agentLastHeartbeat != nil {
+		heartbeatAge = now.Sub(*agentLastHeartbeat).Truncate(time.Second).String()
+	}
+	return fmt.Errorf(
+		"task %s is running and the agent heartbeat is recent (age: %s, timeout: %s); "+
+			"use --force to override, or wait for the task to finish",
+		task.ID, heartbeatAge, heartbeatTimeout,
+	)
+}
+
+// terminalStatus reports whether s is a terminal task state that should never
+// be reset (even with --force).
+func terminalStatus(s string) bool {
+	return s == "completed" || s == "failed"
+}
+
+func newTaskResetCmd(ctx context.Context) *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "reset <task-id>",
+		Short: "Reset a stuck task back to pending",
+		Long: `Reset a task's status to "pending" so the engine can reassign it.
+
+Without --force the reset is only allowed when:
+  - the task is "running" AND the assigned agent has missed its heartbeat
+    deadline (agent.heartbeat_timeout in config), OR
+  - the task is "running" AND has not been updated in more than 10 minutes.
+
+Completed and failed tasks are always refused, even with --force.
+
+An audit log entry is written recording "cli" as the actor.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			taskID := args[0]
+
+			// Load config for heartbeat_timeout.
+			cfg, err := config.Load(cfgFile)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+
+			store, closeStore, err := openStore(ctx, cfgFile)
+			if err != nil {
+				return err
+			}
+			defer closeStore()
+
+			task, err := store.GetTaskByID(ctx, taskID)
+			if err != nil {
+				return fmt.Errorf("get task: %w", err)
+			}
+
+			// Terminal states are always refused.
+			if terminalStatus(task.Status) {
+				return fmt.Errorf(
+					"task %s is in terminal state %q and cannot be reset; "+
+						"use the job retry command to re-queue failed tasks",
+					taskID, task.Status,
+				)
+			}
+
+			if !force {
+				// Fetch the agent's last heartbeat for the safety check.
+				var agentLastHeartbeat *time.Time
+				if task.AgentID != nil {
+					agent, agentErr := store.GetAgentByID(ctx, *task.AgentID)
+					if agentErr == nil {
+						agentLastHeartbeat = agent.LastHeartbeat
+					}
+				}
+				if checkErr := taskResetSafetyCheck(task, agentLastHeartbeat, cfg.Agent.HeartbeatTimeout, time.Now()); checkErr != nil {
+					return checkErr
+				}
+			}
+
+			// Print before state.
+			tw := newTabWriter()
+			fmt.Fprintf(tw, "Before:\tstatus=%s", task.Status)
+			if task.AgentID != nil {
+				fmt.Fprintf(tw, " agent_id=%s", *task.AgentID)
+			}
+			if task.StartedAt != nil {
+				fmt.Fprintf(tw, " started_at=%s", task.StartedAt.Format(time.DateTime))
+			}
+			fmt.Fprintln(tw)
+			_ = tw.Flush()
+
+			// Perform the reset.
+			if err := store.ResetTask(ctx, taskID); err != nil {
+				return fmt.Errorf("reset task: %w", err)
+			}
+
+			// Recalculate denormalised job task counters.
+			if err := store.UpdateJobTaskCounts(ctx, task.JobID); err != nil {
+				// Non-fatal — log and continue.
+				slog.Warn("task reset: failed to update job task counts",
+					"task_id", taskID, "job_id", task.JobID, "err", err)
+			}
+
+			// Write audit log entry — best-effort, never fail the command.
+			if auditErr := store.CreateAuditEntry(ctx, db.CreateAuditEntryParams{
+				Username:   "cli",
+				Action:     "task.reset",
+				Resource:   "task",
+				ResourceID: taskID,
+				IPAddress:  "127.0.0.1",
+			}); auditErr != nil {
+				slog.Warn("task reset: audit log failed", "task_id", taskID, "err", auditErr)
+			}
+
+			fmt.Printf("After:\tstatus=pending agent_id=- started_at=-\n")
+			fmt.Printf("task %s reset to pending\n", taskID)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "reset regardless of safety checks (terminal states still refused)")
+	return cmd
 }
 
 // ---------------------------------------------------------------------------

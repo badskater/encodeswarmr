@@ -47,13 +47,15 @@ logging:
 
 agent:
   auto_approve: false
+  # How long since an agent's last heartbeat before it is marked offline.
+  # This is the single source of truth for stale detection — the engine uses
+  # this value directly. Increase if agents briefly drop heartbeats on a slow
+  # network; decrease for faster offline detection.
   heartbeat_timeout: 90s
   dispatch_interval: 10s
-  stale_threshold: 5m             # mark agents stale after no heartbeat
 
 engine:
   tick_interval: 10s              # how often to check for pending jobs
-  stale_threshold: 5m             # agent stale detection interval
 
 # Agent binary upgrade distribution — place binaries in this directory
 # and agents will self-upgrade via GET /api/v1/agent/upgrade/check
@@ -170,3 +172,23 @@ tracing:
   enabled: false
   endpoint: "localhost:4317"      # OTLP receiver
   sample_rate: 0.1                # 10% sampling
+
+# ─── Log-stream WebSocket connection caps ────────────────────────────────────
+# Limits the number of concurrent WebSocket connections to the per-task log
+# stream endpoint (/api/v1/tasks/{id}/logs/stream).  Connections that exceed a
+# cap receive HTTP 429 with a Retry-After: 60 header before the upgrade occurs.
+# Set a value to 0 to disable that cap entirely.
+logstream:
+  max_per_user: 10                # Max concurrent connections per authenticated user
+  max_per_ip:   20                # Max concurrent connections per client IP address
+
+# ─── Cloud storage retry ─────────────────────────────────────────────────────
+# Applied to S3, GCS, and Azure Blob adapters for transient errors (429, 5xx,
+# network timeouts).  Non-retryable errors (401, 403, 404, context cancelled)
+# are never retried regardless of these settings.
+cloud_storage:
+  retry:
+    max_elapsed:      5m     # Maximum total retry window per operation
+    initial_interval: 500ms  # Delay before the first retry
+    max_interval:     30s    # Cap on per-attempt delay
+    multiplier:       2.0    # Back-off growth factor (full jitter applied)

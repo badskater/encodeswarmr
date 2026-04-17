@@ -55,6 +55,13 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate the graph structure before persisting. Use a temporary Flow
+	// with a placeholder ID since the row has not been inserted yet.
+	if err := s.flowEngine.ValidateFlow(&db.Flow{ID: "new", Graph: req.Graph}); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", err.Error())
+		return
+	}
+
 	flow, err := s.store.CreateFlow(r.Context(), db.CreateFlowParams{
 		Name:        req.Name,
 		Description: req.Description,
@@ -86,6 +93,12 @@ func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Graph) == 0 {
 		writeProblem(w, r, http.StatusUnprocessableEntity, "Validation Error", "graph is required")
+		return
+	}
+
+	// Validate the graph structure before persisting.
+	if err := s.flowEngine.ValidateFlow(&db.Flow{ID: id, Graph: req.Graph}); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
 
