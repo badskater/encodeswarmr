@@ -1,4 +1,4 @@
-.PHONY: all controller agent agent-linux agent-windows web proto test lint \
+.PHONY: all controller agent agent-linux agent-windows web proto test stress lint \
         migrate-up migrate-down migrate-status bin installer \
         deb deb-agent rpm rpm-agent \
         desktop-windows desktop-linux deb-desktop
@@ -41,6 +41,9 @@ proto:
 
 test:
 	go test ./... -race -cover -timeout 120s
+
+stress:
+	go test -tags 'integration stress' -race -count=1 -timeout 600s ./tests/integration/...
 
 lint:
 	golangci-lint run ./...
