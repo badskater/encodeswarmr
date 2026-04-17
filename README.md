@@ -59,7 +59,7 @@ Web UI at `http://localhost:8080`. First visit prompts admin account creation.
 - **Auto-upgrade** — SHA-256 verified binary upgrades with rollback
 - **Auto-retry** — exponential backoff on task failure
 - **Observability** — Prometheus metrics, Grafana dashboards, structured audit logging
-- **OpenAPI 3.1** — machine-readable spec + generated TypeScript/Go clients
+- **OpenAPI 3.1** — machine-readable spec at `api/openapi.yaml` (served at `/api/v1/openapi.json`)
 
 ## Documentation
 
@@ -74,7 +74,7 @@ All documentation lives in the **[Wiki](https://github.com/badskater/encodeswarm
 | [Configuration](https://github.com/badskater/encodeswarmr/wiki/Configuration) | Agent and Controller YAML reference |
 | [API Reference](https://github.com/badskater/encodeswarmr/wiki/API-Reference) | REST endpoints and example workflow |
 | [Architecture](https://github.com/badskater/encodeswarmr/wiki/Architecture) | System design and component deep-dives |
-| [Roadmap](https://github.com/badskater/encodeswarmr/wiki/Roadmap) | All 6 completed phases |
+| [Roadmap](https://github.com/badskater/encodeswarmr/wiki/Roadmap) | All 8 completed phases |
 | [CLAUDE.md](CLAUDE.md) | Contributor and AI agent working instructions - Used to help build commits and documentations |
 
 Also in repo: [ARCHITECTURE.md](ARCHITECTURE.md) (detailed system design)
