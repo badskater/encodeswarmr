@@ -1848,6 +1848,175 @@ Configuration (bitrate, channels, sample rate, stream selection) is set per-job 
 
 ---
 
+### 3.6 Flow Engine
+
+The flow engine is a controller-side component in `internal/controller/engine/` that executes user-defined DAG pipelines. Use it when a job requires branching logic, conditional routing, or a sequence of heterogeneous steps (encode + audio + subtitle + notify) that cannot be expressed as a single flat encode template. For simple single-template encodes the template path in `expandEncodeJob` is used instead.
+
+Wiki reference: [Flow-Pipeline-Editor](https://github.com/badskater/encodeswarmr/wiki/Flow-Pipeline-Editor)
+
+#### 3.6.1 Purpose
+
+The flow engine lets operators build reusable pipelines in the web UI (Flow Pipeline Editor) and attach them to jobs via `encode_config.flow_id`. At job expansion time the engine walks the graph, evaluates condition nodes against live source analysis data, and produces an ordered list of `TaskStep` values. The consumer (`expandFlowJob` in `expand.go`) translates those steps into `tasks` rows. This decouples pipeline shape from task mechanics: the engine deals only with graph traversal; the consumer deals only with DB writes and script rendering.
+
+#### 3.6.2 Data Model
+
+A flow definition is a JSON object with two arrays stored in the `flows.graph` JSONB column (migration `023_flows.up.sql`):
+
+```json
+{
+  "nodes": [
+    { "id": "n1", "type": "input_source", "data": { "label": "Source" } },
+    { "id": "n2", "type": "encode_x265", "data": { "crf": 18, "preset": "slow" } },
+    { "id": "n3", "type": "output_move", "data": { "destination": "\\\\nas\\output" } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "n1", "target": "n2", "sourceHandle": "" },
+    { "id": "e2", "source": "n2", "target": "n3", "sourceHandle": "" }
+  ]
+}
+```
+
+Key fields (`internal/controller/engine/flowengine.go`):
+
+- `node.type` — identifies the built-in or plugin-provided node kind (e.g. `encode_x265`, `condition`, `notify_webhook`).
+- `node.data` — arbitrary key/value config passed through to the `TaskStep.Config` map and ultimately into task variables.
+- `edge.sourceHandle` — named output port. Empty string (`""`) is the default (happy) path. `"true"` and `"false"` route condition branches. `"error"` is the error-handler path followed when a node signals failure.
+
+The `flows` table schema:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID | Primary key, auto-generated |
+| `name` | TEXT | Human-readable name, indexed |
+| `description` | TEXT | Optional |
+| `graph` | JSONB | Full graph (`nodes` + `edges`) |
+| `created_at` / `updated_at` | TIMESTAMPTZ | Auto-managed |
+
+Only the graph definition is persisted. Steps, task variables, and dependency order are all derived at execution time.
+
+#### 3.6.3 Execution Model
+
+**Pre-save validation (`ValidateFlow`)**
+
+Called in `internal/controller/api/flows.go` for both `POST /api/v1/flows` (create) and `PUT /api/v1/flows/{id}` (update). A graph that fails validation is rejected with HTTP 400 before any DB write occurs.
+
+Checks performed (`flowengine.go: ValidateFlow`):
+
+- At least one node is present.
+- At least one `input_` node exists (type prefix check).
+- Every edge source and target references a node ID that exists in the graph.
+- No cycles — three-color DFS (white/grey/black marking). A back-edge returns `errCyclicDAG`.
+
+**Runtime walker (`ExecuteFlow`)**
+
+Triggered by `expandFlowJob` in `expand.go` when `job.EncodeConfig.FlowID` is non-empty.
+
+```
+ExecuteFlow(ctx, flow, sourceID)
+  │
+  ├─ parse graph JSON
+  ├─ load source analysis summary (for condition evaluation)
+  ├─ locate input_ node
+  └─ walk(inputNode, deps=[])
+       │
+       ├─ ctx.Done() check — returns ctx.Err() immediately if cancelled
+       ├─ inStack[nodeID] check — catches cycles not caught at validate time
+       ├─ visited[nodeID] guard — visits shared sink nodes exactly once (diamond DAGs)
+       │
+       ├─ condition node:
+       │    evaluateCondition(cfg, analysisSummary)
+       │    → follows "true" or "false" handle edges only
+       │    → follows "error" handle if simulate_error=true
+       │
+       └─ all other nodes:
+            append TaskStep{NodeID, NodeType, Config, DependsOn}
+            → follows non-"error" handle edges (happy path)
+            → follows "error" handle edges only when simulate_error=true
+```
+
+Named return + `defer/recover` at the top of `ExecuteFlow` catches any panic inside the walk, logs it with `flow_id` and the panic value, and returns it as an error. The engine goroutine is never silently killed.
+
+**Consumer (`expand.go: expandFlowJob`)**
+
+Iterates the ordered `[]TaskStep` slice returned by `ExecuteFlow`:
+
+- `notify_webhook` / `webhook` — fires `webhooks.EmitRaw` immediately; no DB task created.
+- `condition` — branch already resolved by the engine; skipped (no DB task).
+- `template_run` — fetches template content from DB, injects `script_content` into vars.
+- `audio_flac` / `audio_opus` / `audio_aac` — maps to ffmpeg audio args.
+- `encode_twopass` / `encode_twopass_x264` — creates two sequential `tasks` rows (pass 1 + pass 2).
+- `encode_vmaf_target` — creates a single `vmaf_target` task handled by the controller runner.
+- `subtitle_extract` / `subtitle_convert` / `subtitle_embed` / `subtitle_burn` — sets subtitle-specific vars.
+- All other node types — creates a single `TaskTypeEncode` task row.
+
+On any task creation failure, `failJob` deletes all tasks created so far and marks the job failed.
+
+#### 3.6.4 Node Types
+
+41 built-in node types defined in `web/src/flow/nodeRegistry.ts`, grouped by category:
+
+| Category | Types |
+|---|---|
+| **Input** (2) | `input_file`, `input_folder` |
+| **Encoding** (10) | `encode_x265`, `encode_x264`, `encode_svtav1`, `encode_ffmpeg_copy`, `encode_nvenc`, `encode_twopass`, `encode_twopass_x264`, `encode_vmaf_target`, _(+2 — see registry)_ |
+| **Analysis** (4) | `analyze_hdr`, `analyze_scene`, `analyze_vmaf`, `analyze_probe` |
+| **Conditions** (5) | `cond_file_size`, `cond_resolution`, `cond_codec`, `cond_hdr_type`, `cond_file_ext` |
+| **Audio** (4) | `audio_flac`, `audio_opus`, `audio_aac`, `audio_extract` |
+| **Subtitles** (4) | `subtitle_extract`, `subtitle_convert`, `subtitle_embed`, `subtitle_burn` |
+| **Output** (4) | `output_move`, `output_copy`, `output_rename`, `output_set_path` |
+| **Notifications** (4) | `notify_webhook`, `notify_discord`, `notify_teams`, `notify_slack` |
+| **Templates** (2) | `template_run`, `template_frameserver` |
+| **Flow Control** (4) | `flow_chunk_split`, `flow_concat`, `flow_fail`, `flow_delay` |
+
+The node registry is the authoritative list. The test `nodeRegistry.test.ts` asserts `NODE_REGISTRY.length === 41`. New node types are added to the registry and handled in `expandFlowJob`; unknown types fall through to generic `TaskTypeEncode` task creation.
+
+Wiki reference: [Plugin-Loading](https://github.com/badskater/encodeswarmr/wiki/Plugin-Loading)
+
+#### 3.6.5 Failure Modes
+
+- **Cycle at validate time** — `ValidateFlow` returns `errCyclicDAG`; HTTP 400 is returned to the caller. The flow is not saved.
+- **Cycle at execute time** — `ExecuteFlow`'s `inStack` guard catches back-edges that bypass validation (e.g. flow loaded directly from DB). Returns `errCyclicDAG`; job is marked failed.
+- **Node panic** — `defer/recover` in `ExecuteFlow` catches any panic, logs it with the flow ID and panic value, and returns a wrapped error. The engine loop continues processing other jobs.
+- **Context cancelled** — `ctx.Done()` is checked before each node is visited. Returns `context.Canceled` immediately; partial step list is discarded. This handles the case where a flow instance is deleted or the controller is shutting down mid-run.
+- **Node failure, no `"error"` edge** — `expandFlowJob` marks the job failed and cleans up tasks. No downstream nodes run.
+- **Node failure with `"error"` edge** — the engine follows the `"error"` handle edge(s) instead of normal successors. Downstream error-handler nodes (e.g. `notify_webhook`) are included in the step list and executed normally.
+- **Flow produces zero steps** — `expandFlowJob` logs a warning and marks the job failed without creating any tasks.
+
+#### 3.6.6 Persistence
+
+Flow definitions are stored in the `flows` table (migration `023_flows.up.sql`, migration number 23). The `graph` column is JSONB.
+
+What is **stored**: `id`, `name`, `description`, `graph` (nodes + edges), `created_at`, `updated_at`.
+
+What is **derived at execution time**: the ordered `[]TaskStep` list, task variables, dependency chains, condition evaluation results, and source analysis data lookups. None of these are cached or persisted between runs; `ExecuteFlow` is always called fresh when a job is expanded.
+
+Jobs reference a flow via `encode_config.flow_id` (a UUID). If the flow is deleted after the job is created, `expandFlowJob` will call `GetFlowByID`, receive a not-found error, and mark the job failed.
+
+#### 3.6.7 Observability
+
+The engine emits structured `log/slog` log entries at `Error` and `Warn` level for:
+
+- Panic recovery (`flowengine: panic in ExecuteFlow`) — includes `flow_id` and `panic` fields.
+- Flow producing zero steps (`engine: flow produced no steps, marking job failed`) — includes `job_id` and `flow_id`.
+- Orphan task cleanup failures on rollback — includes `job_id` and `error`.
+- Webhook step with no emitter configured — includes `job_id` and `node_id`.
+- Template not found during `template_run` expansion — includes `job_id` and `template_id`.
+
+No Prometheus metrics or audit table entries are emitted by the flow engine at this time. **Future improvement**: add per-flow execution counters (steps produced, tasks created, failures) and a structured audit log entry on job expansion so operators can trace which flow version produced which task set without reading application logs.
+
+#### 3.6.8 Cross-References
+
+- [Flow-Pipeline-Editor](https://github.com/badskater/encodeswarmr/wiki/Flow-Pipeline-Editor) — UI usage guide, node reference, pipeline examples.
+- [Plugin-Loading](https://github.com/badskater/encodeswarmr/wiki/Plugin-Loading) — adding custom node types to the registry.
+- [Operational-Semantics](https://github.com/badskater/encodeswarmr/wiki/Operational-Semantics) — error-edge routing behaviour and job lifecycle.
+- `internal/controller/engine/flowengine.go` — `FlowEngine`, `ValidateFlow`, `ExecuteFlow`.
+- `internal/controller/engine/expand.go` — `expandFlowJob` (consumer).
+- `internal/controller/api/flows.go` — REST handlers; `ValidateFlow` called on create and update.
+- `internal/db/migrations/023_flows.up.sql` — `flows` table schema.
+- `web/src/flow/nodeRegistry.ts` — canonical list of 41 built-in node types.
+
+---
+
 ## 4. Database Schema (PostgreSQL)
 
 ### 4.0 Entity Relationship Diagram
